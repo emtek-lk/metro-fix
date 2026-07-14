@@ -1,0 +1,47 @@
+node_modules
+# ==========================================
+# Monorepo Root Global Ignores
+# ==========================================
+node_modules/
+.DS_Store
+Thmubs.db
+.vscode/
+.idea/
+
+# Sensitive Environment Secrets (CRITICAL)
+.env
+.env.local
+.env.*.local
+*.env
+
+# ==========================================
+# Apps: API (NestJS) Specifics
+# ==========================================
+apps/api/dist/
+apps/api/node_modules/
+apps/api/*.tsbuildinfo
+
+# ==========================================
+# Apps: Web (Vite / React) Specifics
+# ==========================================
+apps/web/dist/
+apps/web/node_modules/
+apps/web/.eslintcache
+
+# ==========================================
+# Apps: Mobile (React Native) Specifics
+# ==========================================
+apps/mobile/node_modules/
+
+# Android build outputs and caches
+apps/mobile/android/.gradle/
+apps/mobile/android/build/
+apps/mobile/android/app/build/
+apps/mobile/android/local.properties
+apps/mobile/android/*.skp
+
+# iOS build outputs and CocoaPods
+apps/mobile/ios/Pods/
+apps/mobile/ios/build/
+apps/mobile/ios/DerivedData/
+apps/mobile/ios/.xcode.env.local
