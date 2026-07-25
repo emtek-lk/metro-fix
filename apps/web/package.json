@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@hello-pangea/dnd": "^18.0.1",
     "@metro-fix/core-types": "*",
     "@metro-fix/ui": "*",
     "react": "^19.0.0",
