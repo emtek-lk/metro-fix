@@ -61,32 +61,29 @@ describe('Core Types & API Entities Validation', () => {
       expect(user.role).toBe('ADMIN');
     });
 
-    it('should instantiate WorkerEntity with PostGIS Point coordinates', () => {
+    it('should instantiate WorkerEntity with float coordinates', () => {
       const worker = new WorkerEntity();
       worker.id = 'worker-uuid';
       worker.rating = 4.9;
       worker.servicePillars = [ServicePillar.HARD, ServicePillar.STRATEGIC];
-      worker.location = {
-        type: 'Point',
-        coordinates: [79.8612, 6.9271], // [longitude, latitude]
-      };
+      worker.latitude = 6.9271;
+      worker.longitude = 79.8612;
 
-      expect(worker.location.type).toBe('Point');
-      expect(worker.location.coordinates).toEqual([79.8612, 6.9271]);
+      expect(worker.latitude).toBe(6.9271);
+      expect(worker.longitude).toBe(79.8612);
     });
 
-    it('should instantiate CustomerEntity with PostGIS Point coordinates', () => {
+    it('should instantiate CustomerEntity with float coordinates', () => {
       const customer = new CustomerEntity();
       customer.id = 'cust-uuid';
       customer.facilityType = FacilityType.INDUSTRIAL;
       customer.subscriptionTier = SubscriptionTier.PREMIUM;
-      customer.facilityLocation = {
-        type: 'Point',
-        coordinates: [79.8612, 6.9271],
-      };
+      customer.latitude = 6.9271;
+      customer.longitude = 79.8612;
 
       expect(customer.facilityType).toBe(FacilityType.INDUSTRIAL);
       expect(customer.subscriptionTier).toBe(SubscriptionTier.PREMIUM);
+      expect(customer.latitude).toBe(6.9271);
     });
 
     it('should instantiate ServiceRequestEntity with 7-stage JobStatus', () => {
@@ -97,13 +94,11 @@ describe('Core Types & API Entities Validation', () => {
       sr.servicePillar = ServicePillar.HARD;
       sr.facilityType = FacilityType.COMMERCIAL;
       sr.status = JobStatus.ON_ROUTE;
-      sr.location = {
-        type: 'Point',
-        coordinates: [79.8612, 6.9271],
-      };
+      sr.latitude = 6.9271;
+      sr.longitude = 79.8612;
 
       expect(sr.status).toBe('ON_ROUTE');
-      expect(sr.location.type).toBe('Point');
+      expect(sr.latitude).toBe(6.9271);
     });
   });
 });

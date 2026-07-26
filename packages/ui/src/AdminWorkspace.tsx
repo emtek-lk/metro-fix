@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import {
   type ColumnDef,
   flexRender,
@@ -617,6 +617,46 @@ export function AdminWorkspace({
   onCloseCustomerModal,
 }: AdminWorkspaceProps) {
   const [customers, setCustomers] = useState<CustomerRecord[]>(initialCustomerRows);
+  const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    setIsLoading(true);
+    setFetchError(null);
+
+    fetch('http://localhost:3000/customers')
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+        return res.json();
+      })
+      .then((data: any[]) => {
+        if (!isMounted) return;
+        setIsLoading(false);
+        if (!Array.isArray(data) || data.length === 0) return;
+        const mapped: CustomerRecord[] = data.map((item) => ({
+          id: item.id || `cust-${Math.random().toString(36).slice(2, 6)}`,
+          fullName: item.user?.fullName || 'Customer User',
+          displayName: (item.user?.fullName || 'Customer').split(' ')[0],
+          email: item.user?.email || 'N/A',
+          phone: item.user?.phoneNumber || 'N/A',
+          facilityType: (item.facilityType as FacilityType) || 'Commercial',
+          subscriptionTier: (item.subscriptionTier as SubscriptionTier) || 'Basic',
+          physicalAddress: 'Site Location',
+        }));
+        setCustomers(mapped);
+      })
+      .catch((err) => {
+        if (!isMounted) return;
+        setIsLoading(false);
+        setFetchError('Unable to load live customer directory from API. Displaying default records.');
+        console.warn('Using default customer rows, NestJS API connecting or starting:', err);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleCustomerCreated = (newCustomer: CustomerRecord) => {
     setCustomers((prev) => [newCustomer, ...prev]);
@@ -625,11 +665,23 @@ export function AdminWorkspace({
   return (
     <section style={styles.workspace}>
       {activeView === 'customers' && (
-        <DataTable<CustomerRecord>
-          columns={customerColumns}
-          data={customers}
-          emptyMessage="No customers found in directory."
-        />
+        <>
+          {isLoading && (
+            <div style={styles.infoBanner}>
+              <span>🔄 Loading live customer records from NestJS API...</span>
+            </div>
+          )}
+          {fetchError && !isLoading && (
+            <div style={styles.errorBanner}>
+              <span>⚠️ {fetchError}</span>
+            </div>
+          )}
+          <DataTable<CustomerRecord>
+            columns={customerColumns}
+            data={customers}
+            emptyMessage="No customers found in directory."
+          />
+        </>
       )}
 
       {activeView === 'service-catalog' && (
@@ -942,6 +994,16 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: '10px',
     cursor: 'pointer',
     fontWeight: 700,
+  },
+  infoBanner: {
+    padding: '10px 16px',
+    marginBottom: '12px',
+    background: '#2b435f',
+    color: '#ffffff',
+    borderRadius: '8px',
+    fontSize: '0.85rem',
+    fontWeight: 600,
+    border: '1px solid rgba(243, 136, 8, 0.4)',
   },
 };
 

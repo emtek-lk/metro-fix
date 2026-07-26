@@ -19,8 +19,8 @@ export class UserEntity {
   email: string;
 
   @Column({
-    type: 'enum',
-    enum: Role,
+    type: 'varchar',
+    length: 50,
     default: Role.CUSTOMER,
   })
   role: Role;

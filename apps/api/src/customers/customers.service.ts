@@ -77,10 +77,8 @@ export class CustomersService {
       user: savedUser,
       facilityType: dto.facilityType,
       subscriptionTier: dto.subscriptionTier || SubscriptionTier.BASIC,
-      facilityLocation: {
-        type: 'Point',
-        coordinates: [coords.longitude, coords.latitude],
-      },
+      latitude: coords.latitude,
+      longitude: coords.longitude,
     });
 
     const savedCustomer = await this.customerRepo.save(customer);

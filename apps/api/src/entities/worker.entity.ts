@@ -15,7 +15,7 @@ export class WorkerEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'uuid' })
+  @Column({ type: 'uniqueidentifier' })
   userId: string;
 
   @OneToOne(() => UserEntity, { onDelete: 'CASCADE', eager: true })
@@ -28,19 +28,17 @@ export class WorkerEntity {
   @Column({ type: 'simple-array', nullable: true })
   servicePillars: ServicePillar[];
 
-  @Column({ type: 'boolean', default: true })
+  @Column({ type: 'bit', default: 1 })
   isAvailable: boolean;
 
   @Column({ type: 'integer', default: 0 })
   activeJobs: number;
 
-  @Column({
-    type: 'geometry',
-    spatialFeatureType: 'Point',
-    srid: 4326,
-    nullable: true,
-  })
-  location?: { type: 'Point'; coordinates: [number, number] };
+  @Column({ type: 'float', nullable: true })
+  latitude?: number | null;
+
+  @Column({ type: 'float', nullable: true })
+  longitude?: number | null;
 
   @CreateDateColumn()
   createdAt: Date;

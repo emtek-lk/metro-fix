@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { DragDropContext, Draggable, Droppable, type DropResult } from '@hello-pangea/dnd';
 import { JobStatus, ServiceType } from '@metro-fix/core-types';
 import { useMediaQuery } from '@metro-fix/ui';
@@ -232,6 +232,80 @@ export function CustomerCareView() {
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
   const isCompact = useMediaQuery('(max-width: 980px)');
 
+  const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ message, type });
+    setTimeout(() => {
+      setToast((cur) => (cur?.message === message ? null : cur));
+    }, 4000);
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+    setIsLoading(true);
+    setFetchError(null);
+
+    fetch('http://localhost:3000/jobs')
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+        return res.json();
+      })
+      .then((data: any[]) => {
+        if (!isMounted) return;
+        setIsLoading(false);
+        if (!Array.isArray(data) || data.length === 0) return;
+        const newCols: Record<JobStatus, DispatchCard[]> = {
+          [JobStatus.Requested]: [],
+          [JobStatus.PendingAcceptance]: [],
+          [JobStatus.Assigned]: [],
+          [JobStatus.OnRoute]: [],
+          [JobStatus.Inspection]: [],
+          [JobStatus.InProgress]: [],
+          [JobStatus.Completed]: [],
+        };
+        data.forEach((job) => {
+          const card: DispatchCard = {
+            id: job.id,
+            title: job.title || 'Service Request',
+            customerName: job.customer?.user?.fullName || 'Customer Site',
+            serviceType: (job.servicePillar as ServiceType) || ServiceType.Hard,
+            urgency: 'Medium',
+            location: job.facilityType || 'Site Location',
+            assignedWorker: job.worker
+              ? {
+                  id: job.worker.id,
+                  fullName: job.worker.user?.fullName || 'Assigned Worker',
+                  rating: job.worker.rating || 5.0,
+                  proximityKm: 1.5,
+                }
+              : null,
+            status: (job.status as JobStatus) || JobStatus.Requested,
+            summary: job.description || 'Service request description',
+            createdAt: job.createdAt || new Date().toISOString(),
+          };
+          if (newCols[card.status]) {
+            newCols[card.status].push(card);
+          } else {
+            newCols[JobStatus.Requested].push(card);
+          }
+        });
+        setColumns(newCols);
+      })
+      .catch((err) => {
+        if (!isMounted) return;
+        setIsLoading(false);
+        setFetchError('Unable to connect to live NestJS API. Displaying local workspace state.');
+        console.warn('Using seed/mock jobs, NestJS backend connecting or starting:', err);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const grouped = useMemo(() => boardOrder.map((status) => ({ status, items: columns[status] })), [columns]);
 
   const sortedWorkers = useMemo(
@@ -404,15 +478,56 @@ export function CustomerCareView() {
     const destinationCards = [...columns[destinationStatus]];
     destinationCards.splice(destination.index, 0, updatedItem);
 
+    const previousColumns = columns;
     setColumns((current) => ({
       ...current,
       [sourceStatus]: sourceCards,
       [destinationStatus]: destinationCards,
     }));
+
+    fetch(`http://localhost:3000/jobs/${draggableId}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: destinationStatus }),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        showToast(`Job status updated to "${statusLabels[destinationStatus]}"`, 'success');
+      })
+      .catch((err) => {
+        setColumns(previousColumns);
+        showToast(`Failed to persist job status change to backend API. Action reverted.`, 'error');
+        console.warn('Failed to persist job status to backend:', err);
+      });
   };
 
   return (
     <section style={styles.view}>
+      {isLoading && (
+        <div style={styles.loadingBanner}>
+          <div style={styles.spinner} />
+          <span>Fetching live service requests from NestJS API...</span>
+        </div>
+      )}
+
+      {fetchError && !isLoading && (
+        <div style={styles.errorBanner}>
+          <span>⚠️ {fetchError}</span>
+        </div>
+      )}
+
+      {toast && (
+        <div
+          style={{
+            ...styles.toastNotification,
+            background: toast.type === 'success' ? '#2b435f' : '#8b0000',
+            borderColor: toast.type === 'success' ? '#f38808' : '#ff4d4d',
+          }}
+        >
+          <span>{toast.type === 'success' ? '✓' : '✕'} {toast.message}</span>
+        </div>
+      )}
+
       <DragDropContext onDragEnd={handleDragEnd}>
         <div style={{ ...styles.boardShell, ...(isCompact ? styles.boardShellCompact : undefined) }}>
           <div style={{ ...styles.board, ...(isCompact ? styles.boardCompact : undefined) }}>
@@ -940,10 +1055,53 @@ const styles: Record<string, CSSProperties> = {
     display: 'grid',
     placeItems: 'center',
     color: 'var(--text-secondary)',
-    background: 'var(--surface-strong)',
-    fontSize: '0.84rem',
     padding: '12px',
     textAlign: 'center',
+  },
+  loadingBanner: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '8px 16px',
+    marginBottom: '10px',
+    background: '#2b435f',
+    color: '#ffffff',
+    borderRadius: '8px',
+    fontSize: '0.85rem',
+    fontWeight: 500,
+  },
+  spinner: {
+    width: '14px',
+    height: '14px',
+    border: '2px solid rgba(255, 255, 255, 0.3)',
+    borderTopColor: '#f38808',
+    borderRadius: '50%',
+    animation: 'spin 0.8s linear infinite',
+  },
+  errorBanner: {
+    padding: '8px 16px',
+    marginBottom: '10px',
+    background: '#8b0000',
+    color: '#ffffff',
+    borderRadius: '8px',
+    fontSize: '0.85rem',
+    fontWeight: 500,
+  },
+  toastNotification: {
+    position: 'fixed',
+    bottom: '24px',
+    right: '24px',
+    zIndex: 9999,
+    padding: '12px 20px',
+    borderRadius: '8px',
+    color: '#ffffff',
+    border: '1px solid #f38808',
+    boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+    fontSize: '0.9rem',
+    fontWeight: 600,
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
   },
 };
 

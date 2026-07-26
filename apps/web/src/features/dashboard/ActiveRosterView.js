@@ -1,0 +1,172 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+const rosterData = [
+    {
+        id: 'wrk-101',
+        name: 'Amina Yusuf',
+        phone: '+1 (555) 012-4491',
+        zone: 'North District',
+        rating: 4.9,
+        currentTask: 'REQ-1001 • HVAC Chiller Maintenance',
+        status: 'IN_PROGRESS',
+        lastPing: '2 mins ago (GPS Live)',
+    },
+    {
+        id: 'wrk-102',
+        name: 'Malik Thompson',
+        phone: '+1 (555) 012-7720',
+        zone: 'Central Business',
+        rating: 4.7,
+        currentTask: 'REQ-1002 • Emergency Deep Clean',
+        status: 'ON_ROUTE',
+        lastPing: '1 min ago (GPS Live)',
+    },
+    {
+        id: 'wrk-103',
+        name: 'Nadia Khan',
+        phone: '+1 (555) 012-3310',
+        zone: 'East Park',
+        rating: 4.8,
+        currentTask: 'REQ-1003 • Security Patrol Audit',
+        status: 'INSPECTION',
+        lastPing: '4 mins ago (GPS Live)',
+    },
+    {
+        id: 'wrk-104',
+        name: 'Omar Silva',
+        phone: '+1 (555) 012-8843',
+        zone: 'Harbor Loop',
+        rating: 4.5,
+        currentTask: 'Standby / Unassigned',
+        status: 'AVAILABLE',
+        lastPing: 'Just now (GPS Live)',
+    },
+    {
+        id: 'wrk-105',
+        name: 'David Chen',
+        phone: '+1 (555) 012-1152',
+        zone: 'West Campus',
+        rating: 4.6,
+        currentTask: 'REQ-1004 • Fire Panel Compliance',
+        status: 'ON_ROUTE',
+        lastPing: '3 mins ago (GPS Live)',
+    },
+];
+const statusStyles = {
+    IN_PROGRESS: { label: 'In Progress', bg: 'rgba(243, 136, 8, 0.18)', color: '#f38808' },
+    ON_ROUTE: { label: 'On Route', bg: 'rgba(59, 130, 246, 0.18)', color: '#60a5fa' },
+    INSPECTION: { label: 'Inspection', bg: 'rgba(168, 85, 247, 0.18)', color: '#c084fc' },
+    AVAILABLE: { label: 'Available', bg: 'rgba(74, 173, 131, 0.18)', color: '#4aad83' },
+};
+export function ActiveRosterView() {
+    return (_jsx("div", { style: styles.container, children: _jsx("div", { style: styles.tableShell, children: _jsx("div", { style: styles.tableWrap, children: _jsxs("table", { style: styles.table, children: [_jsx("thead", { children: _jsxs("tr", { children: [_jsx("th", { style: styles.th, children: "Worker Name" }), _jsx("th", { style: styles.th, children: "Coverage Zone" }), _jsx("th", { style: styles.th, children: "Current Task" }), _jsx("th", { style: styles.th, children: "Internal Rating" }), _jsx("th", { style: styles.th, children: "Status" }), _jsx("th", { style: styles.th, children: "GPS Status" })] }) }), _jsx("tbody", { children: rosterData.map((worker) => {
+                                const s = statusStyles[worker.status];
+                                return (_jsxs("tr", { children: [_jsxs("td", { style: styles.tdStrong, children: [_jsx("div", { children: worker.name }), _jsx("div", { style: styles.subtext, children: worker.phone })] }), _jsx("td", { style: styles.td, children: worker.zone }), _jsx("td", { style: styles.td, children: worker.currentTask }), _jsx("td", { style: styles.td, children: _jsxs("span", { style: styles.rating, children: ["\u2605 ", worker.rating.toFixed(1)] }) }), _jsx("td", { style: styles.td, children: _jsx("span", { style: { ...styles.statusPill, backgroundColor: s.bg, color: s.color }, children: s.label }) }), _jsx("td", { style: styles.tdSubtle, children: worker.lastPing })] }, worker.id));
+                            }) })] }) }) }) }));
+}
+const styles = {
+    container: {
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        maxHeight: '100%',
+        minHeight: 0,
+        overflow: 'hidden',
+        color: 'var(--text-primary)',
+    },
+    header: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '16px',
+        flexShrink: 0,
+    },
+    title: {
+        margin: 0,
+        fontSize: '1.5rem',
+        fontWeight: 800,
+    },
+    actionBtn: {
+        backgroundColor: '#f38808',
+        color: '#ffffff',
+        border: 'none',
+        borderRadius: '12px',
+        padding: '10px 18px',
+        fontWeight: 800,
+        fontSize: '0.88rem',
+        cursor: 'pointer',
+        boxShadow: '0 4px 14px rgba(243, 136, 8, 0.35)',
+    },
+    tableShell: {
+        display: 'flex',
+        flexDirection: 'column',
+        flex: 1,
+        minHeight: 0,
+        height: '100%',
+        overflow: 'hidden',
+        background: 'var(--surface-strong)',
+        borderRadius: '18px',
+        border: '1px solid var(--border-subtle)',
+    },
+    tableWrap: {
+        flex: 1,
+        minHeight: 0,
+        height: '100%',
+        overflowY: 'auto',
+        overflowX: 'auto',
+        scrollbarWidth: 'none',
+    },
+    table: {
+        width: '100%',
+        borderCollapse: 'collapse',
+        color: 'var(--text-primary)',
+    },
+    th: {
+        position: 'sticky',
+        top: 0,
+        zIndex: 2,
+        textAlign: 'left',
+        padding: '14px 16px',
+        backgroundColor: '#2b435f',
+        color: '#ffffff',
+        fontSize: '0.82rem',
+        fontWeight: 800,
+        textTransform: 'uppercase',
+        letterSpacing: '0.08em',
+        boxShadow: '0 1px 0 var(--border-subtle)',
+    },
+    td: {
+        padding: '14px 16px',
+        borderBottom: '1px solid var(--border-subtle)',
+        fontSize: '0.9rem',
+    },
+    tdStrong: {
+        padding: '14px 16px',
+        borderBottom: '1px solid var(--border-subtle)',
+        fontWeight: 700,
+        fontSize: '0.92rem',
+    },
+    subtext: {
+        fontSize: '0.78rem',
+        color: 'var(--text-secondary)',
+        marginTop: '2px',
+        fontWeight: 400,
+    },
+    tdSubtle: {
+        padding: '14px 16px',
+        borderBottom: '1px solid var(--border-subtle)',
+        color: 'var(--text-secondary)',
+        fontSize: '0.84rem',
+    },
+    rating: {
+        fontWeight: 700,
+        color: '#f38808',
+    },
+    statusPill: {
+        display: 'inline-block',
+        padding: '4px 10px',
+        borderRadius: '999px',
+        fontSize: '0.78rem',
+        fontWeight: 800,
+    },
+};
+export default ActiveRosterView;
