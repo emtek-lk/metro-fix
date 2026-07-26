@@ -1,155 +1,214 @@
-import { useState } from 'react';
-import { Button } from '@metro-fix/ui';
-import type { UserProfile, ApiResponse } from '@metro-fix/core-types';
+import { useState, useEffect, type CSSProperties } from 'react';
+import { DashboardLayout, AdminWorkspace } from '@metro-fix/ui';
+import { Role, type User } from '@metro-fix/core-types';
+import AuthShell from './features/auth/AuthShell';
+import { CustomerCareView } from './features/dashboard/CustomerCareView';
+import { ActiveRosterView } from './features/dashboard/ActiveRosterView';
+import { ThemeToggle } from './theme/ThemeToggle';
+
+type AdminViewType = 'customers' | 'service-catalog' | 'workers' | 'subscriptions' | 'financials';
+
+const pathToConfig: Record<string, { label: string; viewType?: AdminViewType }> = {
+  '/dispatch': { label: 'Dispatch Board' },
+  '/active-roster': { label: 'Active Roster' },
+  '/workers': { label: 'Workers', viewType: 'workers' },
+  '/customers': { label: 'Customers', viewType: 'customers' },
+  '/service-catalog': { label: 'Service Catalog', viewType: 'service-catalog' },
+  '/subscriptions': { label: 'Subscriptions', viewType: 'subscriptions' },
+  '/financials': { label: 'Financials', viewType: 'financials' },
+  '/admin': { label: 'Customers', viewType: 'customers' },
+};
+
+const labelToPath: Record<string, string> = {
+  'Dispatch Board': '/dispatch',
+  'Active Roster': '/active-roster',
+  'Workers': '/workers',
+  'Customers': '/customers',
+  'Service Catalog': '/service-catalog',
+  'Subscriptions': '/subscriptions',
+  'Financials': '/financials',
+};
+
+const headerBtnStyle: CSSProperties = {
+  backgroundColor: '#f38808',
+  color: '#ffffff',
+  border: 'none',
+  borderRadius: '10px',
+  padding: '8px 16px',
+  fontWeight: 700,
+  fontSize: '0.84rem',
+  cursor: 'pointer',
+  boxShadow: '0 3px 10px rgba(243, 136, 8, 0.3)',
+  transition: 'background-color 150ms ease',
+};
+
+function getInitialState(): { user: User | null; route: string } {
+  if (typeof window === 'undefined') {
+    return { user: null, route: '/dispatch' };
+  }
+
+  const currentPath = window.location.pathname;
+  const searchParams = new URLSearchParams(window.location.search);
+
+  // Explicit URL bypass param for testing
+  if (searchParams.get('bypass') === '1') {
+    const bypassRole = searchParams.get('role') === 'admin' ? Role.ADMIN : Role.CUSTOMER_CARE;
+    const targetRoute = currentPath !== '/' && currentPath !== '/login' ? currentPath : (bypassRole === Role.ADMIN ? '/customers' : '/dispatch');
+    return {
+      user: {
+        id: 'usr_demo_001',
+        fullName: bypassRole === Role.ADMIN ? 'System Administrator' : 'Customer Care Dispatcher',
+        email: bypassRole === Role.ADMIN ? 'admin@metro-fix.com' : 'dispatch@metro-fix.com',
+        role: bypassRole,
+        createdAt: new Date().toISOString(),
+      },
+      route: targetRoute,
+    };
+  }
+
+  // Session check in local storage
+  try {
+    const storedToken = localStorage.getItem('metrofix_token');
+    const storedUserJson = localStorage.getItem('metrofix_user');
+    if (storedToken && storedUserJson) {
+      const parsedUser = JSON.parse(storedUserJson) as User;
+      const validPath = currentPath !== '/' && currentPath !== '/login' && pathToConfig[currentPath]
+        ? currentPath
+        : (parsedUser.role === Role.ADMIN ? '/customers' : '/dispatch');
+      return { user: parsedUser, route: validPath };
+    }
+  } catch {
+    // Storage safety
+  }
+
+  return { user: null, route: '/login' };
+}
 
 export default function App() {
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [initial] = useState(getInitialState);
+  const [user, setUser] = useState<User | null>(initial.user);
+  const [currentPath, setCurrentPath] = useState<string>(initial.route);
+  const [isAddCustomerOpen, setIsAddCustomerOpen] = useState(false);
 
-  // Functionality: Simulated API fetch demonstrating end-to-end typing
-  const handleFetchUserProfile = () => {
-    setLoading(true);
+  useEffect(() => {
+    const handlePopState = () => {
+      setCurrentPath(window.location.pathname);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
-    // Simulate standard network latency (800ms delay)
-    setTimeout(() => {
-      // Development: Enforcing the API contract shape we defined in core-types
-      const mockApiResponse: ApiResponse<UserProfile> = {
-        success: true,
-        data: {
-          id: 'usr_99824',
-          fullName: 'Shamil Suraweera',
-          email: 'shamil@metrofix.dev',
-          createdAt: new Date().toLocaleDateString(),
-        },
-      };
+  const handleAuthenticated = (authUser: User, _token: string, targetPath: string) => {
+    setUser(authUser);
+    const destination = targetPath === '/admin' ? '/customers' : (targetPath || '/dispatch');
+    setCurrentPath(destination);
+    window.history.pushState({}, '', destination);
+  };
 
-      if (mockApiResponse.success) {
-        setUser(mockApiResponse.data);
-      }
-      setLoading(false);
-    }, 800);
+  const handleLogout = () => {
+    try {
+      localStorage.removeItem('metrofix_token');
+      localStorage.removeItem('metrofix_user');
+      sessionStorage.clear();
+    } catch {
+      // Storage safety
+    }
+    setUser(null);
+    setCurrentPath('/login');
+    window.history.pushState({}, '', '/login');
+  };
+
+  if (!user) {
+    return <AuthShell onAuthenticated={handleAuthenticated} />;
+  }
+
+  const activeConfig = pathToConfig[currentPath] || { label: 'Dispatch Board' };
+
+  const handleRouteChange = (newRouteLabel: string) => {
+    const targetPath = labelToPath[newRouteLabel] || '/dispatch';
+    setCurrentPath(targetPath);
+    window.history.pushState({}, '', targetPath);
+  };
+
+  const renderHeaderActions = () => {
+    switch (currentPath) {
+      case '/customers':
+        return (
+          <button type="button" style={headerBtnStyle} onClick={() => setIsAddCustomerOpen(true)}>
+            + Add New Customer
+          </button>
+        );
+      case '/workers':
+        return (
+          <button type="button" style={headerBtnStyle} onClick={() => alert('Add New Worker triggered')}>
+            + Add New Worker
+          </button>
+        );
+      case '/service-catalog':
+        return (
+          <button type="button" style={headerBtnStyle} onClick={() => alert('Add New Service triggered')}>
+            + Add New Service
+          </button>
+        );
+      case '/subscriptions':
+        return (
+          <button type="button" style={headerBtnStyle} onClick={() => alert('New Plan Tier triggered')}>
+            + New Plan Tier
+          </button>
+        );
+      case '/financials':
+        return (
+          <button type="button" style={headerBtnStyle} onClick={() => alert('Exporting financial report...')}>
+            Export Report
+          </button>
+        );
+      case '/active-roster':
+        return (
+          <button type="button" style={headerBtnStyle} onClick={() => alert('Pinging all field units...')}>
+            + Ping All Field Units
+          </button>
+        );
+      default:
+        return null;
+    }
+  };
+
+  const renderCurrentView = () => {
+    switch (currentPath) {
+      case '/active-roster':
+        return <ActiveRosterView />;
+      case '/workers':
+        return <AdminWorkspace activeView="workers" />;
+      case '/customers':
+        return (
+          <AdminWorkspace
+            activeView="customers"
+            isCustomerModalOpen={isAddCustomerOpen}
+            onCloseCustomerModal={() => setIsAddCustomerOpen(false)}
+          />
+        );
+      case '/service-catalog':
+        return <AdminWorkspace activeView="service-catalog" />;
+      case '/subscriptions':
+        return <AdminWorkspace activeView="subscriptions" />;
+      case '/financials':
+        return <AdminWorkspace activeView="financials" />;
+      case '/dispatch':
+      default:
+        return <CustomerCareView />;
+    }
   };
 
   return (
-    <div style={styles.container}>
-      <header style={styles.header}>
-        <h1 style={styles.title}>Metro-Fix Workspace</h1>
-        <p style={styles.subtitle}>Web frontend running on Ubuntu environment.</p>
-      </header>
-
-      <main style={styles.main}>
-        <section style={styles.section}>
-          <h2 style={styles.sectionHeader}>Component Integration Test</h2>
-          <p style={styles.paragraph}>
-            This button is loaded as a hot-reloadable module directly from your local 
-            <code>packages/ui</code> library.
-          </p>
-          
-          <Button 
-            label={loading ? 'Accessing Data Contract...' : 'Load Profile Data'} 
-            onClick={handleFetchUserProfile} 
-          />
-        </section>
-
-        {user && (
-          <section style={styles.card}>
-            <h3 style={styles.cardHeader}>User Profile Data (Type Confirmed)</h3>
-            <div style={styles.metaRow}>
-              <span style={styles.label}>Unique ID:</span> 
-              <code style={styles.code}>{user.id}</code>
-            </div>
-            <div style={styles.metaRow}>
-              <span style={styles.label}>Full Name:</span> 
-              <span style={styles.value}>{user.fullName}</span>
-            </div>
-            <div style={styles.metaRow}>
-              <span style={styles.label}>Email Address:</span> 
-              <span style={styles.value}>{user.email}</span>
-            </div>
-            <div style={styles.metaRow}>
-              <span style={styles.label}>Initialized:</span> 
-              <span style={styles.value}>{user.createdAt}</span>
-            </div>
-          </section>
-        )}
-      </main>
-    </div>
+    <DashboardLayout
+      activeRoute={activeConfig.label}
+      userProfile={user}
+      headerActions={renderHeaderActions()}
+      onRouteChange={handleRouteChange}
+      settingsSlot={<ThemeToggle compact />}
+      onLogout={handleLogout}
+    >
+      {renderCurrentView()}
+    </DashboardLayout>
   );
 }
-
-// Layout Styling (Simple inline CSS for clean separation without extra dependencies)
-const styles = {
-  container: {
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-    maxWidth: '640px',
-    margin: '60px auto',
-    padding: '0 24px',
-    color: '#1a1a1a',
-  },
-  header: {
-    borderBottom: '1px solid #eaeaea',
-    paddingBottom: '24px',
-    marginBottom: '32px',
-  },
-  title: {
-    fontSize: '2rem',
-    fontWeight: 700,
-    margin: '0 0 8px 0',
-    color: '#000',
-  },
-  subtitle: {
-    fontSize: '1rem',
-    margin: 0,
-    color: '#666',
-  },
-  main: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '24px',
-  },
-  section: {
-    padding: '24px',
-    borderRadius: '8px',
-    border: '1px solid #eaeaea',
-    backgroundColor: '#fafafa',
-  },
-  sectionHeader: {
-    fontSize: '1.25rem',
-    margin: '0 0 12px 0',
-  },
-  paragraph: {
-    color: '#444',
-    lineHeight: 1.5,
-    margin: '0 0 20px 0',
-  },
-  card: {
-    padding: '24px',
-    borderRadius: '8px',
-    border: '1px solid #0070f3',
-    backgroundColor: '#f0f7ff',
-  },
-  cardHeader: {
-    color: '#0070f3',
-    margin: '0 0 16px 0',
-    fontSize: '1.1rem',
-  },
-  metaRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    padding: '8px 0',
-    borderBottom: '1px solid rgba(0, 112, 243, 0.1)',
-  },
-  label: {
-    fontWeight: 600,
-    color: '#333',
-  },
-  value: {
-    color: '#555',
-  },
-  code: {
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
-    padding: '2px 6px',
-    borderRadius: '4px',
-    fontSize: '0.9em',
-  },
-};

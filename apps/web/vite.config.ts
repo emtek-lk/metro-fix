@@ -6,8 +6,10 @@ export default defineConfig({
   plugins: [react()],
   server: {
     watch: {
-      // Force Vite to watch code updates inside your packages directory
-      ignored: ['!**/packages/ui/**']
+      usePolling: true,
+      interval: 250,
+      // Keep workspace packages hot-reloadable without relying on inotify limits.
+      ignored: ['!**/packages/ui/**', '!**/packages/core-types/**']
     }
   },
   resolve: {
