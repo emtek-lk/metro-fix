@@ -10,10 +10,13 @@
   },
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",
+    "@hookform/resolvers": "^3.10.0",
     "@metro-fix/core-types": "*",
     "@metro-fix/ui": "*",
+    "@tanstack/react-table": "^8.20.5",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "react-hook-form": "^7.54.2"
   },
   "devDependencies": {
     "@metro-fix/ts-config": "*",

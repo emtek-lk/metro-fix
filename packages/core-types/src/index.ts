@@ -1,12 +1,19 @@
 import { z } from 'zod';
 
-export enum ServiceType {
-  Hard = 'Hard',
-  Soft = 'Soft',
-  Strategic = 'Strategic',
-}
+// ==========================================
+// Core Domain Enums
+// ==========================================
 
 export enum JobStatus {
+  REQUESTED = 'REQUESTED',
+  PENDING_ACCEPTANCE = 'PENDING_ACCEPTANCE',
+  ASSIGNED = 'ASSIGNED',
+  ON_ROUTE = 'ON_ROUTE',
+  INSPECTION = 'INSPECTION',
+  IN_PROGRESS = 'IN_PROGRESS',
+  COMPLETED = 'COMPLETED',
+
+  // Backward-compatibility aliases
   Requested = 'REQUESTED',
   PendingAcceptance = 'PENDING_ACCEPTANCE',
   Assigned = 'ASSIGNED',
@@ -16,50 +23,126 @@ export enum JobStatus {
   Completed = 'COMPLETED',
 }
 
+export enum FacilityType {
+  RESIDENTIAL = 'RESIDENTIAL',
+  COMMERCIAL = 'COMMERCIAL',
+  INDUSTRIAL = 'INDUSTRIAL',
+
+  // Backward-compatibility aliases
+  Residential = 'RESIDENTIAL',
+  Commercial = 'COMMERCIAL',
+  Industrial = 'INDUSTRIAL',
+}
+
+export enum ServicePillar {
+  HARD = 'HARD',
+  SOFT = 'SOFT',
+  STRATEGIC = 'STRATEGIC',
+
+  // Backward-compatibility aliases
+  Hard = 'HARD',
+  Soft = 'SOFT',
+  Strategic = 'STRATEGIC',
+}
+
+// Backwards compatibility alias
+export { ServicePillar as ServiceType };
+
+export enum SubscriptionTier {
+  BASIC = 'BASIC',
+  PLUS = 'PLUS',
+  PREMIUM = 'PREMIUM',
+
+  // Backward-compatibility aliases
+  Basic = 'BASIC',
+  Plus = 'PLUS',
+  Premium = 'PREMIUM',
+}
+
 export enum Role {
-  Admin = 'Admin',
-  CustomerCare = 'Customer Care',
-  Customer = 'Customer',
-  Worker = 'Worker',
+  ADMIN = 'ADMIN',
+  CUSTOMER_CARE = 'CUSTOMER_CARE',
+  CUSTOMER = 'CUSTOMER',
+  WORKER = 'WORKER',
+
+  // Backward-compatibility aliases
+  Admin = 'ADMIN',
+  CustomerCare = 'CUSTOMER_CARE',
+  Customer = 'CUSTOMER',
+  Worker = 'WORKER',
 }
 
-export interface User {
-  id: string;
-  fullName: string;
-  email: string;
-  role: Role;
-  phoneNumber?: string;
-  avatarUrl?: string;
-  createdAt: string;
-  updatedAt?: string;
-}
+// ==========================================
+// Location / Spatial Schemas
+// ==========================================
 
-export interface WorkerProfile {
-  id: string;
-  userId: string;
-  jobTitle: string;
-  role: Role.Worker;
-  serviceTypes: ServiceType[];
-  coverageZones: string[];
-  currentLocation?: string;
-  rating: number;
-  activeJobs: number;
-  isAvailable: boolean;
-}
+export const locationCoordinatesSchema = z.object({
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+});
 
-export interface ServiceRequest {
-  id: string;
-  serviceType: ServiceType;
-  title: string;
-  description: string;
-  location: string;
-  requestedByUserId: string;
-  assignedWorkerId?: string | null;
-  status: JobStatus;
-  scheduledFor?: string | null;
-  createdAt: string;
-  updatedAt?: string;
-}
+export type LocationCoordinates = z.infer<typeof locationCoordinatesSchema>;
+
+// ==========================================
+// Core Entity Schemas & Types
+// ==========================================
+
+// Base User Schema
+export const userSchema = z.object({
+  id: z.string(),
+  fullName: z.string().min(2, 'Full name is required.'),
+  email: z.string().email('Invalid email address.'),
+  role: z.nativeEnum(Role),
+  phoneNumber: z.string().optional(),
+  avatarUrl: z.string().optional(),
+  createdAt: z.union([z.string(), z.date()]),
+  updatedAt: z.union([z.string(), z.date()]).optional(),
+});
+
+export type User = z.infer<typeof userSchema>;
+
+// Worker Schema (Extends User with internal rating 1-5, location, pillars, status)
+export const workerSchema = userSchema.extend({
+  rating: z.number().min(1).max(5).default(5),
+  location: locationCoordinatesSchema.optional(),
+  servicePillars: z.array(z.nativeEnum(ServicePillar)).default([]),
+  isAvailable: z.boolean().default(true),
+  activeJobs: z.number().int().nonnegative().default(0),
+});
+
+export type Worker = z.infer<typeof workerSchema>;
+
+// Customer Schema (Extends User with facility type and subscription tier)
+export const customerSchema = userSchema.extend({
+  facilityType: z.nativeEnum(FacilityType),
+  subscriptionTier: z.nativeEnum(SubscriptionTier),
+  facilityLocation: locationCoordinatesSchema.optional(),
+});
+
+export type Customer = z.infer<typeof customerSchema>;
+
+// Service Request Schema (Core Job Ticket)
+export const serviceRequestSchema = z.object({
+  id: z.string(),
+  title: z.string().min(3, 'Title is required.'),
+  description: z.string().min(5, 'Description is required.'),
+  servicePillar: z.nativeEnum(ServicePillar),
+  facilityType: z.nativeEnum(FacilityType),
+  status: z.nativeEnum(JobStatus).default(JobStatus.REQUESTED),
+  customerId: z.string(),
+  workerId: z.string().optional().nullable(),
+  location: locationCoordinatesSchema,
+  scheduledFor: z.union([z.string(), z.date()]).optional().nullable(),
+  quoteAmount: z.number().nonnegative().optional().nullable(),
+  createdAt: z.union([z.string(), z.date()]),
+  updatedAt: z.union([z.string(), z.date()]).optional(),
+});
+
+export type ServiceRequest = z.infer<typeof serviceRequestSchema>;
+
+// ==========================================
+// Auth & Form Schemas
+// ==========================================
 
 export const loginSchema = z.object({
   email: z.string().trim().email('Enter a valid email address.'),
@@ -71,7 +154,7 @@ export const registrationSchema = z
     fullName: z.string().trim().min(2, 'Full name is required.'),
     email: z.string().trim().email('Enter a valid email address.'),
     phoneNumber: z.string().trim().min(7, 'Enter a valid phone number.').optional().or(z.literal('')),
-    role: z.nativeEnum(Role).default(Role.Customer),
+    role: z.nativeEnum(Role).default(Role.CUSTOMER),
     password: z.string().min(8, 'Password must be at least 8 characters long.'),
     confirmPassword: z.string().min(8, 'Confirm the password.'),
     companyName: z.string().trim().min(2, 'Company name is required.').optional().or(z.literal('')),

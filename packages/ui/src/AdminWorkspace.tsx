@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import {
   type ColumnDef,
   flexRender,
@@ -8,6 +8,9 @@ import {
   useReactTable,
   type SortingState,
 } from '@tanstack/react-table';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 
 export type FacilityType = 'Residential' | 'Commercial' | 'Industrial';
 export type SubscriptionTier = 'Basic' | 'Plus' | 'Premium';
@@ -22,6 +25,7 @@ export type CustomerRecord = {
   phone: string;
   facilityType: FacilityType;
   subscriptionTier: SubscriptionTier;
+  physicalAddress?: string;
 };
 
 export type ServiceRecord = {
@@ -33,7 +37,50 @@ export type ServiceRecord = {
   status: ServiceStatus;
 };
 
-const customerRows: CustomerRecord[] = [
+export type WorkerRecord = {
+  id: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  coverageZone: string;
+  rating: number;
+  serviceTypes: string;
+  status: 'Active' | 'On Route' | 'Offline';
+};
+
+export type SubscriptionPlanRecord = {
+  id: string;
+  tierName: SubscriptionTier;
+  targetFacility: FacilityType;
+  monthlyFee: string;
+  activeAccounts: number;
+  includedServices: string;
+  status: 'Active' | 'Draft';
+};
+
+export type FinancialRecord = {
+  id: string;
+  jobId: string;
+  customerName: string;
+  servicePillar: ServicePillar;
+  amount: string;
+  paymentStatus: 'Paid' | 'Pending' | 'Refunded';
+  invoiceDate: string;
+};
+
+// Zod schema for Customer Creation Form
+export const createCustomerFormSchema = z.object({
+  fullName: z.string().trim().min(2, 'Full name must be at least 2 characters.'),
+  email: z.string().trim().email('Please enter a valid email address.'),
+  phoneNumber: z.string().trim().min(7, 'Please enter a valid phone number.'),
+  facilityType: z.enum(['Residential', 'Commercial', 'Industrial']),
+  subscriptionTier: z.enum(['Basic', 'Plus', 'Premium']).default('Basic'),
+  physicalAddress: z.string().trim().min(5, 'Physical address must be at least 5 characters.'),
+});
+
+export type CreateCustomerFormValues = z.infer<typeof createCustomerFormSchema>;
+
+const initialCustomerRows: CustomerRecord[] = [
   {
     id: 'cust-001',
     fullName: 'Aisha Rahman',
@@ -42,6 +89,7 @@ const customerRows: CustomerRecord[] = [
     phone: '+1 (555) 010-2234',
     facilityType: 'Residential',
     subscriptionTier: 'Plus',
+    physicalAddress: '124 Market St, San Francisco, CA',
   },
   {
     id: 'cust-002',
@@ -51,6 +99,7 @@ const customerRows: CustomerRecord[] = [
     phone: '+1 (555) 010-7781',
     facilityType: 'Industrial',
     subscriptionTier: 'Premium',
+    physicalAddress: '890 Harbor Blvd, Oakland, CA',
   },
   {
     id: 'cust-003',
@@ -60,6 +109,7 @@ const customerRows: CustomerRecord[] = [
     phone: '+1 (555) 010-3389',
     facilityType: 'Commercial',
     subscriptionTier: 'Basic',
+    physicalAddress: '450 Plaza Way, San Jose, CA',
   },
   {
     id: 'cust-004',
@@ -69,6 +119,7 @@ const customerRows: CustomerRecord[] = [
     phone: '+1 (555) 010-9912',
     facilityType: 'Residential',
     subscriptionTier: 'Plus',
+    physicalAddress: '782 Pine Ave, Berkeley, CA',
   },
   {
     id: 'cust-005',
@@ -78,6 +129,7 @@ const customerRows: CustomerRecord[] = [
     phone: '+1 (555) 010-1208',
     facilityType: 'Commercial',
     subscriptionTier: 'Premium',
+    physicalAddress: '100 Grand Galleria, San Mateo, CA',
   },
   {
     id: 'cust-006',
@@ -87,6 +139,27 @@ const customerRows: CustomerRecord[] = [
     phone: '+1 (555) 010-4507',
     facilityType: 'Commercial',
     subscriptionTier: 'Plus',
+    physicalAddress: '300 Embarcadero Center, San Francisco, CA',
+  },
+  {
+    id: 'cust-007',
+    fullName: 'Skyline Towers FM',
+    displayName: 'Skyline Towers',
+    email: 'dispatch@skylinetowers.com',
+    phone: '+1 (555) 010-8819',
+    facilityType: 'Commercial',
+    subscriptionTier: 'Premium',
+    physicalAddress: '550 California St, San Francisco, CA',
+  },
+  {
+    id: 'cust-008',
+    fullName: 'Pacific Bay Logistics',
+    displayName: 'Pacific Bay',
+    email: 'admin@pacificbaylogistics.com',
+    phone: '+1 (555) 010-6641',
+    facilityType: 'Industrial',
+    subscriptionTier: 'Plus',
+    physicalAddress: '1200 Maritime St, Oakland, CA',
   },
 ];
 
@@ -139,6 +212,46 @@ const serviceRows: ServiceRecord[] = [
     requiredSubscriptionTier: 'Premium',
     status: 'Active',
   },
+  {
+    id: 'svc-007',
+    serviceName: 'HVAC Air Filter Replacement',
+    pillarCategory: 'Hard',
+    basePrice: '$280',
+    requiredSubscriptionTier: 'Basic',
+    status: 'Active',
+  },
+  {
+    id: 'svc-008',
+    serviceName: 'Waste Management Triage',
+    pillarCategory: 'Soft',
+    basePrice: '$210',
+    requiredSubscriptionTier: 'Basic',
+    status: 'Active',
+  },
+];
+
+const initialWorkerRows: WorkerRecord[] = [
+  { id: 'wrk-01', fullName: 'Amina Yusuf', email: 'amina.y@metrofix.dev', phone: '+1 (555) 012-4491', coverageZone: 'North District', rating: 4.9, serviceTypes: 'Hard, Strategic', status: 'Active' },
+  { id: 'wrk-02', fullName: 'Malik Thompson', email: 'malik.t@metrofix.dev', phone: '+1 (555) 012-7720', coverageZone: 'Central Business', rating: 4.7, serviceTypes: 'Soft', status: 'On Route' },
+  { id: 'wrk-03', fullName: 'Nadia Khan', email: 'nadia.k@metrofix.dev', phone: '+1 (555) 012-3310', coverageZone: 'East Park', rating: 4.8, serviceTypes: 'Hard, Soft', status: 'Active' },
+  { id: 'wrk-04', fullName: 'Omar Silva', email: 'omar.s@metrofix.dev', phone: '+1 (555) 012-8843', coverageZone: 'Harbor Loop', rating: 4.5, serviceTypes: 'Strategic', status: 'Active' },
+  { id: 'wrk-05', fullName: 'Elena Rostova', email: 'elena.r@metrofix.dev', phone: '+1 (555) 012-9901', coverageZone: 'South Bay', rating: 4.9, serviceTypes: 'Hard', status: 'Offline' },
+  { id: 'wrk-06', fullName: 'David Chen', email: 'david.c@metrofix.dev', phone: '+1 (555) 012-1152', coverageZone: 'West Campus', rating: 4.6, serviceTypes: 'Soft, Strategic', status: 'Active' },
+];
+
+const initialSubscriptionRows: SubscriptionPlanRecord[] = [
+  { id: 'sub-tier-01', tierName: 'Basic', targetFacility: 'Residential', monthlyFee: '$299/mo', activeAccounts: 42, includedServices: 'Basic Soft FM, Standard Dispatch', status: 'Active' },
+  { id: 'sub-tier-02', tierName: 'Plus', targetFacility: 'Commercial', monthlyFee: '$799/mo', activeAccounts: 28, includedServices: 'Hard + Soft FM, Priority Dispatch', status: 'Active' },
+  { id: 'sub-tier-03', tierName: 'Premium', targetFacility: 'Industrial', monthlyFee: '$1,499/mo', activeAccounts: 14, includedServices: 'All Pillars, Dedicated Supervisor, SLA Guarantee', status: 'Active' },
+];
+
+const initialFinancialRows: FinancialRecord[] = [
+  { id: 'inv-9001', jobId: 'req-1001', customerName: 'Skyline Towers', servicePillar: 'Hard', amount: '$1,250.00', paymentStatus: 'Paid', invoiceDate: '2026-07-22' },
+  { id: 'inv-9002', jobId: 'req-1002', customerName: 'Tower One Management', servicePillar: 'Soft', amount: '$480.00', paymentStatus: 'Pending', invoiceDate: '2026-07-22' },
+  { id: 'inv-9003', jobId: 'req-1003', customerName: 'Metro Logistics LLC', servicePillar: 'Strategic', amount: '$2,100.00', paymentStatus: 'Paid', invoiceDate: '2026-07-21' },
+  { id: 'inv-9004', jobId: 'req-1004', customerName: 'Northpoint Residences', servicePillar: 'Hard', amount: '$350.00', paymentStatus: 'Paid', invoiceDate: '2026-07-21' },
+  { id: 'inv-9005', jobId: 'req-1005', customerName: 'Greenfield Mall', servicePillar: 'Strategic', amount: '$1,850.00', paymentStatus: 'Paid', invoiceDate: '2026-07-20' },
+  { id: 'inv-9006', jobId: 'req-1006', customerName: 'Crescent Retail Group', servicePillar: 'Soft', amount: '$620.00', paymentStatus: 'Paid', invoiceDate: '2026-07-19' },
 ];
 
 const customerColumns: ColumnDef<CustomerRecord>[] = [
@@ -164,13 +277,64 @@ const serviceColumns: ColumnDef<ServiceRecord>[] = [
   { accessorKey: 'serviceName', header: 'Service Name' },
   { accessorKey: 'pillarCategory', header: 'Pillar Category' },
   { accessorKey: 'basePrice', header: 'Base Price' },
-  { accessorKey: 'requiredSubscriptionTier', header: 'Required Subscription Tier' },
+  { accessorKey: 'requiredSubscriptionTier', header: 'Required Tier' },
   {
     accessorKey: 'status',
     header: 'Status',
     cell: ({ getValue }) => {
       const value = getValue<ServiceStatus>();
       return <span style={{ ...styles.statusPill, ...(value === 'Active' ? styles.statusActive : styles.statusDisabled) }}>{value}</span>;
+    },
+  },
+];
+
+const workerColumns: ColumnDef<WorkerRecord>[] = [
+  { accessorKey: 'fullName', header: 'Full Name' },
+  { accessorKey: 'email', header: 'Email' },
+  { accessorKey: 'phone', header: 'Phone' },
+  { accessorKey: 'coverageZone', header: 'Coverage Zone' },
+  {
+    accessorKey: 'rating',
+    header: 'Internal Rating',
+    cell: ({ getValue }) => <span style={styles.ratingPill}>★ {getValue<number>().toFixed(1)}</span>,
+  },
+  { accessorKey: 'serviceTypes', header: 'Pillar Capabilities' },
+  {
+    accessorKey: 'status',
+    header: 'Status',
+    cell: ({ getValue }) => {
+      const val = getValue<string>();
+      return <span style={{ ...styles.statusPill, ...(val === 'Active' ? styles.statusActive : styles.statusDisabled) }}>{val}</span>;
+    },
+  },
+];
+
+const subscriptionColumns: ColumnDef<SubscriptionPlanRecord>[] = [
+  { accessorKey: 'tierName', header: 'Tier Name' },
+  { accessorKey: 'targetFacility', header: 'Target Facility' },
+  { accessorKey: 'monthlyFee', header: 'Monthly Fee' },
+  { accessorKey: 'activeAccounts', header: 'Active Accounts' },
+  { accessorKey: 'includedServices', header: 'Included Services' },
+  {
+    accessorKey: 'status',
+    header: 'Status',
+    cell: ({ getValue }) => <span style={{ ...styles.statusPill, ...styles.statusActive }}>{getValue<string>()}</span>,
+  },
+];
+
+const financialColumns: ColumnDef<FinancialRecord>[] = [
+  { accessorKey: 'id', header: 'Invoice ID' },
+  { accessorKey: 'jobId', header: 'Job ID' },
+  { accessorKey: 'customerName', header: 'Customer' },
+  { accessorKey: 'servicePillar', header: 'Service Pillar' },
+  { accessorKey: 'amount', header: 'Amount' },
+  { accessorKey: 'invoiceDate', header: 'Invoice Date' },
+  {
+    accessorKey: 'paymentStatus',
+    header: 'Payment Status',
+    cell: ({ getValue }) => {
+      const val = getValue<string>();
+      return <span style={{ ...styles.statusPill, ...(val === 'Paid' ? styles.statusActive : styles.statusDisabled) }}>{val}</span>;
     },
   },
 ];
@@ -184,14 +348,14 @@ function DataTable<TData>({ columns, data, emptyMessage }: { columns: ColumnDef<
     columns,
     state: {
       sorting,
-      pagination: { pageIndex, pageSize: 5 },
+      pagination: { pageIndex, pageSize: 8 },
     },
     onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     onPaginationChange: (updater) => {
-      const nextState = typeof updater === 'function' ? updater({ pageIndex, pageSize: 5 }) : updater;
+      const nextState = typeof updater === 'function' ? updater({ pageIndex, pageSize: 8 }) : updater;
       setPageIndex(nextState.pageIndex);
     },
   });
@@ -257,93 +421,255 @@ function DataTable<TData>({ columns, data, emptyMessage }: { columns: ColumnDef<
   );
 }
 
-export function AdminWorkspace() {
-  const [activeTab, setActiveTab] = useState<'customers' | 'services'>('customers');
-  const [isCreateModalOpen, setCreateModalOpen] = useState(false);
+// Add Customer Modal Component
+function AddCustomerModal({
+  isOpen,
+  onClose,
+  onCustomerCreated,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onCustomerCreated: (newCustomer: CustomerRecord) => void;
+}) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
 
-  const tabs = useMemo(
-    () => [
-      { id: 'customers' as const, label: 'Customers', description: 'Directory & Subscriptions' },
-      { id: 'services' as const, label: 'Services & Catalog', description: 'Hard, Soft, Strategic services' },
-    ],
-    []
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<CreateCustomerFormValues>({
+    resolver: zodResolver(createCustomerFormSchema),
+    defaultValues: {
+      fullName: '',
+      email: '',
+      phoneNumber: '',
+      facilityType: 'Residential',
+      subscriptionTier: 'Basic',
+      physicalAddress: '',
+    },
+  });
+
+  if (!isOpen) return null;
+
+  const onSubmit = async (values: CreateCustomerFormValues) => {
+    setIsSubmitting(true);
+    setApiError(null);
+
+    const displayName = values.fullName.split(' ')[0] + (values.fullName.split(' ')[1] ? ` ${values.fullName.split(' ')[1][0]}.` : '');
+    const newRecord: CustomerRecord = {
+      id: `cust-${Date.now().toString().slice(-4)}`,
+      fullName: values.fullName,
+      displayName,
+      email: values.email,
+      phone: values.phoneNumber,
+      facilityType: values.facilityType,
+      subscriptionTier: values.subscriptionTier,
+      physicalAddress: values.physicalAddress,
+    };
+
+    try {
+      const response = await fetch('http://localhost:3000/customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: values.fullName,
+          email: values.email,
+          phoneNumber: values.phoneNumber,
+          facilityType: values.facilityType.toUpperCase(),
+          subscriptionTier: values.subscriptionTier.toUpperCase(),
+          physicalAddress: values.physicalAddress,
+        }),
+      }).catch(() => null);
+
+      if (response && response.ok) {
+        const createdFromApi = await response.json();
+        onCustomerCreated({
+          id: createdFromApi.id || newRecord.id,
+          fullName: createdFromApi.user?.fullName || values.fullName,
+          displayName,
+          email: createdFromApi.user?.email || values.email,
+          phone: createdFromApi.user?.phoneNumber || values.phoneNumber,
+          facilityType: values.facilityType,
+          subscriptionTier: values.subscriptionTier,
+          physicalAddress: values.physicalAddress,
+        });
+      } else {
+        onCustomerCreated(newRecord);
+      }
+
+      reset();
+      onClose();
+    } catch (err: any) {
+      console.warn('Customer creation request, using local record:', err);
+      onCustomerCreated(newRecord);
+      reset();
+      onClose();
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div style={styles.modalOverlay}>
+      <div style={styles.modalContent}>
+        <div style={styles.modalHeader}>
+          <h3 style={styles.modalTitle}>Add New Customer Profile</h3>
+          <button type="button" style={styles.closeButton} onClick={onClose}>
+            ✕
+          </button>
+        </div>
+
+        {apiError && <div style={styles.errorBanner}>{apiError}</div>}
+
+        <form onSubmit={handleSubmit(onSubmit)} style={styles.formStack}>
+          <div>
+            <label style={styles.fieldLabel}>FULL NAME *</label>
+            <input
+              type="text"
+              {...register('fullName')}
+              placeholder="e.g. Eleanor Vance"
+              style={styles.formInput}
+            />
+            {errors.fullName && <span style={styles.fieldError}>{errors.fullName.message}</span>}
+          </div>
+
+          <div style={styles.formGrid2}>
+            <div>
+              <label style={styles.fieldLabel}>EMAIL ADDRESS *</label>
+              <input
+                type="email"
+                {...register('email')}
+                placeholder="eleanor@example.com"
+                style={styles.formInput}
+              />
+              {errors.email && <span style={styles.fieldError}>{errors.email.message}</span>}
+            </div>
+
+            <div>
+              <label style={styles.fieldLabel}>PHONE NUMBER *</label>
+              <input
+                type="tel"
+                {...register('phoneNumber')}
+                placeholder="+1 (555) 019-2834"
+                style={styles.formInput}
+              />
+              {errors.phoneNumber && <span style={styles.fieldError}>{errors.phoneNumber.message}</span>}
+            </div>
+          </div>
+
+          <div style={styles.formGrid2}>
+            <div>
+              <label style={styles.fieldLabel}>FACILITY TYPE *</label>
+              <select {...register('facilityType')} style={styles.formSelect}>
+                <option value="Residential">Residential</option>
+                <option value="Commercial">Commercial</option>
+                <option value="Industrial">Industrial</option>
+              </select>
+              {errors.facilityType && <span style={styles.fieldError}>{errors.facilityType.message}</span>}
+            </div>
+
+            <div>
+              <label style={styles.fieldLabel}>SUBSCRIPTION TIER</label>
+              <select {...register('subscriptionTier')} style={styles.formSelect}>
+                <option value="Basic">Basic</option>
+                <option value="Plus">Plus</option>
+                <option value="Premium">Premium</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label style={styles.fieldLabel}>PHYSICAL SITE ADDRESS *</label>
+            <textarea
+              {...register('physicalAddress')}
+              rows={3}
+              placeholder="Enter full street address for PostGIS geocoding..."
+              style={styles.formTextarea}
+            />
+            {errors.physicalAddress && <span style={styles.fieldError}>{errors.physicalAddress.message}</span>}
+          </div>
+
+          <div style={styles.modalActions}>
+            <button type="button" style={styles.cancelBtn} onClick={onClose} disabled={isSubmitting}>
+              Cancel
+            </button>
+            <button type="submit" style={styles.primaryActionBtn} disabled={isSubmitting}>
+              {isSubmitting ? 'Creating...' : 'Create Customer'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
+}
+
+export interface AdminWorkspaceProps {
+  activeView?: 'customers' | 'service-catalog' | 'workers' | 'subscriptions' | 'financials';
+  isCustomerModalOpen?: boolean;
+  onCloseCustomerModal?: () => void;
+}
+
+export function AdminWorkspace({
+  activeView = 'customers',
+  isCustomerModalOpen = false,
+  onCloseCustomerModal,
+}: AdminWorkspaceProps) {
+  const [customers, setCustomers] = useState<CustomerRecord[]>(initialCustomerRows);
+
+  const handleCustomerCreated = (newCustomer: CustomerRecord) => {
+    setCustomers((prev) => [newCustomer, ...prev]);
+  };
 
   return (
     <section style={styles.workspace}>
-      <div style={styles.hero}>
-        <div>
-          <div style={styles.kicker}>Administration Workspace</div>
-          <h2 style={styles.title}>Platform operations and catalog management</h2>
-          <p style={styles.copy}>
-            Manage the customer directory, subscription tiers, and the service catalog from a single tabbed workspace.
-          </p>
-        </div>
-      </div>
-
-      <div style={styles.tabSwitcher}>
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setActiveTab(tab.id)}
-            style={{ ...styles.tabButton, ...(activeTab === tab.id ? styles.tabButtonActive : undefined) }}
-          >
-            <span>{tab.label}</span>
-            <span style={styles.tabDescription}>{tab.description}</span>
-          </button>
-        ))}
-      </div>
-
-      {activeTab === 'customers' ? (
+      {activeView === 'customers' && (
         <DataTable<CustomerRecord>
           columns={customerColumns}
-          data={customerRows}
-          emptyMessage="No customer records found."
+          data={customers}
+          emptyMessage="No customers found in directory."
         />
-      ) : (
-        <div style={styles.sectionStack}>
-          <div style={styles.sectionHeaderRow}>
-            <div>
-              <div style={styles.sectionKicker}>Service Catalog</div>
-              <h3 style={styles.sectionTitle}>Hard, Soft, and Strategic services</h3>
-            </div>
-            <button type="button" style={styles.primaryButton} onClick={() => setCreateModalOpen(true)}>
-              Add New Service
-            </button>
-          </div>
-          <DataTable<ServiceRecord>
-            columns={serviceColumns}
-            data={serviceRows}
-            emptyMessage="No services available."
-          />
-        </div>
       )}
 
-      {isCreateModalOpen && (
-        <div style={styles.modalOverlay} role="dialog" aria-modal="true" aria-label="Create service modal">
-          <div style={styles.modalCard}>
-            <div style={styles.modalHeader}>
-              <div>
-                <div style={styles.sectionKicker}>Service Catalog</div>
-                <h3 style={styles.modalTitle}>Add New Service</h3>
-              </div>
-              <button type="button" style={styles.closeButton} onClick={() => setCreateModalOpen(false)}>
-                Close
-              </button>
-            </div>
-            <p style={styles.copy}>
-              Modal placeholder for creating a new service entry. Hook this into your form workflow and persistence layer.
-            </p>
-            <div style={styles.modalStubGrid}>
-              <div style={styles.modalStub}>Service name</div>
-              <div style={styles.modalStub}>Pillar category</div>
-              <div style={styles.modalStub}>Base price</div>
-              <div style={styles.modalStub}>Required tier</div>
-            </div>
-          </div>
-        </div>
+      {activeView === 'service-catalog' && (
+        <DataTable<ServiceRecord>
+          columns={serviceColumns}
+          data={serviceRows}
+          emptyMessage="No service catalog records."
+        />
       )}
+
+      {activeView === 'workers' && (
+        <DataTable<WorkerRecord>
+          columns={workerColumns}
+          data={initialWorkerRows}
+          emptyMessage="No workers registered in system."
+        />
+      )}
+
+      {activeView === 'subscriptions' && (
+        <DataTable<SubscriptionPlanRecord>
+          columns={subscriptionColumns}
+          data={initialSubscriptionRows}
+          emptyMessage="No subscription tiers defined."
+        />
+      )}
+
+      {activeView === 'financials' && (
+        <DataTable<FinancialRecord>
+          columns={financialColumns}
+          data={initialFinancialRows}
+          emptyMessage="No financial ledger entries found."
+        />
+      )}
+
+      {/* Creation Modal */}
+      <AddCustomerModal
+        isOpen={isCustomerModalOpen}
+        onClose={onCloseCustomerModal ?? (() => undefined)}
+        onCustomerCreated={handleCustomerCreated}
+      />
     </section>
   );
 }
@@ -352,242 +678,271 @@ const styles: Record<string, CSSProperties> = {
   workspace: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '20px',
-    minWidth: 0,
-    background: 'var(--bg-primary)',
+    height: '100%',
+    maxHeight: '100%',
+    minHeight: 0,
+    overflow: 'hidden',
     color: 'var(--text-primary)',
   },
-  hero: {
+  viewHeader: {
     display: 'flex',
     justifyContent: 'space-between',
-    gap: '20px',
-  },
-  kicker: {
-    color: '#f38808',
-    textTransform: 'uppercase',
-    letterSpacing: '0.14em',
-    fontSize: '0.78rem',
-    fontWeight: 700,
-  },
-  title: {
-    margin: '10px 0 8px',
-    fontSize: 'clamp(1.7rem, 3vw, 2.4rem)',
-    color: 'var(--text-primary)',
-  },
-  copy: {
-    margin: 0,
-    color: 'var(--text-secondary)',
-    lineHeight: 1.6,
-    maxWidth: '68ch',
-  },
-  tabSwitcher: {
-    display: 'flex',
-    gap: '10px',
-    flexWrap: 'wrap',
-  },
-  tabButton: {
-    border: '1px solid var(--border-color)',
-    background: 'var(--surface-strong)',
-    color: 'var(--text-primary)',
-    borderRadius: '16px',
-    padding: '14px 18px',
-    cursor: 'pointer',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'flex-start',
-    gap: '4px',
-    minWidth: '220px',
-  },
-  tabButtonActive: {
-    borderColor: '#f38808',
-    boxShadow: '0 12px 28px rgba(243, 136, 8, 0.14)',
-  },
-  tabDescription: {
-    color: 'var(--text-secondary)',
-    fontSize: '0.86rem',
-  },
-  sectionStack: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '16px',
-    minWidth: 0,
-  },
-  sectionHeaderRow: {
-    display: 'flex',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: '16px',
-    flexWrap: 'wrap',
+    marginBottom: '16px',
+    flexShrink: 0,
   },
-  sectionKicker: {
-    color: '#f38808',
-    textTransform: 'uppercase',
-    letterSpacing: '0.14em',
-    fontSize: '0.74rem',
-    fontWeight: 700,
-  },
-  sectionTitle: {
-    margin: '8px 0 0',
+  viewTitle: {
+    margin: 0,
+    fontSize: '1.5rem',
+    fontWeight: 800,
     color: 'var(--text-primary)',
-    fontSize: '1.45rem',
   },
-  primaryButton: {
-    border: '1px solid #d37105',
-    background: 'linear-gradient(135deg, #f38808, #d37105)',
+  primaryActionBtn: {
+    backgroundColor: '#f38808',
     color: '#ffffff',
-    padding: '12px 16px',
-    borderRadius: '14px',
-    fontWeight: 700,
+    border: 'none',
+    borderRadius: '12px',
+    padding: '10px 18px',
+    fontWeight: 800,
+    fontSize: '0.88rem',
     cursor: 'pointer',
+    boxShadow: '0 4px 14px rgba(243, 136, 8, 0.35)',
+    transition: 'background-color 150ms ease',
   },
   tableShell: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '14px',
-    minWidth: 0,
+    flex: 1,
+    minHeight: 0,
+    height: '100%',
+    overflow: 'hidden',
+    background: 'var(--surface-strong)',
+    borderRadius: '18px',
+    border: '1px solid var(--border-subtle)',
+    boxSizing: 'border-box',
   },
   tableWrap: {
+    flex: 1,
+    minHeight: 0,
+    height: '100%',
+    overflowY: 'auto',
     overflowX: 'auto',
-    overflowY: 'hidden',
-    border: '1px solid var(--border-color)',
-    borderRadius: '20px',
-    background: 'var(--surface)',
+    scrollbarWidth: 'none',
   },
   table: {
     width: '100%',
-    minWidth: '980px',
     borderCollapse: 'collapse',
     color: 'var(--text-primary)',
   },
   th: {
+    position: 'sticky',
+    top: 0,
+    zIndex: 2,
     textAlign: 'left',
     padding: '14px 16px',
-    background: '#2b435f',
+    backgroundColor: '#2b435f',
     color: '#ffffff',
-    fontSize: '0.84rem',
+    fontSize: '0.82rem',
+    fontWeight: 800,
     textTransform: 'uppercase',
     letterSpacing: '0.08em',
-    borderBottom: '1px solid var(--border-color)',
     cursor: 'pointer',
-    whiteSpace: 'nowrap',
+    userSelect: 'none',
+    boxShadow: '0 1px 0 var(--border-subtle)',
   },
   thInner: {
     display: 'inline-flex',
     alignItems: 'center',
-    gap: '8px',
+    gap: '6px',
   },
   sortGlyph: {
     color: '#f38808',
+    fontWeight: 900,
   },
   td: {
     padding: '14px 16px',
-    borderBottom: '1px solid var(--border-color)',
-    whiteSpace: 'nowrap',
-    background: 'var(--surface)',
+    borderBottom: '1px solid var(--border-subtle)',
+    color: 'var(--text-primary)',
+    fontSize: '0.9rem',
   },
   emptyCell: {
-    padding: '24px 16px',
     textAlign: 'center',
+    padding: '32px',
     color: 'var(--text-secondary)',
   },
   inlineActions: {
     display: 'flex',
-    gap: '8px',
+    gap: '12px',
   },
   textButton: {
-    border: '1px solid #f38808',
-    background: 'transparent',
+    background: 'none',
+    border: 'none',
     color: '#f38808',
-    borderRadius: '999px',
-    padding: '8px 12px',
-    cursor: 'pointer',
     fontWeight: 700,
+    cursor: 'pointer',
+    padding: 0,
+  },
+  ratingPill: {
+    fontWeight: 700,
+    color: '#f38808',
   },
   statusPill: {
-    display: 'inline-flex',
-    alignItems: 'center',
+    display: 'inline-block',
+    padding: '4px 10px',
     borderRadius: '999px',
-    padding: '6px 10px',
-    fontSize: '0.76rem',
-    fontWeight: 700,
+    fontSize: '0.78rem',
+    fontWeight: 800,
   },
   statusActive: {
-    background: '#f38808',
-    color: '#ffffff',
+    background: 'rgba(74, 173, 131, 0.18)',
+    color: '#4aad83',
   },
   statusDisabled: {
-    background: '#2b435f',
-    color: '#ffffff',
+    background: 'rgba(255, 255, 255, 0.1)',
+    color: 'var(--text-secondary)',
   },
   paginationRow: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: '12px',
-    flexWrap: 'wrap',
+    padding: '12px 16px',
+    borderTop: '1px solid var(--border-subtle)',
+    background: 'var(--surface-strong)',
+    flexShrink: 0,
   },
   pageButton: {
-    border: '1px solid var(--border-color)',
-    background: 'var(--surface-strong)',
+    background: 'var(--surface)',
+    border: '1px solid var(--border-subtle)',
     color: 'var(--text-primary)',
-    borderRadius: '12px',
-    padding: '10px 12px',
+    padding: '6px 12px',
+    borderRadius: '8px',
     cursor: 'pointer',
     fontWeight: 700,
+    fontSize: '0.84rem',
   },
   pageMeta: {
     color: 'var(--text-secondary)',
-    fontSize: '0.92rem',
+    fontSize: '0.84rem',
   },
   modalOverlay: {
     position: 'fixed',
-    inset: 0,
-    background: 'rgba(4, 10, 11, 0.62)',
-    display: 'grid',
-    placeItems: 'center',
-    padding: '24px',
-    zIndex: 20,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    backdropFilter: 'blur(6px)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 99999,
+    padding: '20px',
   },
-  modalCard: {
-    width: 'min(640px, 100%)',
-    borderRadius: '24px',
-    background: 'var(--surface)',
-    border: '1px solid var(--border-color)',
+  modalContent: {
+    backgroundColor: '#2b435f',
+    color: '#ffffff',
+    borderRadius: '20px',
     padding: '24px',
-    boxSizing: 'border-box',
+    width: '100%',
+    maxWidth: '520px',
+    border: '1px solid rgba(255, 255, 255, 0.15)',
+    boxShadow: '0 24px 48px rgba(0, 0, 0, 0.6)',
   },
   modalHeader: {
     display: 'flex',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: '18px',
-    marginBottom: '14px',
+    alignItems: 'center',
+    marginBottom: '16px',
   },
   modalTitle: {
-    margin: '8px 0 0',
-    fontSize: '1.4rem',
-    color: 'var(--text-primary)',
+    margin: 0,
+    fontSize: '1.25rem',
+    fontWeight: 800,
+    color: '#ffffff',
   },
   closeButton: {
-    border: '1px solid var(--border-color)',
-    background: 'var(--surface-strong)',
-    color: '#f38808',
-    borderRadius: '12px',
+    background: 'none',
+    border: 'none',
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: '1.2rem',
+    cursor: 'pointer',
+    padding: '4px',
+  },
+  errorBanner: {
+    backgroundColor: 'rgba(229, 62, 62, 0.2)',
+    border: '1px solid #e53e3e',
+    color: '#fc8181',
+    padding: '10px 14px',
+    borderRadius: '10px',
+    fontSize: '0.85rem',
+    marginBottom: '16px',
+  },
+  formStack: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '14px',
+  },
+  formGrid2: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: '12px',
+  },
+  fieldLabel: {
+    display: 'block',
+    fontSize: '0.72rem',
+    fontWeight: 800,
+    color: '#81b1b3',
+    letterSpacing: '0.08em',
+    marginBottom: '4px',
+  },
+  formInput: {
+    width: '100%',
     padding: '10px 12px',
+    borderRadius: '10px',
+    border: '1px solid rgba(255, 255, 255, 0.2)',
+    background: 'rgba(0, 0, 0, 0.25)',
+    color: '#ffffff',
+    boxSizing: 'border-box',
+  },
+  formSelect: {
+    width: '100%',
+    padding: '10px 12px',
+    borderRadius: '10px',
+    border: '1px solid rgba(255, 255, 255, 0.2)',
+    background: '#2b435f',
+    color: '#ffffff',
+    boxSizing: 'border-box',
+  },
+  formTextarea: {
+    width: '100%',
+    padding: '10px 12px',
+    borderRadius: '10px',
+    border: '1px solid rgba(255, 255, 255, 0.2)',
+    background: 'rgba(0, 0, 0, 0.25)',
+    color: '#ffffff',
+    boxSizing: 'border-box',
+  },
+  fieldError: {
+    color: '#fc8181',
+    fontSize: '0.76rem',
+    marginTop: '4px',
+    display: 'block',
+  },
+  modalActions: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    gap: '10px',
+    marginTop: '16px',
+  },
+  cancelBtn: {
+    background: 'transparent',
+    border: '1px solid rgba(255, 255, 255, 0.2)',
+    color: '#ffffff',
+    padding: '10px 16px',
+    borderRadius: '10px',
     cursor: 'pointer',
     fontWeight: 700,
   },
-  modalStubGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-    gap: '12px',
-    marginTop: '18px',
-  },
-  modalStub: {
-    padding: '14px',
-    borderRadius: '14px',
-    background: 'var(--surface-strong)',
-    border: '1px dashed var(--border-color)',
-    color: 'var(--text-secondary)',
-  },
 };
+
+export default AdminWorkspace;

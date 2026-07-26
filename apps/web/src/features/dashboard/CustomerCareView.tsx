@@ -413,113 +413,99 @@ export function CustomerCareView() {
 
   return (
     <section style={styles.view}>
-      <div style={{ ...styles.hero, ...(isCompact ? styles.heroCompact : undefined) }}>
-        <div>
-          <div style={styles.kicker}>Customer Care Workspace</div>
-          <h2 style={styles.title}>Job lifecycle Kanban</h2>
-          <p style={styles.copy}>
-            Coordinate service demand, queue workers, and track execution from requested to completed.
-          </p>
-        </div>
-
-        <button type="button" style={styles.primaryButton} onClick={() => setDispatchModalOpen(true)}>
-          Drag and Drop Worker Dispatch
-        </button>
-      </div>
-
       <DragDropContext onDragEnd={handleDragEnd}>
         <div style={{ ...styles.boardShell, ...(isCompact ? styles.boardShellCompact : undefined) }}>
           <div style={{ ...styles.board, ...(isCompact ? styles.boardCompact : undefined) }}>
-          {grouped.map(({ status, items }) => (
-            <Droppable key={status} droppableId={status}>
-              {(provided, snapshot) => (
-                <article
-                  ref={provided.innerRef}
-                  {...provided.droppableProps}
-                  style={{
-                    ...styles.column,
-                    ...(snapshot.isDraggingOver ? styles.columnDraggingOver : undefined),
-                  }}
-                >
-                  <div style={styles.columnHeader}>
-                    <span>{statusLabels[status]}</span>
-                    <span style={styles.badge}>{items.length}</span>
-                  </div>
+            {grouped.map(({ status, items }) => (
+              <article key={status} style={styles.column}>
+                <div style={styles.columnHeader}>
+                  <span>{statusLabels[status]}</span>
+                  <span style={styles.badge}>{items.length}</span>
+                </div>
 
-                  <div style={styles.cardStack}>
-                    {items.map((item, index) => (
-                      <Draggable key={item.id} draggableId={item.id} index={index}>
-                        {(draggableProvided, draggableSnapshot) => (
-                          <div
-                            ref={draggableProvided.innerRef}
-                            {...draggableProvided.draggableProps}
-                            {...draggableProvided.dragHandleProps}
-                            style={{
-                              ...styles.card,
-                              ...(draggableSnapshot.isDragging ? styles.cardDragging : undefined),
-                              ...draggableProvided.draggableProps.style,
-                            }}
-                          >
-                            <div style={styles.cardTopRow}>
-                              <span style={styles.serviceChip}>{item.serviceType}</span>
-                              <span style={styles.cardId}>{item.id}</span>
-                            </div>
-                            <h3 style={styles.cardTitle}>{item.title}</h3>
-                            <p style={styles.cardMeta}>{item.customerName}</p>
-                            <p style={styles.cardCopy}>{item.summary}</p>
-                            <div style={styles.cardFooterRow}>
-                              <span style={{ ...styles.urgencyPill, ...(urgencyStyles[item.urgency] ?? undefined) }}>
-                                {item.urgency}
-                              </span>
-                              <span style={styles.cardFooter}>{item.location}</span>
-                            </div>
-
-                            {item.assignedWorker && (
-                              <div style={styles.workerChip}>
-                                <span style={styles.workerChipLabel}>Worker</span>
-                                <span>{item.assignedWorker.fullName}</span>
+                <Droppable droppableId={status}>
+                  {(provided, snapshot) => (
+                    <div
+                      ref={provided.innerRef}
+                      {...provided.droppableProps}
+                      style={{
+                        ...styles.cardStack,
+                        ...(snapshot.isDraggingOver ? styles.cardStackDraggingOver : undefined),
+                      }}
+                    >
+                      {items.map((item, index) => (
+                        <Draggable key={item.id} draggableId={item.id} index={index}>
+                          {(draggableProvided, draggableSnapshot) => (
+                            <div
+                              ref={draggableProvided.innerRef}
+                              {...draggableProvided.draggableProps}
+                              {...draggableProvided.dragHandleProps}
+                              style={{
+                                ...styles.card,
+                                ...(draggableSnapshot.isDragging ? styles.cardDragging : undefined),
+                                ...draggableProvided.draggableProps.style,
+                              }}
+                            >
+                              <div style={styles.cardTopRow}>
+                                <span style={styles.serviceChip}>{item.serviceType}</span>
+                                <span style={styles.cardId}>{item.id}</span>
                               </div>
-                            )}
+                              <h3 style={styles.cardTitle}>{item.title}</h3>
+                              <p style={styles.cardMeta}>{item.customerName}</p>
+                              <p style={styles.cardCopy}>{item.summary}</p>
+                              <div style={styles.cardFooterRow}>
+                                <span style={{ ...styles.urgencyPill, ...(urgencyStyles[item.urgency] ?? undefined) }}>
+                                  {item.urgency}
+                                </span>
+                                <span style={styles.cardFooter}>{item.location}</span>
+                              </div>
 
-                            <div style={styles.cardActions}>
-                              {status === JobStatus.Requested && (
-                                <button
-                                  type="button"
-                                  style={styles.secondaryActionButton}
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    openDispatchModal(item.id);
-                                  }}
-                                >
-                                  Dispatch Worker
-                                </button>
+                              {item.assignedWorker && (
+                                <div style={styles.workerChip}>
+                                  <span style={styles.workerChipLabel}>Worker</span>
+                                  <span>{item.assignedWorker.fullName}</span>
+                                </div>
                               )}
 
-                              {status === JobStatus.PendingAcceptance && (
-                                <button
-                                  type="button"
-                                  style={styles.rejectButton}
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    handleRejectSimulation(item.id);
-                                  }}
-                                >
-                                  Simulate Worker Reject
-                                </button>
-                              )}
+                              <div style={styles.cardActions}>
+                                {status === JobStatus.Requested && (
+                                  <button
+                                    type="button"
+                                    style={styles.secondaryActionButton}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      openDispatchModal(item.id);
+                                    }}
+                                  >
+                                    Dispatch Worker
+                                  </button>
+                                )}
+
+                                {status === JobStatus.PendingAcceptance && (
+                                  <button
+                                    type="button"
+                                    style={styles.rejectButton}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      handleRejectSimulation(item.id);
+                                    }}
+                                  >
+                                    Simulate Reject
+                                  </button>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        )}
-                      </Draggable>
-                    ))}
+                          )}
+                        </Draggable>
+                      ))}
 
-                    {items.length === 0 && <div style={styles.emptyState}>No jobs in this stage.</div>}
-                    {provided.placeholder}
-                  </div>
-                </article>
-              )}
-            </Droppable>
-          ))}
+                      {items.length === 0 && <div style={styles.emptyState}>No jobs in this stage.</div>}
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
+              </article>
+            ))}
           </div>
         </div>
       </DragDropContext>
@@ -530,15 +516,12 @@ export function CustomerCareView() {
             <div style={styles.modalHeader}>
               <div>
                 <div style={styles.kicker}>Dispatch Workflow</div>
-                <h3 style={styles.modalTitle}>Assign a worker for acceptance</h3>
+                <h3 style={styles.modalTitle}>Assign worker for job</h3>
               </div>
               <button type="button" style={styles.closeButton} onClick={closeDispatchModal}>
                 Close
               </button>
             </div>
-            <p style={styles.copy}>
-              Select the best worker based on proximity and internal rating. Confirming will move the job into the pending acceptance stage.
-            </p>
 
             {selectedCard && (
               <div style={styles.dispatchContext}>
@@ -576,7 +559,7 @@ export function CustomerCareView() {
 
               <div style={styles.dispatchPreview}>
                 <div style={styles.dispatchLaneTitle}>Dispatch summary</div>
-                <div style={styles.dispatchDropZone}>The selected worker will be attached to the job and moved into PENDING_ACCEPTANCE.</div>
+                <div style={styles.dispatchDropZone}>Move job to PENDING_ACCEPTANCE with selected worker.</div>
                 <button type="button" style={styles.primaryButton} onClick={confirmDispatch} disabled={!selectedWorkerId}>
                   Confirm dispatch
                 </button>
@@ -593,19 +576,11 @@ const styles: Record<string, CSSProperties> = {
   view: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '22px',
+    height: '100%',
+    maxHeight: '100%',
     color: 'var(--text-primary)',
     minWidth: 0,
-    background: 'var(--bg-primary)',
-  },
-  hero: {
-    display: 'flex',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: '20px',
-  },
-  heroCompact: {
-    flexDirection: 'column',
+    overflow: 'hidden',
   },
   kicker: {
     color: '#f38808',
@@ -614,33 +589,24 @@ const styles: Record<string, CSSProperties> = {
     fontSize: '0.78rem',
     fontWeight: 700,
   },
-  title: {
-    margin: '10px 0 8px',
-    fontSize: 'clamp(1.7rem, 3vw, 2.4rem)',
-    color: 'var(--text-primary)',
-  },
-  copy: {
-    margin: 0,
-    color: 'var(--text-secondary)',
-    lineHeight: 1.6,
-    maxWidth: '64ch',
-  },
   primaryButton: {
     border: '1px solid #d37105',
     background: 'linear-gradient(135deg, #f38808, #d37105)',
     color: '#ffffff',
-    padding: '13px 16px',
-    borderRadius: '14px',
+    padding: '12px 16px',
+    borderRadius: '12px',
     fontWeight: 700,
     cursor: 'pointer',
-    boxShadow: '0 14px 28px rgba(0, 0, 0, 0.18)',
+    boxShadow: '0 8px 18px rgba(0, 0, 0, 0.18)',
   },
   boardShell: {
+    flex: 1,
+    height: '100%',
+    maxHeight: '100%',
     width: '100%',
     minWidth: 0,
     overflowX: 'auto',
     overflowY: 'hidden',
-    paddingBottom: '8px',
     boxSizing: 'border-box',
   },
   boardShellCompact: {
@@ -651,6 +617,8 @@ const styles: Record<string, CSSProperties> = {
     gridAutoFlow: 'column',
     gridAutoColumns: 'minmax(280px, 320px)',
     gap: '14px',
+    height: '100%',
+    maxHeight: '100%',
     width: 'max-content',
     minWidth: '100%',
   },
@@ -658,55 +626,69 @@ const styles: Record<string, CSSProperties> = {
     gridAutoFlow: 'row',
     gridTemplateColumns: 'repeat(1, minmax(0, 1fr))',
     width: '100%',
+    height: 'auto',
   },
   column: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '14px',
-    minHeight: '70svh',
-    padding: '16px',
-    borderRadius: '22px',
+    height: '100%',
+    maxHeight: '100%',
+    overflow: 'hidden',
+    padding: '14px',
+    borderRadius: '18px',
     background: 'var(--surface-strong)',
     border: '1px solid var(--border-subtle)',
     boxSizing: 'border-box',
-  },
-  columnDraggingOver: {
-    boxShadow: 'var(--shadow-elevated)',
   },
   columnHeader: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: '12px',
-    fontWeight: 700,
+    fontWeight: 800,
     color: 'var(--text-primary)',
     textTransform: 'uppercase',
     letterSpacing: '0.08em',
+    fontSize: '0.82rem',
+    marginBottom: '12px',
+    flexShrink: 0,
   },
   badge: {
-    minWidth: '28px',
-    height: '28px',
+    minWidth: '24px',
+    height: '24px',
     borderRadius: '999px',
     display: 'grid',
     placeItems: 'center',
     background: '#f38808',
-    color: 'var(--text-inverse)',
-    fontSize: '0.85rem',
+    color: '#ffffff',
+    fontSize: '0.78rem',
+    fontWeight: 800,
   },
   cardStack: {
+    flex: 1,
+    minHeight: 0,
+    overflowY: 'auto',
+    scrollbarWidth: 'none',
+    msOverflowStyle: 'none',
     display: 'flex',
     flexDirection: 'column',
-    gap: '12px',
+    gap: '10px',
+    paddingRight: '2px',
+  },
+  cardStackDraggingOver: {
+    background: 'rgba(243, 136, 8, 0.04)',
+    borderRadius: '12px',
   },
   card: {
-    padding: '14px',
-    borderRadius: '18px',
+    padding: '12px 14px',
+    borderRadius: '14px',
     background: 'var(--surface)',
     color: 'var(--text-primary)',
     boxShadow: 'var(--shadow-elevated)',
     border: '1px solid var(--border-subtle)',
     cursor: 'grab',
     boxSizing: 'border-box',
+    flexShrink: 0,
   },
   cardDragging: {
     cursor: 'grabbing',
@@ -715,52 +697,53 @@ const styles: Record<string, CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: '12px',
-    marginBottom: '10px',
+    gap: '8px',
+    marginBottom: '8px',
   },
   serviceChip: {
     borderRadius: '999px',
     background: '#f38808',
-    color: 'var(--text-inverse)',
-    padding: '5px 10px',
-    fontSize: '0.74rem',
+    color: '#ffffff',
+    padding: '4px 8px',
+    fontSize: '0.7rem',
     fontWeight: 700,
   },
   cardId: {
-    fontSize: '0.76rem',
+    fontSize: '0.74rem',
     color: 'var(--text-secondary)',
   },
   cardTitle: {
-    margin: '0 0 8px',
-    fontSize: '1rem',
+    margin: '0 0 6px',
+    fontSize: '0.95rem',
+    fontWeight: 700,
   },
   cardMeta: {
-    margin: '0 0 8px',
+    margin: '0 0 6px',
     color: 'var(--text-secondary)',
-    fontSize: '0.88rem',
+    fontSize: '0.84rem',
     fontWeight: 600,
   },
   cardCopy: {
     margin: 0,
     color: 'var(--text-secondary)',
-    lineHeight: 1.55,
-    fontSize: '0.92rem',
+    lineHeight: 1.45,
+    fontSize: '0.84rem',
   },
   cardFooterRow: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: '12px',
-    marginTop: '14px',
+    gap: '8px',
+    marginTop: '10px',
   },
   cardFooter: {
-    fontSize: '0.84rem',
+    fontSize: '0.78rem',
     color: 'var(--text-muted)',
   },
   urgencyPill: {
-    padding: '5px 10px',
+    padding: '4px 8px',
     borderRadius: '999px',
-    fontSize: '0.72rem',
+    fontSize: '0.7rem',
     fontWeight: 700,
     color: '#ffffff',
     background: '#2b435f',
@@ -769,50 +752,54 @@ const styles: Record<string, CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: '12px',
-    marginTop: '14px',
-    padding: '10px 12px',
-    borderRadius: '14px',
+    gap: '8px',
+    marginTop: '10px',
+    padding: '8px 10px',
+    borderRadius: '10px',
     background: 'rgba(43, 67, 95, 0.08)',
     color: 'var(--text-primary)',
+    fontSize: '0.82rem',
   },
   workerChipLabel: {
-    fontSize: '0.74rem',
+    fontSize: '0.7rem',
     fontWeight: 700,
     textTransform: 'uppercase',
     letterSpacing: '0.08em',
-    color: '#2b435f',
+    color: '#f38808',
   },
   cardActions: {
     display: 'flex',
     flexWrap: 'wrap',
-    gap: '10px',
-    marginTop: '14px',
+    gap: '8px',
+    marginTop: '10px',
   },
   secondaryActionButton: {
     border: '1px solid #f38808',
     background: 'transparent',
     color: '#f38808',
-    padding: '10px 12px',
-    borderRadius: '12px',
+    padding: '8px 10px',
+    borderRadius: '10px',
     fontWeight: 700,
+    fontSize: '0.82rem',
     cursor: 'pointer',
   },
   rejectButton: {
     border: '1px solid #d37105',
     background: '#d37105',
     color: '#ffffff',
-    padding: '10px 12px',
-    borderRadius: '12px',
+    padding: '8px 10px',
+    borderRadius: '10px',
     fontWeight: 700,
+    fontSize: '0.82rem',
     cursor: 'pointer',
   },
   emptyState: {
-    padding: '18px',
-    borderRadius: '14px',
+    padding: '16px',
+    borderRadius: '12px',
     border: '1px dashed var(--border-subtle)',
     color: 'var(--text-secondary)',
     textAlign: 'center',
+    fontSize: '0.84rem',
   },
   modalOverlay: {
     position: 'fixed',
@@ -821,54 +808,57 @@ const styles: Record<string, CSSProperties> = {
     display: 'grid',
     placeItems: 'center',
     padding: '24px',
-    zIndex: 20,
+    zIndex: 99999,
   },
   modalCard: {
-    width: 'min(720px, 100%)',
-    borderRadius: '24px',
+    width: 'min(680px, 100%)',
+    borderRadius: '20px',
     background: 'var(--surface)',
     border: '1px solid var(--border-subtle)',
-    padding: '24px',
+    padding: '20px',
     boxSizing: 'border-box',
-    maxHeight: '85svh',
+    maxHeight: '85vh',
     overflowY: 'auto',
   },
   modalHeader: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    gap: '18px',
-    marginBottom: '14px',
+    gap: '16px',
+    marginBottom: '12px',
   },
   modalTitle: {
-    margin: '8px 0 0',
-    fontSize: '1.4rem',
+    margin: '4px 0 0',
+    fontSize: '1.25rem',
     color: 'var(--text-primary)',
+    fontWeight: 700,
   },
   closeButton: {
     border: '1px solid var(--border-subtle)',
     background: 'var(--surface-strong)',
     color: '#f38808',
-    borderRadius: '12px',
-    padding: '10px 12px',
+    borderRadius: '10px',
+    padding: '8px 12px',
     cursor: 'pointer',
     fontWeight: 700,
+    fontSize: '0.84rem',
   },
   dispatchGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-    gap: '16px',
-    marginTop: '18px',
+    gap: '14px',
+    marginTop: '14px',
   },
   dispatchLaneTitle: {
-    marginBottom: '12px',
+    marginBottom: '10px',
     fontWeight: 700,
+    fontSize: '0.88rem',
     color: 'var(--text-primary)',
   },
   workerList: {
     background: 'var(--surface-strong)',
-    borderRadius: '18px',
-    padding: '16px',
+    borderRadius: '14px',
+    padding: '14px',
     border: '1px solid var(--border-subtle)',
   },
   workerRow: {
@@ -877,9 +867,9 @@ const styles: Record<string, CSSProperties> = {
     border: '1px solid var(--border-subtle)',
     background: 'var(--surface)',
     color: 'var(--text-primary)',
-    borderRadius: '16px',
-    padding: '12px 14px',
-    marginBottom: '10px',
+    borderRadius: '12px',
+    padding: '10px 12px',
+    marginBottom: '8px',
     cursor: 'pointer',
   },
   workerRowSelected: {
@@ -890,38 +880,38 @@ const styles: Record<string, CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: '12px',
-    marginBottom: '6px',
+    gap: '8px',
+    marginBottom: '4px',
   },
   workerName: {
-    fontSize: '0.96rem',
+    fontSize: '0.9rem',
   },
   workerScore: {
     borderRadius: '999px',
     background: '#f38808',
     color: '#ffffff',
-    padding: '4px 8px',
-    fontSize: '0.74rem',
+    padding: '2px 6px',
+    fontSize: '0.7rem',
     fontWeight: 700,
   },
   workerMeta: {
     color: 'var(--text-secondary)',
-    fontSize: '0.85rem',
-    lineHeight: 1.4,
+    fontSize: '0.8rem',
+    lineHeight: 1.35,
   },
   dispatchPreview: {
     background: 'var(--surface-strong)',
-    borderRadius: '18px',
-    padding: '16px',
+    borderRadius: '14px',
+    padding: '14px',
     border: '1px solid var(--border-subtle)',
     display: 'flex',
     flexDirection: 'column',
-    gap: '14px',
+    gap: '12px',
   },
   dispatchContext: {
-    marginTop: '18px',
-    borderRadius: '18px',
-    padding: '16px',
+    marginTop: '12px',
+    borderRadius: '14px',
+    padding: '12px 14px',
     border: '1px solid var(--border-subtle)',
     background: 'rgba(43, 67, 95, 0.08)',
   },
@@ -929,28 +919,31 @@ const styles: Record<string, CSSProperties> = {
     color: '#f38808',
     textTransform: 'uppercase',
     letterSpacing: '0.12em',
-    fontSize: '0.75rem',
+    fontSize: '0.72rem',
     fontWeight: 700,
   },
   dispatchContextTitle: {
-    marginTop: '6px',
+    marginTop: '4px',
     color: 'var(--text-primary)',
-    fontSize: '1.04rem',
+    fontSize: '0.96rem',
     fontWeight: 700,
   },
   dispatchContextMeta: {
-    marginTop: '4px',
+    marginTop: '2px',
     color: 'var(--text-secondary)',
-    fontSize: '0.9rem',
+    fontSize: '0.84rem',
   },
   dispatchDropZone: {
-    minHeight: '132px',
-    borderRadius: '16px',
+    minHeight: '100px',
+    borderRadius: '12px',
     border: '1px dashed rgba(243, 136, 8, 0.34)',
     display: 'grid',
     placeItems: 'center',
-    color: '#2b435f',
+    color: 'var(--text-secondary)',
     background: 'var(--surface-strong)',
+    fontSize: '0.84rem',
+    padding: '12px',
+    textAlign: 'center',
   },
 };
 

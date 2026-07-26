@@ -6,28 +6,32 @@ import { Sidebar, sidebarSections } from './Sidebar';
 export interface DashboardLayoutProps {
   children: ReactNode;
   activeRoute: string;
-  userProfile: Pick<User, 'fullName' | 'email' | 'role'>;
+  userProfile: Pick<User, 'fullName' | 'email' | 'role' | 'avatarUrl'>;
+  headerActions?: ReactNode;
   onRouteChange?: (route: string) => void;
   settingsSlot?: ReactNode;
+  onLogout?: () => void;
 }
 
-type WorkspaceRole = 'CUSTOMER_CARE' | 'ADMIN';
-
-const defaultRouteByRole: Record<WorkspaceRole, string> = {
-  CUSTOMER_CARE: 'Dispatch Board',
-  ADMIN: 'Workers',
-};
+const adminRoutes = new Set([
+  'Workers',
+  'Customers',
+  'Service Catalog',
+  'Subscriptions',
+  'Financials',
+]);
 
 export function DashboardLayout({
   children,
   activeRoute,
   userProfile,
+  headerActions,
   onRouteChange,
   settingsSlot,
+  onLogout,
 }: DashboardLayoutProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [filterText, setFilterText] = useState('');
-  const [currentUserRole, setCurrentUserRole] = useState<WorkspaceRole>('CUSTOMER_CARE');
 
   const filteredSections = useMemo(() => {
     const search = filterText.trim().toLowerCase();
@@ -47,12 +51,7 @@ export function DashboardLayout({
     .join('')
     .toUpperCase();
 
-  const toggleRole = (nextRole: WorkspaceRole) => {
-    setCurrentUserRole(nextRole);
-    onRouteChange?.(defaultRouteByRole[nextRole]);
-  };
-
-  const workspace = currentUserRole === 'CUSTOMER_CARE' ? children : <AdminWorkspace />;
+  const workspace = children;
 
   return (
     <div style={styles.shell}>
@@ -65,32 +64,18 @@ export function DashboardLayout({
         collapsed={isCollapsed}
         onToggleCollapsed={() => setIsCollapsed((value) => !value)}
         footerSlot={settingsSlot}
+        userProfile={userProfile}
+        onLogout={onLogout}
       />
 
       <section style={styles.contentPane}>
         <header style={styles.header}>
           <div>
             <div style={styles.routeLabel}>{activeRoute}</div>
-            <div style={styles.routeMeta}>Cross-platform command surface</div>
           </div>
 
           <div style={styles.headerActions}>
-            <div style={styles.roleSwitch}>
-              <button
-                type="button"
-                onClick={() => toggleRole('CUSTOMER_CARE')}
-                style={{ ...styles.roleButton, ...(currentUserRole === 'CUSTOMER_CARE' ? styles.roleButtonActive : undefined) }}
-              >
-                Customer Care
-              </button>
-              <button
-                type="button"
-                onClick={() => toggleRole('ADMIN')}
-                style={{ ...styles.roleButton, ...(currentUserRole === 'ADMIN' ? styles.roleButtonActive : undefined) }}
-              >
-                Admin
-              </button>
-            </div>
+            {headerActions && <div style={styles.dynamicActions}>{headerActions}</div>}
             <div style={styles.profileChip}>
               <div style={styles.avatar}>{initials}</div>
               <div>
@@ -129,8 +114,8 @@ const styles: Record<string, CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: '24px',
-    padding: '22px 28px',
+    gap: '16px',
+    padding: '14px 24px',
     borderBottom: '1px solid var(--border-subtle)',
     background: 'var(--surface)',
     backdropFilter: 'blur(14px)',
@@ -140,77 +125,55 @@ const styles: Record<string, CSSProperties> = {
     alignItems: 'center',
     gap: '12px',
   },
-  roleSwitch: {
+  dynamicActions: {
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
-    padding: '6px',
-    borderRadius: '16px',
-    border: '1px solid var(--border-subtle)',
-    background: 'var(--surface-strong)',
-  },
-  roleButton: {
-    border: 'none',
-    background: 'transparent',
-    color: 'var(--color-text-secondary)',
-    padding: '8px 12px',
-    borderRadius: '12px',
-    cursor: 'pointer',
-    fontWeight: 700,
-  },
-  roleButtonActive: {
-    background: 'var(--sidebar-accent)',
-    color: 'var(--text-inverse)',
   },
   routeLabel: {
-    fontSize: '1.4rem',
-    fontWeight: 700,
+    fontSize: '1.25rem',
+    fontWeight: 800,
     color: 'var(--color-text-primary)',
-  },
-  routeMeta: {
-    marginTop: '6px',
-    color: 'var(--color-text-secondary)',
-    fontSize: '0.92rem',
   },
   profileChip: {
     display: 'flex',
     alignItems: 'center',
-    gap: '12px',
-    padding: '12px 16px',
-    borderRadius: '18px',
+    gap: '10px',
+    padding: '6px 12px',
+    borderRadius: '14px',
     background: 'var(--surface-strong)',
     border: '1px solid var(--border-subtle)',
-    minWidth: '260px',
   },
   avatar: {
-    width: '42px',
-    height: '42px',
+    width: '32px',
+    height: '32px',
     borderRadius: '50%',
     background: 'var(--sidebar-accent)',
     color: 'var(--text-inverse)',
     display: 'grid',
     placeItems: 'center',
     fontWeight: 800,
+    fontSize: '0.85rem',
     flexShrink: 0,
   },
   profileName: {
     fontWeight: 700,
+    fontSize: '0.86rem',
     color: 'var(--color-text-primary)',
   },
   profileEmail: {
-    marginTop: '4px',
     color: 'var(--color-text-secondary)',
-    fontSize: '0.85rem',
+    fontSize: '0.76rem',
   },
   main: {
     flex: 1,
     minWidth: 0,
-    padding: '24px',
+    height: 'calc(100vh - 61px)',
+    maxHeight: 'calc(100vh - 61px)',
+    padding: '16px',
     boxSizing: 'border-box',
-    overflowX: 'auto',
-    overflowY: 'auto',
-    msOverflowStyle: 'none',
-    scrollbarWidth: 'none',
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
   },
 };
 
