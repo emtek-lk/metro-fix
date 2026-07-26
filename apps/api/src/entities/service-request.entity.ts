@@ -19,50 +19,49 @@ export class ServiceRequestEntity {
   @Column()
   title: string;
 
-  @Column({ type: 'text' })
+  @Column({ type: 'varchar', length: 'max' })
   description: string;
 
   @Column({
-    type: 'enum',
-    enum: ServicePillar,
+    type: 'varchar',
+    length: 50,
   })
   servicePillar: ServicePillar;
 
   @Column({
-    type: 'enum',
-    enum: FacilityType,
+    type: 'varchar',
+    length: 50,
   })
   facilityType: FacilityType;
 
   @Column({
-    type: 'enum',
-    enum: JobStatus,
+    type: 'varchar',
+    length: 50,
     default: JobStatus.REQUESTED,
   })
   status: JobStatus;
 
-  @Column({ type: 'uuid' })
+  @Column({ type: 'uniqueidentifier' })
   customerId: string;
 
   @ManyToOne(() => CustomerEntity, { onDelete: 'CASCADE', eager: true })
   @JoinColumn({ name: 'customerId' })
   customer: CustomerEntity;
 
-  @Column({ type: 'uuid', nullable: true })
+  @Column({ type: 'uniqueidentifier', nullable: true })
   workerId?: string | null;
 
-  @ManyToOne(() => WorkerEntity, { onDelete: 'SET NULL', nullable: true, eager: true })
+  @ManyToOne(() => WorkerEntity, { onDelete: 'NO ACTION', nullable: true, eager: true })
   @JoinColumn({ name: 'workerId' })
   worker?: WorkerEntity | null;
 
-  @Column({
-    type: 'geometry',
-    spatialFeatureType: 'Point',
-    srid: 4326,
-  })
-  location: { type: 'Point'; coordinates: [number, number] };
+  @Column({ type: 'float', nullable: true })
+  latitude?: number | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: 'float', nullable: true })
+  longitude?: number | null;
+
+  @Column({ type: 'datetime', nullable: true })
   scheduledFor?: Date | null;
 
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })

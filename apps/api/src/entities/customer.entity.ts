@@ -15,7 +15,7 @@ export class CustomerEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'uuid' })
+  @Column({ type: 'uniqueidentifier' })
   userId: string;
 
   @OneToOne(() => UserEntity, { onDelete: 'CASCADE', eager: true })
@@ -23,26 +23,24 @@ export class CustomerEntity {
   user: UserEntity;
 
   @Column({
-    type: 'enum',
-    enum: FacilityType,
+    type: 'varchar',
+    length: 50,
     default: FacilityType.RESIDENTIAL,
   })
   facilityType: FacilityType;
 
   @Column({
-    type: 'enum',
-    enum: SubscriptionTier,
+    type: 'varchar',
+    length: 50,
     default: SubscriptionTier.BASIC,
   })
   subscriptionTier: SubscriptionTier;
 
-  @Column({
-    type: 'geometry',
-    spatialFeatureType: 'Point',
-    srid: 4326,
-    nullable: true,
-  })
-  facilityLocation?: { type: 'Point'; coordinates: [number, number] };
+  @Column({ type: 'float', nullable: true })
+  latitude?: number | null;
+
+  @Column({ type: 'float', nullable: true })
+  longitude?: number | null;
 
   @CreateDateColumn()
   createdAt: Date;

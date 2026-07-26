@@ -58,10 +58,8 @@ export class JobsService {
       status: JobStatus.REQUESTED,
       customerId: dto.customerId,
       workerId: null,
-      location: {
-        type: 'Point',
-        coordinates: [dto.location.longitude, dto.location.latitude],
-      },
+      latitude: dto.location?.latitude ?? 37.7749,
+      longitude: dto.location?.longitude ?? -122.4194,
     });
 
     const savedJob = await this.jobRepo.save(job);
