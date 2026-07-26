@@ -1,20 +1,43 @@
 services:
   db:
-    image: postgres:16-alpine
+    image: mcr.microsoft.com/mssql/server:2022-latest
     restart: unless-stopped
     environment:
-      POSTGRES_DB: metrofix
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      ACCEPT_EULA: Y
+      MSSQL_SA_PASSWORD: YourPassword123!
     ports:
-      - '5432:5432'
+      - '1433:1433'
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - mssql_data:/var/opt/mssql
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U postgres -d metrofix']
+      test:
+        [
+          'CMD-SHELL',
+          '/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -Q "SELECT 1"',
+        ]
       interval: 5s
       timeout: 5s
-      retries: 20
+      retries: 30
+
+  db-init:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      MSSQL_SA_PASSWORD: YourPassword123!
+    entrypoint: []
+    command:
+      - /bin/bash
+      - -lc
+      - >
+        until /opt/mssql-tools18/bin/sqlcmd -C -S db -U sa -P "$$MSSQL_SA_PASSWORD" -Q "SELECT 1" >/dev/null 2>&1;
+        do
+          echo 'Waiting for MSSQL to accept connections...';
+          sleep 2;
+        done;
+        /opt/mssql-tools18/bin/sqlcmd -C -S db -U sa -P "$$MSSQL_SA_PASSWORD" -Q "IF DB_ID('metrofix_db') IS NULL CREATE DATABASE [metrofix_db]";
+        echo 'Database metrofix_db is ready.'
 
   api:
     build:
@@ -24,10 +47,10 @@ services:
     command: sh -lc "npm install && npm run start:dev --workspace apps/api"
     environment:
       DB_HOST: db
-      DB_PORT: '5432'
-      DB_USERNAME: postgres
-      DB_PASSWORD: postgres
-      DB_NAME: metrofix
+      DB_PORT: '1433'
+      DB_USERNAME: sa
+      DB_PASSWORD: YourPassword123!
+      DB_NAME: metrofix_db
       PORT: '3000'
       NODE_ENV: development
     volumes:
@@ -36,6 +59,8 @@ services:
     ports:
       - '3000:3000'
     depends_on:
+      db-init:
+        condition: service_completed_successfully
       db:
         condition: service_healthy
 
@@ -54,6 +79,6 @@ services:
       - api
 
 volumes:
-  postgres_data:
+  mssql_data:
   api_node_modules:
   web_node_modules:
