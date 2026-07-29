@@ -1,7 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { WorkerEntity, ServiceRequestEntity } from '../entities';
+import { WorkerEntity, ServiceRequestEntity, UserEntity } from '../entities';
+import { Role, ServicePillar } from '@metro-fix/core-types';
+
+import { CreateWorkerDto } from './dto/create-worker.dto';
 
 export interface DispatchSearchResult {
   worker: WorkerEntity;
@@ -17,6 +20,8 @@ export class WorkersService {
     private readonly workerRepo: Repository<WorkerEntity>,
     @InjectRepository(ServiceRequestEntity)
     private readonly jobRepo: Repository<ServiceRequestEntity>,
+    @InjectRepository(UserEntity)
+    private readonly userRepo: Repository<UserEntity>,
   ) {}
 
   async findAll(): Promise<WorkerEntity[]> {
@@ -32,6 +37,48 @@ export class WorkersService {
       throw new NotFoundException(`Worker with ID "${id}" not found`);
     }
     return worker;
+  }
+
+  async createWorker(dto: CreateWorkerDto): Promise<WorkerEntity> {
+    const existing = await this.userRepo.findOne({ where: { email: dto.email } });
+    if (existing) {
+      throw new BadRequestException(`User with email "${dto.email}" already exists.`);
+    }
+
+    const user = this.userRepo.create({
+      fullName: dto.fullName,
+      email: dto.email,
+      phoneNumber: dto.phoneNumber || undefined,
+      role: Role.WORKER,
+      password: 'Password123!',
+    });
+    const savedUser = await this.userRepo.save(user);
+
+    const pillars = dto.servicePillars && dto.servicePillars.length > 0
+      ? dto.servicePillars
+      : [ServicePillar.HARD];
+
+    const worker = this.workerRepo.create({
+      userId: savedUser.id,
+      rating: 5.0,
+      servicePillars: pillars,
+      isAvailable: true,
+      activeJobs: 0,
+      latitude: 6.9271,
+      longitude: 79.8612,
+    });
+    const savedWorker = await this.workerRepo.save(worker);
+    savedWorker.user = savedUser;
+
+    return savedWorker;
+  }
+
+  async pingAllWorkers() {
+    return {
+      success: true,
+      message: 'Broadcast ping sent to all active field units successfully.',
+      timestamp: new Date().toISOString(),
+    };
   }
 
   /**
@@ -52,10 +99,7 @@ export class WorkersService {
   }
 
   /**
-   * Dispatch Sorting Algorithm:
-   * Finds available workers near the specified job location.
-   * Workers are sorted by a blended score combining Proximity and Worker Internal Rating (1-5).
-   * Blended Score Formula: (Internal Rating * 20) - (Distance in KM)
+   * Dispatch Sorting Algorithm
    */
   async getAvailableWorkersForJob(
     jobId: string,

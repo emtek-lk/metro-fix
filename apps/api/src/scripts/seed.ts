@@ -72,6 +72,7 @@ async function seed(): Promise<void> {
       userRepo.create({
         fullName: 'Rajesh Perera',
         email: 'admin@metro-fix.com',
+        password: 'Password123!',
         phoneNumber: '+94 77 234 5678',
         role: Role.ADMIN,
       }),
@@ -82,6 +83,7 @@ async function seed(): Promise<void> {
       userRepo.create({
         fullName: 'Kavinda Silva',
         email: 'dispatch@metro-fix.com',
+        password: 'Password123!',
         phoneNumber: '+94 77 345 6789',
         role: Role.CUSTOMER_CARE,
       }),
@@ -95,6 +97,7 @@ async function seed(): Promise<void> {
       userRepo.create({
         fullName: 'Eleanor Vance',
         email: 'eleanor@skylinetowers.com',
+        password: 'Password123!',
         phoneNumber: '+94 71 019 2834',
         role: Role.CUSTOMER,
       }),
@@ -114,6 +117,7 @@ async function seed(): Promise<void> {
       userRepo.create({
         fullName: 'Marcus Wijesinghe',
         email: 'marcus@residences.lk',
+        password: 'Password123!',
         phoneNumber: '+94 71 012 9988',
         role: Role.CUSTOMER,
       }),
@@ -133,6 +137,7 @@ async function seed(): Promise<void> {
       userRepo.create({
         fullName: 'Sophia Martinez',
         email: 'sophia@industrialpark.com',
+        password: 'Password123!',
         phoneNumber: '+94 71 018 4421',
         role: Role.CUSTOMER,
       }),
@@ -153,6 +158,7 @@ async function seed(): Promise<void> {
       userRepo.create({
         fullName: 'Amina Yusuf',
         email: 'amina@metro-fix.com',
+        password: 'Password123!',
         phoneNumber: '+94 77 012 4491',
         role: Role.WORKER,
       }),
@@ -174,6 +180,7 @@ async function seed(): Promise<void> {
       userRepo.create({
         fullName: 'Malik Thompson',
         email: 'malik@metro-fix.com',
+        password: 'Password123!',
         phoneNumber: '+94 77 012 7720',
         role: Role.WORKER,
       }),

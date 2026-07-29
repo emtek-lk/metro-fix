@@ -4,8 +4,11 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  BeforeInsert,
+  BeforeUpdate,
 } from 'typeorm';
 import { Role } from '@metro-fix/core-types';
+import * as bcrypt from 'bcrypt';
 
 @Entity('users')
 export class UserEntity {
@@ -17,6 +20,9 @@ export class UserEntity {
 
   @Column({ unique: true })
   email: string;
+
+  @Column()
+  password!: string;
 
   @Column({
     type: 'varchar',
@@ -36,4 +42,12 @@ export class UserEntity {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @BeforeInsert()
+  @BeforeUpdate()
+  async hashPassword(): Promise<void> {
+    if (this.password && !this.password.startsWith('$2b$') && !this.password.startsWith('$2a$')) {
+      this.password = await bcrypt.hash(this.password, 10);
+    }
+  }
 }

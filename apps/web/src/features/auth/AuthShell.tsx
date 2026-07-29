@@ -15,28 +15,18 @@ export function AuthShell({ onAuthenticated }: AuthShellProps) {
   const [mode, setMode] = useState<AuthMode>('login');
   const isCompact = useMediaQuery('(max-width: 820px)');
 
-  const handleLoginSuccess = (values: LoginInput) => {
-    const isAdmin = values.email.toLowerCase() === 'admin@metro-fix.com' || values.email.toLowerCase().includes('admin');
-    const role = isAdmin ? Role.ADMIN : Role.CUSTOMER_CARE;
-    const targetPath = isAdmin ? '/admin' : '/dispatch';
-    const mockToken = `mock_token_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-
-    const user: User = {
-      id: `usr_${Date.now()}`,
-      fullName: isAdmin ? 'System Administrator' : 'Customer Care Dispatcher',
-      email: values.email,
-      role: role,
-      createdAt: new Date().toISOString(),
-    };
+  const handleLoginSuccess = (data: { accessToken: string; user: User }) => {
+    const { accessToken, user } = data;
+    const targetPath = user.role === Role.ADMIN ? '/admin' : '/dispatch';
 
     try {
-      localStorage.setItem('metrofix_token', mockToken);
+      localStorage.setItem('metrofix_token', accessToken);
       localStorage.setItem('metrofix_user', JSON.stringify(user));
     } catch {
       // Storage fallback
     }
 
-    onAuthenticated(user, mockToken, targetPath);
+    onAuthenticated(user, accessToken, targetPath);
   };
 
   const handleRegistrationSuccess = (values: RegistrationInput) => {
@@ -97,7 +87,7 @@ export function AuthShell({ onAuthenticated }: AuthShellProps) {
 
         <div style={styles.formPanel}>
           {mode === 'login' ? (
-            <Login onSubmit={handleLoginSuccess} />
+            <Login onSuccess={handleLoginSuccess} />
           ) : (
             <Register onSubmit={handleRegistrationSuccess} />
           )}

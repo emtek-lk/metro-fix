@@ -8,26 +8,17 @@ import ThemeToggle from '../../theme/ThemeToggle';
 export function AuthShell({ onAuthenticated }) {
     const [mode, setMode] = useState('login');
     const isCompact = useMediaQuery('(max-width: 820px)');
-    const handleLoginSuccess = (values) => {
-        const isAdmin = values.email.toLowerCase() === 'admin@metro-fix.com' || values.email.toLowerCase().includes('admin');
-        const role = isAdmin ? Role.ADMIN : Role.CUSTOMER_CARE;
-        const targetPath = isAdmin ? '/admin' : '/dispatch';
-        const mockToken = `mock_token_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-        const user = {
-            id: `usr_${Date.now()}`,
-            fullName: isAdmin ? 'System Administrator' : 'Customer Care Dispatcher',
-            email: values.email,
-            role: role,
-            createdAt: new Date().toISOString(),
-        };
+    const handleLoginSuccess = (data) => {
+        const { accessToken, user } = data;
+        const targetPath = user.role === Role.ADMIN ? '/admin' : '/dispatch';
         try {
-            localStorage.setItem('metrofix_token', mockToken);
+            localStorage.setItem('metrofix_token', accessToken);
             localStorage.setItem('metrofix_user', JSON.stringify(user));
         }
         catch {
             // Storage fallback
         }
-        onAuthenticated(user, mockToken, targetPath);
+        onAuthenticated(user, accessToken, targetPath);
     };
     const handleRegistrationSuccess = (values) => {
         const role = values.role || Role.CUSTOMER;
@@ -50,7 +41,7 @@ export function AuthShell({ onAuthenticated }) {
         }
         onAuthenticated(user, mockToken, targetPath);
     };
-    return (_jsx("div", { style: styles.screen, children: _jsxs("section", { style: { ...styles.card, ...(isCompact ? styles.cardCompact : undefined) }, children: [_jsxs("div", { style: { ...styles.cardHeader, ...(isCompact ? styles.cardHeaderCompact : undefined) }, children: [_jsxs("div", { style: styles.brandBlock, children: [_jsx("div", { style: styles.kicker, children: "Facility Management Platform" }), _jsx("h1", { style: styles.title, children: "METRO-FIX" }), _jsx("p", { style: styles.copy, children: "Managed Dispatch Facility Control Center" })] }), _jsx(ThemeToggle, {})] }), _jsxs("div", { style: { ...styles.toggleRow, ...(isCompact ? styles.toggleRowCompact : undefined) }, children: [_jsx("button", { type: "button", onClick: () => setMode('login'), style: { ...styles.toggleButton, ...(mode === 'login' ? styles.toggleActive : undefined) }, children: "Sign In" }), _jsx("button", { type: "button", onClick: () => setMode('register'), style: { ...styles.toggleButton, ...(mode === 'register' ? styles.toggleActive : undefined) }, children: "Register Profile" })] }), _jsx("div", { style: styles.formPanel, children: mode === 'login' ? (_jsx(Login, { onSubmit: handleLoginSuccess })) : (_jsx(Register, { onSubmit: handleRegistrationSuccess })) })] }) }));
+    return (_jsx("div", { style: styles.screen, children: _jsxs("section", { style: { ...styles.card, ...(isCompact ? styles.cardCompact : undefined) }, children: [_jsxs("div", { style: { ...styles.cardHeader, ...(isCompact ? styles.cardHeaderCompact : undefined) }, children: [_jsxs("div", { style: styles.brandBlock, children: [_jsx("div", { style: styles.kicker, children: "Facility Management Platform" }), _jsx("h1", { style: styles.title, children: "METRO-FIX" }), _jsx("p", { style: styles.copy, children: "Managed Dispatch Facility Control Center" })] }), _jsx(ThemeToggle, {})] }), _jsxs("div", { style: { ...styles.toggleRow, ...(isCompact ? styles.toggleRowCompact : undefined) }, children: [_jsx("button", { type: "button", onClick: () => setMode('login'), style: { ...styles.toggleButton, ...(mode === 'login' ? styles.toggleActive : undefined) }, children: "Sign In" }), _jsx("button", { type: "button", onClick: () => setMode('register'), style: { ...styles.toggleButton, ...(mode === 'register' ? styles.toggleActive : undefined) }, children: "Register Profile" })] }), _jsx("div", { style: styles.formPanel, children: mode === 'login' ? (_jsx(Login, { onSuccess: handleLoginSuccess })) : (_jsx(Register, { onSubmit: handleRegistrationSuccess })) })] }) }));
 }
 const styles = {
     screen: {

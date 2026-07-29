@@ -121,4 +121,26 @@ export class JobsService {
 
     return updatedFull;
   }
+
+  /**
+   * Assigns a worker to a job ticket and transitions state to ASSIGNED.
+   */
+  async assignWorker(id: string, workerId: string): Promise<ServiceRequestEntity> {
+    const job = await this.findOne(id);
+
+    const workerExists = await this.workerRepo.exists({ where: { id: workerId } });
+    if (!workerExists) {
+      throw new NotFoundException(`Worker with ID "${workerId}" not found`);
+    }
+
+    job.workerId = workerId;
+    job.status = JobStatus.ASSIGNED;
+
+    const savedJob = await this.jobRepo.save(job);
+    const updatedFull = await this.findOne(savedJob.id);
+
+    this.jobsGateway.emitJobUpdated(updatedFull);
+
+    return updatedFull;
+  }
 }

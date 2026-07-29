@@ -11,6 +11,7 @@ export interface DashboardLayoutProps {
   onRouteChange?: (route: string) => void;
   settingsSlot?: ReactNode;
   onLogout?: () => void;
+  onViewProfile?: () => void;
 }
 
 const adminRoutes = new Set([
@@ -29,6 +30,7 @@ export function DashboardLayout({
   onRouteChange,
   settingsSlot,
   onLogout,
+  onViewProfile,
 }: DashboardLayoutProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [filterText, setFilterText] = useState('');
@@ -66,6 +68,7 @@ export function DashboardLayout({
         footerSlot={settingsSlot}
         userProfile={userProfile}
         onLogout={onLogout}
+        onViewProfile={onViewProfile}
       />
 
       <section style={styles.contentPane}>

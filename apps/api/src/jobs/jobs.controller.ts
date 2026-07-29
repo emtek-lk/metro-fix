@@ -16,6 +16,8 @@ import {
 import { createJobSchema, CreateJobDto } from './dto/create-job.dto';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 
+import { AssignWorkerDto } from './dto/assign-worker.dto';
+
 @Controller('jobs')
 export class JobsController {
   constructor(private readonly jobsService: JobsService) {}
@@ -43,5 +45,13 @@ export class JobsController {
     @Body() dto: UpdateJobStatusDto,
   ): Promise<ServiceRequestEntity> {
     return this.jobsService.updateJobStatus(id, dto);
+  }
+
+  @Patch(':id/assign')
+  async assignWorker(
+    @Param('id') id: string,
+    @Body() dto: AssignWorkerDto,
+  ): Promise<ServiceRequestEntity> {
+    return this.jobsService.assignWorker(id, dto.workerId);
   }
 }

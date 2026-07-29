@@ -26,6 +26,7 @@ export interface SidebarProps {
     avatarUrl?: string;
   };
   onLogout?: () => void;
+  onViewProfile?: () => void;
 }
 
 export const sidebarSections: SidebarSection[] = [
@@ -59,6 +60,7 @@ export function Sidebar({
   footerSlot,
   userProfile,
   onLogout,
+  onViewProfile,
 }: SidebarProps) {
   const [isProfilePopoverOpen, setIsProfilePopoverOpen] = useState(false);
   const sidebarWidth = collapsed ? 60 : 260;
@@ -195,7 +197,7 @@ export function Sidebar({
                     style={styles.popoverOption}
                     onClick={() => {
                       setIsProfilePopoverOpen(false);
-                      alert(`Profile Info:\nFull Name: ${userProfile.fullName}\nRole: ${userProfile.role}\nEmail: ${userProfile.email}`);
+                      onViewProfile?.();
                     }}
                   >
                     <span>👤</span>

@@ -1,9 +1,13 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { loginSchema } from '@metro-fix/core-types';
 import { BrandLogo } from '@metro-fix/ui';
-export function Login({ onSubmit, isLoading = false }) {
+import { API_BASE_URL } from '../../lib/api';
+export function Login({ onSuccess }) {
+    const [authError, setAuthError] = useState(null);
+    const [isLoading, setIsLoading] = useState(false);
     const { register, handleSubmit, formState: { errors }, } = useForm({
         resolver: zodResolver(loginSchema),
         defaultValues: {
@@ -11,13 +15,39 @@ export function Login({ onSubmit, isLoading = false }) {
             password: '',
         },
     });
-    return (_jsxs("form", { onSubmit: handleSubmit(onSubmit), style: styles.form, noValidate: true, children: [_jsx("div", { style: styles.logoWrapper, children: _jsx("img", { src: BrandLogo, alt: "Metro-Fix Logo", style: styles.logo }) }), _jsxs("div", { style: styles.headerGroup, children: [_jsx("h2", { style: styles.formTitle, children: "Sign In" }), _jsx("p", { style: styles.formSubtitle, children: "Access your METRO-FIX facility control center" })] }), _jsxs("div", { style: styles.fieldGroup, children: [_jsx("label", { style: styles.label, htmlFor: "login-email", children: "Email Address" }), _jsx("input", { id: "login-email", type: "email", autoComplete: "email", ...register('email'), style: {
+    const onSubmit = async (values) => {
+        setIsLoading(true);
+        setAuthError(null);
+        try {
+            const response = await fetch(`${API_BASE_URL}/auth/login`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(values),
+            });
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => null);
+                throw new Error(errorData?.message || 'Invalid email address or password.');
+            }
+            const data = await response.json();
+            // data: { accessToken: string, user: User }
+            onSuccess(data);
+        }
+        catch (err) {
+            setAuthError(err.message || 'Unable to connect to authentication server.');
+        }
+        finally {
+            setIsLoading(false);
+        }
+    };
+    return (_jsxs("form", { onSubmit: handleSubmit(onSubmit), style: styles.form, noValidate: true, children: [_jsx("div", { style: styles.logoWrapper, children: _jsx("img", { src: BrandLogo, alt: "Metro-Fix Logo", style: styles.logo }) }), _jsxs("div", { style: styles.headerGroup, children: [_jsx("h2", { style: styles.formTitle, children: "Sign In" }), _jsx("p", { style: styles.formSubtitle, children: "Access your METRO-FIX facility control center" })] }), authError && (_jsx("div", { style: styles.errorBanner, children: _jsxs("span", { children: ["\u26A0\uFE0F ", authError] }) })), _jsxs("div", { style: styles.fieldGroup, children: [_jsx("label", { style: styles.label, htmlFor: "login-email", children: "Email Address" }), _jsx("input", { id: "login-email", type: "email", autoComplete: "email", ...register('email'), style: {
                             ...styles.input,
                             ...(errors.email ? styles.inputError : undefined),
                         }, placeholder: "admin@metro-fix.com" }), errors.email && _jsx("span", { style: styles.errorText, children: errors.email.message })] }), _jsxs("div", { style: styles.fieldGroup, children: [_jsx("label", { style: styles.label, htmlFor: "login-password", children: "Password" }), _jsx("input", { id: "login-password", type: "password", autoComplete: "current-password", ...register('password'), style: {
                             ...styles.input,
                             ...(errors.password ? styles.inputError : undefined),
-                        }, placeholder: "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" }), errors.password && _jsx("span", { style: styles.errorText, children: errors.password.message })] }), _jsx("button", { type: "submit", disabled: isLoading, style: styles.submitButton, children: isLoading ? 'Signing In...' : 'Sign In' }), _jsxs("div", { style: styles.quickAccessBlock, children: [_jsx("div", { style: styles.quickAccessTitle, children: "Demo Accounts (Password: 8+ chars)" }), _jsxs("div", { style: styles.quickAccessBadges, children: [_jsxs("div", { style: styles.badgeItem, children: [_jsx("span", { style: styles.badgeRole, children: "Admin:" }), _jsx("code", { style: styles.code, children: "admin@metro-fix.com" })] }), _jsxs("div", { style: styles.badgeItem, children: [_jsx("span", { style: styles.badgeRole, children: "Dispatcher:" }), _jsx("code", { style: styles.code, children: "dispatch@metro-fix.com" })] })] })] })] }));
+                        }, placeholder: "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" }), errors.password && _jsx("span", { style: styles.errorText, children: errors.password.message })] }), _jsx("button", { type: "submit", disabled: isLoading, style: styles.submitButton, children: isLoading ? 'Signing In...' : 'Sign In' }), _jsxs("div", { style: styles.quickAccessBlock, children: [_jsx("div", { style: styles.quickAccessTitle, children: "Demo Credentials (Password: Password123!)" }), _jsxs("div", { style: styles.quickAccessBadges, children: [_jsxs("div", { style: styles.badgeItem, children: [_jsx("span", { style: styles.badgeRole, children: "Admin:" }), _jsx("code", { style: styles.code, children: "admin@metro-fix.com" })] }), _jsxs("div", { style: styles.badgeItem, children: [_jsx("span", { style: styles.badgeRole, children: "Dispatcher:" }), _jsx("code", { style: styles.code, children: "dispatch@metro-fix.com" })] })] })] })] }));
 }
 const styles = {
     form: {
@@ -50,6 +80,14 @@ const styles = {
         margin: 0,
         fontSize: '0.84rem',
         color: 'var(--text-secondary)',
+    },
+    errorBanner: {
+        padding: '10px 14px',
+        background: '#8b0000',
+        color: '#ffffff',
+        borderRadius: '10px',
+        fontSize: '0.85rem',
+        fontWeight: 600,
     },
     fieldGroup: {
         display: 'flex',
