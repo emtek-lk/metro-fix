@@ -1,15 +1,18 @@
-import { type CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { loginSchema, type LoginInput } from '@metro-fix/core-types';
+import { loginSchema, type LoginInput, type User } from '@metro-fix/core-types';
 import { BrandLogo } from '@metro-fix/ui';
+import { API_BASE_URL } from '../../lib/api';
 
 export interface LoginProps {
-  onSubmit: (values: LoginInput) => void;
-  isLoading?: boolean;
+  onSuccess: (data: { accessToken: string; user: User }) => void;
 }
 
-export function Login({ onSubmit, isLoading = false }: LoginProps) {
+export function Login({ onSuccess }: LoginProps) {
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
   const {
     register,
     handleSubmit,
@@ -22,6 +25,34 @@ export function Login({ onSubmit, isLoading = false }: LoginProps) {
     },
   });
 
+  const onSubmit = async (values: LoginInput) => {
+    setIsLoading(true);
+    setAuthError(null);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(values),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.message || 'Invalid email address or password.');
+      }
+
+      const data = await response.json();
+      // data: { accessToken: string, user: User }
+      onSuccess(data);
+    } catch (err: any) {
+      setAuthError(err.message || 'Unable to connect to authentication server.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} style={styles.form} noValidate>
       <div style={styles.logoWrapper}>
@@ -32,6 +63,12 @@ export function Login({ onSubmit, isLoading = false }: LoginProps) {
         <h2 style={styles.formTitle}>Sign In</h2>
         <p style={styles.formSubtitle}>Access your METRO-FIX facility control center</p>
       </div>
+
+      {authError && (
+        <div style={styles.errorBanner}>
+          <span>⚠️ {authError}</span>
+        </div>
+      )}
 
       <div style={styles.fieldGroup}>
         <label style={styles.label} htmlFor="login-email">
@@ -74,7 +111,7 @@ export function Login({ onSubmit, isLoading = false }: LoginProps) {
       </button>
 
       <div style={styles.quickAccessBlock}>
-        <div style={styles.quickAccessTitle}>Demo Accounts (Password: 8+ chars)</div>
+        <div style={styles.quickAccessTitle}>Demo Credentials (Password: Password123!)</div>
         <div style={styles.quickAccessBadges}>
           <div style={styles.badgeItem}>
             <span style={styles.badgeRole}>Admin:</span>
@@ -121,6 +158,14 @@ const styles: Record<string, CSSProperties> = {
     margin: 0,
     fontSize: '0.84rem',
     color: 'var(--text-secondary)',
+  },
+  errorBanner: {
+    padding: '10px 14px',
+    background: '#8b0000',
+    color: '#ffffff',
+    borderRadius: '10px',
+    fontSize: '0.85rem',
+    fontWeight: 600,
   },
   fieldGroup: {
     display: 'flex',

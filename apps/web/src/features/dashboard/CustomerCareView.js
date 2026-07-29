@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { DragDropContext, Draggable, Droppable } from '@hello-pangea/dnd';
 import { JobStatus, ServiceType } from '@metro-fix/core-types';
 import { useMediaQuery } from '@metro-fix/ui';
+import { API_BASE_URL } from '../../lib/api';
 const boardOrder = [
     JobStatus.Requested,
     JobStatus.PendingAcceptance,
@@ -185,9 +186,11 @@ function getWorkerBadgeLabel(worker) {
 }
 export function CustomerCareView() {
     const [columns, setColumns] = useState(createInitialColumns);
+    const [workersList, setWorkersList] = useState(mockWorkers);
     const [isDispatchModalOpen, setDispatchModalOpen] = useState(false);
     const [selectedCardId, setSelectedCardId] = useState(null);
     const [selectedWorkerId, setSelectedWorkerId] = useState(null);
+    const [ariaAnnouncement, setAriaAnnouncement] = useState('');
     const isCompact = useMediaQuery('(max-width: 980px)');
     const [isLoading, setIsLoading] = useState(true);
     const [fetchError, setFetchError] = useState(null);
@@ -202,7 +205,12 @@ export function CustomerCareView() {
         let isMounted = true;
         setIsLoading(true);
         setFetchError(null);
-        fetch('http://localhost:3000/jobs')
+        const token = localStorage.getItem('metrofix_token');
+        fetch(`${API_BASE_URL}/jobs`, {
+            headers: {
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+        })
             .then((res) => {
             if (!res.ok)
                 throw new Error(`HTTP error ${res.status}`);
@@ -264,7 +272,7 @@ export function CustomerCareView() {
         };
     }, []);
     const grouped = useMemo(() => boardOrder.map((status) => ({ status, items: columns[status] })), [columns]);
-    const sortedWorkers = useMemo(() => [...mockWorkers].sort((left, right) => calculateWorkerScore(right) - calculateWorkerScore(left)), []);
+    const sortedWorkers = useMemo(() => [...workersList].sort((left, right) => calculateWorkerScore(right) - calculateWorkerScore(left)), [workersList]);
     const selectedCard = useMemo(() => {
         if (!selectedCardId) {
             return null;
@@ -273,8 +281,35 @@ export function CustomerCareView() {
     }, [columns, selectedCardId]);
     const openDispatchModal = (cardId) => {
         setSelectedCardId(cardId);
-        setSelectedWorkerId(sortedWorkers[0]?.id ?? null);
         setDispatchModalOpen(true);
+        const token = localStorage.getItem('metrofix_token');
+        fetch(`${API_BASE_URL}/workers`, {
+            headers: {
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+        })
+            .then((res) => (res.ok ? res.json() : []))
+            .then((data) => {
+            if (Array.isArray(data) && data.length > 0) {
+                const mapped = data.map((item) => ({
+                    id: item.id,
+                    fullName: item.user?.fullName || 'Field Worker',
+                    serviceTypes: [ServiceType.Hard],
+                    coverageZone: 'Colombo Central',
+                    rating: item.rating ?? 5.0,
+                    proximityKm: 1.5,
+                    isAvailable: item.isAvailable ?? true,
+                }));
+                setWorkersList(mapped);
+                setSelectedWorkerId(mapped[0].id);
+            }
+            else {
+                setSelectedWorkerId(sortedWorkers[0]?.id ?? null);
+            }
+        })
+            .catch(() => {
+            setSelectedWorkerId(sortedWorkers[0]?.id ?? null);
+        });
     };
     const closeDispatchModal = () => {
         setDispatchModalOpen(false);
@@ -323,25 +358,54 @@ export function CustomerCareView() {
             };
         });
     };
-    const confirmDispatch = () => {
+    const confirmDispatch = async () => {
         if (!selectedCardId || !selectedWorkerId) {
             return;
         }
         const worker = sortedWorkers.find((entry) => entry.id === selectedWorkerId);
-        if (!worker) {
-            return;
+        const fallbackName = worker ? worker.fullName : 'Field Worker';
+        const token = localStorage.getItem('metrofix_token');
+        try {
+            const response = await fetch(`${API_BASE_URL}/jobs/${selectedCardId}/assign`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({ workerId: selectedWorkerId }),
+            });
+            if (!response.ok) {
+                throw new Error('Failed to persist worker assignment.');
+            }
+            const updatedJob = await response.json();
+            const workerName = updatedJob.worker?.user?.fullName || fallbackName;
+            moveCard(selectedCardId, JobStatus.Assigned, (card) => ({
+                ...card,
+                status: JobStatus.Assigned,
+                assignedWorker: {
+                    id: selectedWorkerId,
+                    fullName: workerName,
+                    rating: updatedJob.worker?.rating || 5.0,
+                    proximityKm: 1.2,
+                },
+            }), 0);
+            showToast(`Worker "${workerName}" assigned to service request!`, 'success');
+            closeDispatchModal();
         }
-        moveCard(selectedCardId, JobStatus.PendingAcceptance, (card) => ({
-            ...card,
-            status: JobStatus.PendingAcceptance,
-            assignedWorker: {
-                id: worker.id,
-                fullName: worker.fullName,
-                rating: worker.rating,
-                proximityKm: worker.proximityKm,
-            },
-        }), 0);
-        closeDispatchModal();
+        catch (err) {
+            moveCard(selectedCardId, JobStatus.Assigned, (card) => ({
+                ...card,
+                status: JobStatus.Assigned,
+                assignedWorker: {
+                    id: selectedWorkerId,
+                    fullName: fallbackName,
+                    rating: worker?.rating || 5.0,
+                    proximityKm: worker?.proximityKm || 1.5,
+                },
+            }), 0);
+            showToast(`Worker "${fallbackName}" assigned (local dispatch update).`, 'success');
+            closeDispatchModal();
+        }
     };
     const handleRejectSimulation = (cardId) => {
         moveCard(cardId, JobStatus.Requested, (card) => ({
@@ -391,9 +455,14 @@ export function CustomerCareView() {
             [sourceStatus]: sourceCards,
             [destinationStatus]: destinationCards,
         }));
-        fetch(`http://localhost:3000/jobs/${draggableId}/status`, {
+        setAriaAnnouncement(`Moved job card ${movedItem.title || movedItem.id} to ${statusLabels[destinationStatus]}`);
+        const token = localStorage.getItem('metrofix_token');
+        fetch(`${API_BASE_URL}/jobs/${draggableId}/status`, {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
             body: JSON.stringify({ status: destinationStatus }),
         })
             .then((res) => {
@@ -407,7 +476,7 @@ export function CustomerCareView() {
             console.warn('Failed to persist job status to backend:', err);
         });
     };
-    return (_jsxs("section", { style: styles.view, children: [isLoading && (_jsxs("div", { style: styles.loadingBanner, children: [_jsx("div", { style: styles.spinner }), _jsx("span", { children: "Fetching live service requests from NestJS API..." })] })), fetchError && !isLoading && (_jsx("div", { style: styles.errorBanner, children: _jsxs("span", { children: ["\u26A0\uFE0F ", fetchError] }) })), toast && (_jsx("div", { style: {
+    return (_jsxs("section", { style: styles.view, "aria-label": "Customer Care Managed Dispatch Kanban Board", children: [_jsx("div", { className: "sr-only", "aria-live": "polite", "aria-atomic": "true", children: ariaAnnouncement }), isLoading && (_jsxs("div", { style: styles.loadingBanner, children: [_jsx("div", { style: styles.spinner }), _jsx("span", { children: "Fetching live service requests from NestJS API..." })] })), fetchError && !isLoading && (_jsx("div", { style: styles.errorBanner, children: _jsxs("span", { children: ["\u26A0\uFE0F ", fetchError] }) })), toast && (_jsx("div", { style: {
                     ...styles.toastNotification,
                     background: toast.type === 'success' ? '#2b435f' : '#8b0000',
                     borderColor: toast.type === 'success' ? '#f38808' : '#ff4d4d',

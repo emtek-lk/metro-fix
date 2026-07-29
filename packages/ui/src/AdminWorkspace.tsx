@@ -470,7 +470,8 @@ function AddCustomerModal({
     };
 
     try {
-      const response = await fetch('http://localhost:3000/customers', {
+      const apiBase = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || 'http://localhost:3000';
+      const response = await fetch(`${apiBase}/customers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -609,14 +610,22 @@ export interface AdminWorkspaceProps {
   activeView?: 'customers' | 'service-catalog' | 'workers' | 'subscriptions' | 'financials';
   isCustomerModalOpen?: boolean;
   onCloseCustomerModal?: () => void;
+  workersList?: WorkerRecord[];
+  onWorkerCreated?: (worker: WorkerRecord) => void;
 }
 
 export function AdminWorkspace({
   activeView = 'customers',
   isCustomerModalOpen = false,
   onCloseCustomerModal,
+  workersList,
+  onWorkerCreated,
 }: AdminWorkspaceProps) {
   const [customers, setCustomers] = useState<CustomerRecord[]>(initialCustomerRows);
+  const [workers, setWorkers] = useState<WorkerRecord[]>(initialWorkerRows);
+  const [services, setServices] = useState<ServiceRecord[]>(serviceRows);
+  const [subscriptions, setSubscriptions] = useState<SubscriptionPlanRecord[]>(initialSubscriptionRows);
+  const [financials, setFinancials] = useState<FinancialRecord[]>(initialFinancialRows);
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
@@ -625,7 +634,19 @@ export function AdminWorkspace({
     setIsLoading(true);
     setFetchError(null);
 
-    fetch('http://localhost:3000/customers')
+    const token = typeof window !== 'undefined' ? localStorage.getItem('metrofix_token') : null;
+    const apiBase = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || 'http://localhost:3000';
+    let endpoint = `${apiBase}/customers`;
+    if (activeView === 'workers') endpoint = `${apiBase}/workers`;
+    if (activeView === 'service-catalog') endpoint = `${apiBase}/services`;
+    if (activeView === 'subscriptions') endpoint = `${apiBase}/subscriptions`;
+    if (activeView === 'financials') endpoint = `${apiBase}/financials`;
+
+    fetch(endpoint, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    })
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP error ${res.status}`);
         return res.json();
@@ -634,29 +655,76 @@ export function AdminWorkspace({
         if (!isMounted) return;
         setIsLoading(false);
         if (!Array.isArray(data) || data.length === 0) return;
-        const mapped: CustomerRecord[] = data.map((item) => ({
-          id: item.id || `cust-${Math.random().toString(36).slice(2, 6)}`,
-          fullName: item.user?.fullName || 'Customer User',
-          displayName: (item.user?.fullName || 'Customer').split(' ')[0],
-          email: item.user?.email || 'N/A',
-          phone: item.user?.phoneNumber || 'N/A',
-          facilityType: (item.facilityType as FacilityType) || 'Commercial',
-          subscriptionTier: (item.subscriptionTier as SubscriptionTier) || 'Basic',
-          physicalAddress: 'Site Location',
-        }));
-        setCustomers(mapped);
+
+        if (activeView === 'workers') {
+          const mappedWorkers: WorkerRecord[] = data.map((item) => ({
+            id: item.id || `wrk-${Math.random().toString(36).slice(2, 6)}`,
+            fullName: item.user?.fullName || 'Field Worker',
+            email: item.user?.email || 'N/A',
+            phone: item.user?.phoneNumber || 'N/A',
+            coverageZone: 'Colombo Central',
+            rating: item.rating ?? 5.0,
+            serviceTypes: Array.isArray(item.servicePillars) ? item.servicePillars.join(', ') : 'Hard',
+            status: item.isAvailable ? 'Active' : 'Offline',
+          }));
+          setWorkers(mappedWorkers);
+        } else if (activeView === 'service-catalog') {
+          const mappedServices: ServiceRecord[] = data.map((item) => ({
+            id: item.id || `srv-${Math.random().toString(36).slice(2, 6)}`,
+            serviceName: item.serviceName || 'Service Item',
+            pillarCategory: item.pillarCategory || 'Hard',
+            basePrice: item.basePrice || '$250.00',
+            requiredSubscriptionTier: item.requiredSubscriptionTier || 'Basic',
+            status: item.status || 'Active',
+          }));
+          setServices(mappedServices);
+        } else if (activeView === 'subscriptions') {
+          const mappedSubs: SubscriptionPlanRecord[] = data.map((item) => ({
+            id: item.id || `sub-${Math.random().toString(36).slice(2, 6)}`,
+            tierName: item.tierName || 'Basic',
+            targetFacility: item.targetFacility || 'Commercial',
+            monthlyFee: item.monthlyFee || '$499/mo',
+            activeAccounts: item.activeAccounts ?? 0,
+            includedServices: item.includedServices || 'Facility Service Tier',
+            status: item.status || 'Active',
+          }));
+          setSubscriptions(mappedSubs);
+        } else if (activeView === 'financials') {
+          const mappedFin: FinancialRecord[] = data.map((item) => ({
+            id: item.id || 'INV-9001',
+            jobId: item.jobId || 'REQ-1001',
+            customerName: item.customerName || 'Facility Customer',
+            servicePillar: item.servicePillar || 'Hard',
+            amount: item.amount || '$500.00',
+            paymentStatus: item.paymentStatus || 'Paid',
+            invoiceDate: item.invoiceDate || '2026-07-28',
+          }));
+          setFinancials(mappedFin);
+        } else {
+          const mappedCustomers: CustomerRecord[] = data.map((item) => ({
+            id: item.id || `cust-${Math.random().toString(36).slice(2, 6)}`,
+            fullName: item.user?.fullName || 'Customer User',
+            displayName: (item.user?.fullName || 'Customer').split(' ')[0],
+            email: item.user?.email || 'N/A',
+            phone: item.user?.phoneNumber || 'N/A',
+            facilityType: (item.facilityType as FacilityType) || 'Commercial',
+            subscriptionTier: (item.subscriptionTier as SubscriptionTier) || 'Basic',
+            physicalAddress: 'Site Location',
+          }));
+          setCustomers(mappedCustomers);
+        }
       })
       .catch((err) => {
         if (!isMounted) return;
         setIsLoading(false);
-        setFetchError('Unable to load live customer directory from API. Displaying default records.');
-        console.warn('Using default customer rows, NestJS API connecting or starting:', err);
+        setFetchError(`Unable to load live ${activeView} directory from API. Displaying default records.`);
+        console.warn(`Using default ${activeView} rows, NestJS API connecting or starting:`, err);
       });
 
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [activeView]);
 
   const handleCustomerCreated = (newCustomer: CustomerRecord) => {
     setCustomers((prev) => [newCustomer, ...prev]);
@@ -685,35 +753,83 @@ export function AdminWorkspace({
       )}
 
       {activeView === 'service-catalog' && (
-        <DataTable<ServiceRecord>
-          columns={serviceColumns}
-          data={serviceRows}
-          emptyMessage="No service catalog records."
-        />
+        <>
+          {isLoading && (
+            <div style={styles.infoBanner}>
+              <span>🔄 Loading live service catalog from NestJS API...</span>
+            </div>
+          )}
+          {fetchError && !isLoading && (
+            <div style={styles.errorBanner}>
+              <span>⚠️ {fetchError}</span>
+            </div>
+          )}
+          <DataTable<ServiceRecord>
+            columns={serviceColumns}
+            data={services}
+            emptyMessage="No service catalog records."
+          />
+        </>
       )}
 
       {activeView === 'workers' && (
-        <DataTable<WorkerRecord>
-          columns={workerColumns}
-          data={initialWorkerRows}
-          emptyMessage="No workers registered in system."
-        />
+        <>
+          {isLoading && (
+            <div style={styles.infoBanner}>
+              <span>🔄 Loading live worker roster from NestJS API...</span>
+            </div>
+          )}
+          {fetchError && !isLoading && (
+            <div style={styles.errorBanner}>
+              <span>⚠️ {fetchError}</span>
+            </div>
+          )}
+          <DataTable<WorkerRecord>
+            columns={workerColumns}
+            data={workers}
+            emptyMessage="No workers registered in system."
+          />
+        </>
       )}
 
       {activeView === 'subscriptions' && (
-        <DataTable<SubscriptionPlanRecord>
-          columns={subscriptionColumns}
-          data={initialSubscriptionRows}
-          emptyMessage="No subscription tiers defined."
-        />
+        <>
+          {isLoading && (
+            <div style={styles.infoBanner}>
+              <span>🔄 Loading live subscription plans from NestJS API...</span>
+            </div>
+          )}
+          {fetchError && !isLoading && (
+            <div style={styles.errorBanner}>
+              <span>⚠️ {fetchError}</span>
+            </div>
+          )}
+          <DataTable<SubscriptionPlanRecord>
+            columns={subscriptionColumns}
+            data={subscriptions}
+            emptyMessage="No subscription tiers defined."
+          />
+        </>
       )}
 
       {activeView === 'financials' && (
-        <DataTable<FinancialRecord>
-          columns={financialColumns}
-          data={initialFinancialRows}
-          emptyMessage="No financial ledger entries found."
-        />
+        <>
+          {isLoading && (
+            <div style={styles.infoBanner}>
+              <span>🔄 Loading live financial ledger from NestJS API...</span>
+            </div>
+          )}
+          {fetchError && !isLoading && (
+            <div style={styles.errorBanner}>
+              <span>⚠️ {fetchError}</span>
+            </div>
+          )}
+          <DataTable<FinancialRecord>
+            columns={financialColumns}
+            data={financials}
+            emptyMessage="No financial ledger entries found."
+          />
+        </>
       )}
 
       {/* Creation Modal */}

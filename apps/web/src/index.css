@@ -41,6 +41,36 @@ textarea {
   overflow: hidden;
 }
 
+/* ─── WCAG Keyboard Navigation & Focus Ring Standards ─── */
+:focus-visible {
+  outline: 2px solid #f38808 !important;
+  outline-offset: 3px !important;
+  box-shadow: 0 0 0 4px rgba(243, 136, 8, 0.25) !important;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible,
+[tabindex="0"]:focus-visible {
+  outline: 2px solid #f38808 !important;
+  outline-offset: 2px !important;
+}
+
+/* ─── Screen Reader Only Helper Class ─── */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
 .sidebar-navScroll,
 .dashboard-viewPanel {
   -ms-overflow-style: none;
