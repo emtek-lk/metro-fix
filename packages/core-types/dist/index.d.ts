@@ -68,6 +68,7 @@ export declare const userSchema: z.ZodObject<{
     role: z.ZodNativeEnum<typeof Role>;
     phoneNumber: z.ZodOptional<z.ZodString>;
     avatarUrl: z.ZodOptional<z.ZodString>;
+    pushToken: z.ZodNullable<z.ZodOptional<z.ZodString>>;
     createdAt: z.ZodUnion<[z.ZodString, z.ZodDate]>;
     updatedAt: z.ZodOptional<z.ZodUnion<[z.ZodString, z.ZodDate]>>;
 }, "strip", z.ZodTypeAny, {
@@ -78,6 +79,7 @@ export declare const userSchema: z.ZodObject<{
     createdAt: string | Date;
     phoneNumber?: string | undefined;
     avatarUrl?: string | undefined;
+    pushToken?: string | null | undefined;
     updatedAt?: string | Date | undefined;
 }, {
     id: string;
@@ -87,6 +89,7 @@ export declare const userSchema: z.ZodObject<{
     createdAt: string | Date;
     phoneNumber?: string | undefined;
     avatarUrl?: string | undefined;
+    pushToken?: string | null | undefined;
     updatedAt?: string | Date | undefined;
 }>;
 export type User = z.infer<typeof userSchema>;
@@ -97,6 +100,7 @@ export declare const workerSchema: z.ZodObject<{
     role: z.ZodNativeEnum<typeof Role>;
     phoneNumber: z.ZodOptional<z.ZodString>;
     avatarUrl: z.ZodOptional<z.ZodString>;
+    pushToken: z.ZodNullable<z.ZodOptional<z.ZodString>>;
     createdAt: z.ZodUnion<[z.ZodString, z.ZodDate]>;
     updatedAt: z.ZodOptional<z.ZodUnion<[z.ZodString, z.ZodDate]>>;
 } & {
@@ -126,6 +130,7 @@ export declare const workerSchema: z.ZodObject<{
     activeJobs: number;
     phoneNumber?: string | undefined;
     avatarUrl?: string | undefined;
+    pushToken?: string | null | undefined;
     updatedAt?: string | Date | undefined;
     location?: {
         latitude: number;
@@ -139,6 +144,7 @@ export declare const workerSchema: z.ZodObject<{
     createdAt: string | Date;
     phoneNumber?: string | undefined;
     avatarUrl?: string | undefined;
+    pushToken?: string | null | undefined;
     updatedAt?: string | Date | undefined;
     rating?: number | undefined;
     location?: {
@@ -157,6 +163,7 @@ export declare const customerSchema: z.ZodObject<{
     role: z.ZodNativeEnum<typeof Role>;
     phoneNumber: z.ZodOptional<z.ZodString>;
     avatarUrl: z.ZodOptional<z.ZodString>;
+    pushToken: z.ZodNullable<z.ZodOptional<z.ZodString>>;
     createdAt: z.ZodUnion<[z.ZodString, z.ZodDate]>;
     updatedAt: z.ZodOptional<z.ZodUnion<[z.ZodString, z.ZodDate]>>;
 } & {
@@ -182,6 +189,7 @@ export declare const customerSchema: z.ZodObject<{
     subscriptionTier: SubscriptionTier;
     phoneNumber?: string | undefined;
     avatarUrl?: string | undefined;
+    pushToken?: string | null | undefined;
     updatedAt?: string | Date | undefined;
     facilityLocation?: {
         latitude: number;
@@ -197,6 +205,7 @@ export declare const customerSchema: z.ZodObject<{
     subscriptionTier: SubscriptionTier;
     phoneNumber?: string | undefined;
     avatarUrl?: string | undefined;
+    pushToken?: string | null | undefined;
     updatedAt?: string | Date | undefined;
     facilityLocation?: {
         latitude: number;
@@ -225,6 +234,10 @@ export declare const serviceRequestSchema: z.ZodObject<{
     }>;
     scheduledFor: z.ZodNullable<z.ZodOptional<z.ZodUnion<[z.ZodString, z.ZodDate]>>>;
     quoteAmount: z.ZodNullable<z.ZodOptional<z.ZodNumber>>;
+    estimatedHours: z.ZodNullable<z.ZodOptional<z.ZodNumber>>;
+    quoteNotes: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+    signature: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+    photos: z.ZodNullable<z.ZodOptional<z.ZodArray<z.ZodString, "many">>>;
     createdAt: z.ZodUnion<[z.ZodString, z.ZodDate]>;
     updatedAt: z.ZodOptional<z.ZodUnion<[z.ZodString, z.ZodDate]>>;
 }, "strip", z.ZodTypeAny, {
@@ -244,6 +257,10 @@ export declare const serviceRequestSchema: z.ZodObject<{
     workerId?: string | null | undefined;
     scheduledFor?: string | Date | null | undefined;
     quoteAmount?: number | null | undefined;
+    estimatedHours?: number | null | undefined;
+    quoteNotes?: string | null | undefined;
+    signature?: string | null | undefined;
+    photos?: string[] | null | undefined;
 }, {
     id: string;
     createdAt: string | Date;
@@ -261,8 +278,66 @@ export declare const serviceRequestSchema: z.ZodObject<{
     workerId?: string | null | undefined;
     scheduledFor?: string | Date | null | undefined;
     quoteAmount?: number | null | undefined;
+    estimatedHours?: number | null | undefined;
+    quoteNotes?: string | null | undefined;
+    signature?: string | null | undefined;
+    photos?: string[] | null | undefined;
 }>;
 export type ServiceRequest = z.infer<typeof serviceRequestSchema>;
+export interface WorkerJobQueueResponse {
+    jobs: ServiceRequest[];
+    total: number;
+}
+export declare const registerPushTokenSchema: z.ZodObject<{
+    pushToken: z.ZodString;
+}, "strip", z.ZodTypeAny, {
+    pushToken: string;
+}, {
+    pushToken: string;
+}>;
+export type RegisterPushTokenDto = z.infer<typeof registerPushTokenSchema>;
+export declare const updateWorkerLocationSchema: z.ZodObject<{
+    latitude: z.ZodNumber;
+    longitude: z.ZodNumber;
+    heading: z.ZodNullable<z.ZodOptional<z.ZodNumber>>;
+    speed: z.ZodNullable<z.ZodOptional<z.ZodNumber>>;
+}, "strip", z.ZodTypeAny, {
+    latitude: number;
+    longitude: number;
+    heading?: number | null | undefined;
+    speed?: number | null | undefined;
+}, {
+    latitude: number;
+    longitude: number;
+    heading?: number | null | undefined;
+    speed?: number | null | undefined;
+}>;
+export type UpdateWorkerLocationDto = z.infer<typeof updateWorkerLocationSchema>;
+export declare const submitJobQuoteSchema: z.ZodObject<{
+    estimatedCost: z.ZodNumber;
+    estimatedHours: z.ZodNumber;
+    notes: z.ZodDefault<z.ZodString>;
+}, "strip", z.ZodTypeAny, {
+    estimatedHours: number;
+    estimatedCost: number;
+    notes: string;
+}, {
+    estimatedHours: number;
+    estimatedCost: number;
+    notes?: string | undefined;
+}>;
+export type SubmitJobQuoteDto = z.infer<typeof submitJobQuoteSchema>;
+export declare const submitJobProofSchema: z.ZodObject<{
+    signature: z.ZodString;
+    photos: z.ZodDefault<z.ZodArray<z.ZodString, "many">>;
+}, "strip", z.ZodTypeAny, {
+    signature: string;
+    photos: string[];
+}, {
+    signature: string;
+    photos?: string[] | undefined;
+}>;
+export type SubmitJobProofDto = z.infer<typeof submitJobProofSchema>;
 export declare const loginSchema: z.ZodObject<{
     email: z.ZodString;
     password: z.ZodString;

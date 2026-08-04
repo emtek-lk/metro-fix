@@ -37,6 +37,9 @@ export class UserEntity {
   @Column({ nullable: true })
   avatarUrl?: string;
 
+  @Column({ nullable: true })
+  pushToken?: string;
+
   @CreateDateColumn()
   createdAt: Date;
 

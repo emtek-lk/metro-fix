@@ -67,6 +67,18 @@ export class ServiceRequestEntity {
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
   quoteAmount?: number | null;
 
+  @Column({ type: 'float', nullable: true })
+  estimatedHours?: number | null;
+
+  @Column({ type: 'varchar', length: 'max', nullable: true })
+  quoteNotes?: string | null;
+
+  @Column({ type: 'varchar', length: 'max', nullable: true })
+  signature?: string | null;
+
+  @Column({ type: 'simple-array', nullable: true })
+  photos?: string[] | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

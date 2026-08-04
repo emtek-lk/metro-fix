@@ -634,7 +634,7 @@ export function AdminWorkspace({
     setIsLoading(true);
     setFetchError(null);
 
-    const token = typeof window !== 'undefined' ? localStorage.getItem('metrofix_token') : null;
+    const token = typeof window !== 'undefined' ? (localStorage.getItem('metrofix_token') || localStorage.getItem('metrofix_jwt')) : null;
     const apiBase = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || 'http://localhost:3000';
     let endpoint = `${apiBase}/customers`;
     if (activeView === 'workers') endpoint = `${apiBase}/workers`;

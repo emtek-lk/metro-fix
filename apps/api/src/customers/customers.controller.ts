@@ -14,10 +14,13 @@ import {
 } from './dto/create-customer.dto';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 
+import { Public } from '../auth/public.decorator';
+
 @Controller('customers')
 export class CustomersController {
   constructor(private readonly customersService: CustomersService) {}
 
+  @Public()
   @Get()
   async findAll(): Promise<CustomerEntity[]> {
     return this.customersService.findAll();

@@ -40,6 +40,12 @@ export class WorkerEntity {
   @Column({ type: 'float', nullable: true })
   longitude?: number | null;
 
+  @Column({ type: 'float', nullable: true })
+  heading?: number | null;
+
+  @Column({ type: 'float', nullable: true })
+  speed?: number | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

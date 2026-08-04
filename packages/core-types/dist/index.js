@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.registrationSchema = exports.loginSchema = exports.serviceRequestSchema = exports.customerSchema = exports.workerSchema = exports.userSchema = exports.locationCoordinatesSchema = exports.Role = exports.SubscriptionTier = exports.ServiceType = exports.ServicePillar = exports.FacilityType = exports.JobStatus = void 0;
+exports.registrationSchema = exports.loginSchema = exports.submitJobProofSchema = exports.submitJobQuoteSchema = exports.updateWorkerLocationSchema = exports.registerPushTokenSchema = exports.serviceRequestSchema = exports.customerSchema = exports.workerSchema = exports.userSchema = exports.locationCoordinatesSchema = exports.Role = exports.SubscriptionTier = exports.ServiceType = exports.ServicePillar = exports.FacilityType = exports.JobStatus = void 0;
 const zod_1 = require("zod");
 // ==========================================
 // Core Domain Enums
@@ -83,6 +83,7 @@ exports.userSchema = zod_1.z.object({
     role: zod_1.z.nativeEnum(Role),
     phoneNumber: zod_1.z.string().optional(),
     avatarUrl: zod_1.z.string().optional(),
+    pushToken: zod_1.z.string().optional().nullable(),
     createdAt: zod_1.z.union([zod_1.z.string(), zod_1.z.date()]),
     updatedAt: zod_1.z.union([zod_1.z.string(), zod_1.z.date()]).optional(),
 });
@@ -113,8 +114,34 @@ exports.serviceRequestSchema = zod_1.z.object({
     location: exports.locationCoordinatesSchema,
     scheduledFor: zod_1.z.union([zod_1.z.string(), zod_1.z.date()]).optional().nullable(),
     quoteAmount: zod_1.z.number().nonnegative().optional().nullable(),
+    estimatedHours: zod_1.z.number().nonnegative().optional().nullable(),
+    quoteNotes: zod_1.z.string().optional().nullable(),
+    signature: zod_1.z.string().optional().nullable(),
+    photos: zod_1.z.array(zod_1.z.string()).optional().nullable(),
     createdAt: zod_1.z.union([zod_1.z.string(), zod_1.z.date()]),
     updatedAt: zod_1.z.union([zod_1.z.string(), zod_1.z.date()]).optional(),
+});
+// Push Token DTO
+exports.registerPushTokenSchema = zod_1.z.object({
+    pushToken: zod_1.z.string().min(1, 'Push token is required.'),
+});
+// Worker Location Telemetry DTO
+exports.updateWorkerLocationSchema = zod_1.z.object({
+    latitude: zod_1.z.number().min(-90).max(90),
+    longitude: zod_1.z.number().min(-180).max(180),
+    heading: zod_1.z.number().optional().nullable(),
+    speed: zod_1.z.number().optional().nullable(),
+});
+// Job Quote DTO (worker estimate submission)
+exports.submitJobQuoteSchema = zod_1.z.object({
+    estimatedCost: zod_1.z.number().nonnegative('Cost must be 0 or greater'),
+    estimatedHours: zod_1.z.number().nonnegative('Hours must be 0 or greater'),
+    notes: zod_1.z.string().default(''),
+});
+// Job Proof DTO (signature and photo proof submission)
+exports.submitJobProofSchema = zod_1.z.object({
+    signature: zod_1.z.string().min(10, 'Signature is required'),
+    photos: zod_1.z.array(zod_1.z.string()).default([]),
 });
 // ==========================================
 // Auth & Form Schemas

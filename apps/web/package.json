@@ -14,8 +14,8 @@
     "@metro-fix/core-types": "*",
     "@metro-fix/ui": "*",
     "@tanstack/react-table": "^8.20.5",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
     "react-hook-form": "^7.54.2"
   },
   "devDependencies": {
