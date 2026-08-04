@@ -95,6 +95,7 @@ export const userSchema = z.object({
   role: z.nativeEnum(Role),
   phoneNumber: z.string().optional(),
   avatarUrl: z.string().optional(),
+  pushToken: z.string().optional().nullable(),
   createdAt: z.union([z.string(), z.date()]),
   updatedAt: z.union([z.string(), z.date()]).optional(),
 });
@@ -134,11 +135,55 @@ export const serviceRequestSchema = z.object({
   location: locationCoordinatesSchema,
   scheduledFor: z.union([z.string(), z.date()]).optional().nullable(),
   quoteAmount: z.number().nonnegative().optional().nullable(),
+  estimatedHours: z.number().nonnegative().optional().nullable(),
+  quoteNotes: z.string().optional().nullable(),
+  signature: z.string().optional().nullable(),
+  photos: z.array(z.string()).optional().nullable(),
   createdAt: z.union([z.string(), z.date()]),
   updatedAt: z.union([z.string(), z.date()]).optional(),
 });
 
 export type ServiceRequest = z.infer<typeof serviceRequestSchema>;
+
+// Worker Job Queue Response DTO
+export interface WorkerJobQueueResponse {
+  jobs: ServiceRequest[];
+  total: number;
+}
+
+// Push Token DTO
+export const registerPushTokenSchema = z.object({
+  pushToken: z.string().min(1, 'Push token is required.'),
+});
+
+export type RegisterPushTokenDto = z.infer<typeof registerPushTokenSchema>;
+
+// Worker Location Telemetry DTO
+export const updateWorkerLocationSchema = z.object({
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  heading: z.number().optional().nullable(),
+  speed: z.number().optional().nullable(),
+});
+
+export type UpdateWorkerLocationDto = z.infer<typeof updateWorkerLocationSchema>;
+
+// Job Quote DTO (worker estimate submission)
+export const submitJobQuoteSchema = z.object({
+  estimatedCost: z.number().nonnegative('Cost must be 0 or greater'),
+  estimatedHours: z.number().nonnegative('Hours must be 0 or greater'),
+  notes: z.string().default(''),
+});
+
+export type SubmitJobQuoteDto = z.infer<typeof submitJobQuoteSchema>;
+
+// Job Proof DTO (signature and photo proof submission)
+export const submitJobProofSchema = z.object({
+  signature: z.string().min(10, 'Signature is required'),
+  photos: z.array(z.string()).default([]),
+});
+
+export type SubmitJobProofDto = z.infer<typeof submitJobProofSchema>;
 
 // ==========================================
 // Auth & Form Schemas

@@ -1,6 +1,7 @@
 import { Injectable, OnApplicationBootstrap, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import * as bcrypt from 'bcrypt';
 import {
   Role,
   FacilityType,
@@ -39,19 +40,102 @@ export class SeedService implements OnApplicationBootstrap {
   }
 
   async seedData() {
+    const defaultPassword = await bcrypt.hash('Password123!', 10);
+
+    // Ensure all seed users exist with valid hashed passwords
+    const usersToSeed = [
+      {
+        fullName: 'Omar Hassan',
+        email: 'omar@metro-fix.com',
+        phoneNumber: '+1 (555) 019-9988',
+        role: Role.WORKER,
+        isWorkerProfile: true,
+      },
+      {
+        fullName: 'System Administrator',
+        email: 'admin@metro-fix.com',
+        phoneNumber: '+1 (555) 000-0000',
+        role: Role.ADMIN,
+        isWorkerProfile: false,
+      },
+      {
+        fullName: 'Amina Yusuf',
+        email: 'amina@metro-fix.com',
+        phoneNumber: '+1 (555) 012-4491',
+        role: Role.WORKER,
+        isWorkerProfile: true,
+      },
+      {
+        fullName: 'Malik Thompson',
+        email: 'malik@metro-fix.com',
+        phoneNumber: '+1 (555) 012-7720',
+        role: Role.WORKER,
+        isWorkerProfile: true,
+      },
+    ];
+
+    for (const u of usersToSeed) {
+      let user = await this.userRepo.findOne({ where: { email: u.email } });
+      if (!user) {
+        user = await this.userRepo.save(
+          this.userRepo.create({
+            fullName: u.fullName,
+            email: u.email,
+            password: defaultPassword,
+            phoneNumber: u.phoneNumber,
+            role: u.role,
+          }),
+        );
+      } else {
+        user.password = defaultPassword;
+        await this.userRepo.save(user);
+      }
+
+      if (u.isWorkerProfile) {
+        const existingWorker = await this.workerRepo.findOne({ where: { userId: user.id } });
+        if (!existingWorker) {
+          await this.workerRepo.save(
+            this.workerRepo.create({
+              userId: user.id,
+              rating: 5.0,
+              servicePillars: [ServicePillar.HARD, ServicePillar.SOFT, ServicePillar.STRATEGIC],
+              isAvailable: true,
+              activeJobs: 1,
+              latitude: 37.7749,
+              longitude: -122.4194,
+            }),
+          );
+        }
+      }
+    }
+
+    const omarUser = await this.userRepo.findOne({ where: { email: 'omar@metro-fix.com' } });
+    const omarWorker = await this.workerRepo.findOne({ where: { userId: omarUser?.id } });
+
     const existingCount = await this.jobRepo.count();
     if (existingCount > 0) {
-      this.logger.log('Database already populated. Skipping initial seed.');
+      if (omarWorker) {
+        // Re-assign all jobs to Omar worker so his mobile dashboard shows active tasks
+        const unassignedJobs = await this.jobRepo.find();
+        for (const j of unassignedJobs) {
+          if (!j.workerId) {
+            j.workerId = omarWorker.id;
+            await this.jobRepo.save(j);
+          }
+        }
+      }
+      this.logger.log('Database users synced & jobs assigned. Skipping initial job seed.');
       return;
     }
 
     this.logger.log('Seeding initial METRO-FIX database records...');
 
-    // 1. Seed Customer Users & Customer Records
+    // Seed Customer Users & Customer Records
     const cust1User = await this.userRepo.save(
       this.userRepo.create({
         fullName: 'Eleanor Vance',
         email: 'eleanor@example.com',
+        password: defaultPassword,
         phoneNumber: '+1 (555) 019-2834',
         role: Role.CUSTOMER,
       }),
@@ -70,6 +154,7 @@ export class SeedService implements OnApplicationBootstrap {
       this.userRepo.create({
         fullName: 'Marcus Aurelius',
         email: 'marcus@example.com',
+        password: defaultPassword,
         phoneNumber: '+1 (555) 012-9988',
         role: Role.CUSTOMER,
       }),
@@ -88,6 +173,7 @@ export class SeedService implements OnApplicationBootstrap {
       this.userRepo.create({
         fullName: 'Sophia Martinez',
         email: 'sophia@example.com',
+        password: defaultPassword,
         phoneNumber: '+1 (555) 018-4421',
         role: Role.CUSTOMER,
       }),
@@ -102,48 +188,10 @@ export class SeedService implements OnApplicationBootstrap {
       }),
     );
 
-    // 2. Seed Worker Users & Worker Records
-    const wrk1User = await this.userRepo.save(
-      this.userRepo.create({
-        fullName: 'Amina Yusuf',
-        email: 'amina@metro-fix.com',
-        phoneNumber: '+1 (555) 012-4491',
-        role: Role.WORKER,
-      }),
-    );
-    const worker1 = await this.workerRepo.save(
-      this.workerRepo.create({
-        userId: wrk1User.id,
-        rating: 4.9,
-        servicePillars: [ServicePillar.HARD, ServicePillar.STRATEGIC],
-        isAvailable: true,
-        activeJobs: 1,
-        latitude: 37.775,
-        longitude: -122.418,
-      }),
-    );
+    const aminaUser = await this.userRepo.findOne({ where: { email: 'amina@metro-fix.com' } });
+    const aminaWorker = await this.workerRepo.findOne({ where: { userId: aminaUser?.id } });
 
-    const wrk2User = await this.userRepo.save(
-      this.userRepo.create({
-        fullName: 'Malik Thompson',
-        email: 'malik@metro-fix.com',
-        phoneNumber: '+1 (555) 012-7720',
-        role: Role.WORKER,
-      }),
-    );
-    const worker2 = await this.workerRepo.save(
-      this.workerRepo.create({
-        userId: wrk2User.id,
-        rating: 4.7,
-        servicePillars: [ServicePillar.SOFT],
-        isAvailable: true,
-        activeJobs: 1,
-        latitude: 37.78,
-        longitude: -122.41,
-      }),
-    );
-
-    // 3. Seed Service Requests (Jobs) across 7 Kanban stages
+    // Seed Service Requests (Jobs)
     const seedJobs = [
       {
         title: 'HVAC Chiller Unit Maintenance',
@@ -163,7 +211,7 @@ export class SeedService implements OnApplicationBootstrap {
         facilityType: FacilityType.RESIDENTIAL,
         status: JobStatus.PENDING_ACCEPTANCE,
         customerId: customer2.id,
-        workerId: worker1.id,
+        workerId: omarWorker?.id || null,
         latitude: 37.7833,
         longitude: -122.4089,
       },
@@ -174,7 +222,7 @@ export class SeedService implements OnApplicationBootstrap {
         facilityType: FacilityType.INDUSTRIAL,
         status: JobStatus.ASSIGNED,
         customerId: customer3.id,
-        workerId: worker1.id,
+        workerId: omarWorker?.id || null,
         latitude: 37.79,
         longitude: -122.399,
       },
@@ -185,7 +233,7 @@ export class SeedService implements OnApplicationBootstrap {
         facilityType: FacilityType.COMMERCIAL,
         status: JobStatus.ON_ROUTE,
         customerId: customer1.id,
-        workerId: worker2.id,
+        workerId: aminaWorker?.id || null,
         latitude: 37.7749,
         longitude: -122.4194,
       },
@@ -196,7 +244,7 @@ export class SeedService implements OnApplicationBootstrap {
         facilityType: FacilityType.COMMERCIAL,
         status: JobStatus.INSPECTION,
         customerId: customer1.id,
-        workerId: worker1.id,
+        workerId: omarWorker?.id || null,
         latitude: 37.7749,
         longitude: -122.4194,
       },
@@ -207,20 +255,9 @@ export class SeedService implements OnApplicationBootstrap {
         facilityType: FacilityType.INDUSTRIAL,
         status: JobStatus.IN_PROGRESS,
         customerId: customer3.id,
-        workerId: worker1.id,
+        workerId: omarWorker?.id || null,
         latitude: 37.79,
         longitude: -122.399,
-      },
-      {
-        title: 'Plumbing Backflow Preventer Test',
-        description: 'Completed annual certification and valve replacement.',
-        servicePillar: ServicePillar.HARD,
-        facilityType: FacilityType.RESIDENTIAL,
-        status: JobStatus.COMPLETED,
-        customerId: customer2.id,
-        workerId: worker2.id,
-        latitude: 37.7833,
-        longitude: -122.4089,
       },
     ];
 

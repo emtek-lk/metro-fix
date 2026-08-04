@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { WorkerEntity, ServiceRequestEntity, UserEntity } from '../entities';
-import { Role, ServicePillar } from '@metro-fix/core-types';
+import { Role, ServicePillar, UpdateWorkerLocationDto } from '@metro-fix/core-types';
 
 import { CreateWorkerDto } from './dto/create-worker.dto';
 
@@ -136,5 +136,67 @@ export class WorkersService {
     return results
       .filter((res) => radiusMeters <= 0 || res.distanceMeters <= radiusMeters)
       .sort((a, b) => b.dispatchScore - a.dispatchScore);
+  }
+
+  async findJobsForWorkerUser(userId: string) {
+    const worker = await this.workerRepo.findOne({ where: { userId } });
+    const targetWorkerId = worker ? worker.id : userId;
+
+    let jobs = await this.jobRepo.find({
+      where: [
+        { workerId: targetWorkerId },
+        { workerId: userId },
+      ],
+      relations: {
+        customer: { user: true },
+        worker: { user: true },
+      },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (jobs.length === 0) {
+      jobs = await this.jobRepo.find({
+        relations: {
+          customer: { user: true },
+          worker: { user: true },
+        },
+        order: { createdAt: 'DESC' },
+      });
+    }
+
+    return {
+      jobs,
+      total: jobs.length,
+    };
+  }
+
+  async updatePushToken(userId: string, pushToken: string): Promise<UserEntity> {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException(`User with ID "${userId}" not found`);
+    }
+
+    user.pushToken = pushToken;
+    return this.userRepo.save(user);
+  }
+
+  async updateWorkerLocation(
+    userId: string,
+    dto: UpdateWorkerLocationDto,
+  ): Promise<WorkerEntity> {
+    const worker = await this.workerRepo.findOne({
+      where: { userId },
+      relations: { user: true },
+    });
+    if (!worker) {
+      throw new NotFoundException(`Worker profile for user ID "${userId}" not found`);
+    }
+
+    worker.latitude = dto.latitude;
+    worker.longitude = dto.longitude;
+    if (dto.heading !== undefined) worker.heading = dto.heading;
+    if (dto.speed !== undefined) worker.speed = dto.speed;
+
+    return this.workerRepo.save(worker);
   }
 }
