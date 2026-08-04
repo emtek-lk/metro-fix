@@ -1,7 +1,6 @@
 import { useState, type CSSProperties, type FormEvent } from 'react';
 import { Role, registrationSchema, type RegistrationInput } from '@metro-fix/core-types';
 import { useMediaQuery } from '@metro-fix/ui';
-import { BrandLogo } from '@metro-fix/ui';
 
 export interface RegisterProps {
   onSubmit: (values: RegistrationInput) => void;
@@ -45,8 +44,6 @@ export function Register({ onSubmit }: RegisterProps) {
 
   return (
     <form onSubmit={handleSubmit} style={styles.form}>
-      <img src={BrandLogo} alt="Metro-Fix" style={styles.logo} />
-
       <div style={{ ...styles.row, ...(isCompact ? styles.rowCompact : undefined) }}>
         <div style={styles.fieldGroup}>
           <label style={styles.label} htmlFor="register-full-name">
@@ -184,12 +181,6 @@ const styles: Record<string, CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     gap: '18px',
-  },
-  logo: {
-    display: 'block',
-    maxWidth: '180px',
-    height: 'auto',
-    margin: '0 auto 24px auto',
   },
   row: {
     display: 'grid',
