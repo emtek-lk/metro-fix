@@ -2,7 +2,6 @@ import { useState, type CSSProperties } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { loginSchema, type LoginInput, type User } from '@metro-fix/core-types';
-import { BrandLogo } from '@metro-fix/ui';
 import { API_BASE_URL } from '../../lib/api';
 
 export interface LoginProps {
@@ -55,13 +54,10 @@ export function Login({ onSuccess }: LoginProps) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} style={styles.form} noValidate>
-      <div style={styles.logoWrapper}>
-        <img src={BrandLogo} alt="Metro-Fix Logo" style={styles.logo} />
-      </div>
-
       <div style={styles.headerGroup}>
+        <div style={styles.sectionEyebrow}>Secure Access</div>
         <h2 style={styles.formTitle}>Sign In</h2>
-        <p style={styles.formSubtitle}>Access your METRO-FIX facility control center</p>
+        <p style={styles.formSubtitle}>Access your METRO-FIX facility control center.</p>
       </div>
 
       {authError && (
@@ -109,20 +105,6 @@ export function Login({ onSuccess }: LoginProps) {
       <button type="submit" disabled={isLoading} style={styles.submitButton}>
         {isLoading ? 'Signing In...' : 'Sign In'}
       </button>
-
-      <div style={styles.quickAccessBlock}>
-        <div style={styles.quickAccessTitle}>Demo Credentials (Password: Password123!)</div>
-        <div style={styles.quickAccessBadges}>
-          <div style={styles.badgeItem}>
-            <span style={styles.badgeRole}>Admin:</span>
-            <code style={styles.code}>admin@metro-fix.com</code>
-          </div>
-          <div style={styles.badgeItem}>
-            <span style={styles.badgeRole}>Dispatcher:</span>
-            <code style={styles.code}>dispatch@metro-fix.com</code>
-          </div>
-        </div>
-      </div>
     </form>
   );
 }
@@ -134,119 +116,85 @@ const styles: Record<string, CSSProperties> = {
     gap: '16px',
     width: '100%',
   },
-  logoWrapper: {
-    display: 'flex',
-    justifyContent: 'center',
-    marginBottom: '4px',
-  },
-  logo: {
-    display: 'block',
-    maxHeight: '40px',
-    width: 'auto',
+  sectionEyebrow: {
+    fontSize: '0.76rem',
+    fontWeight: 800,
+    letterSpacing: '0.14em',
+    textTransform: 'uppercase',
+    color: '#d37105',
   },
   headerGroup: {
-    textAlign: 'center',
-    marginBottom: '4px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+    marginBottom: '2px',
   },
   formTitle: {
-    margin: '0 0 4px',
-    fontSize: '1.35rem',
-    fontWeight: 700,
-    color: 'var(--text-primary)',
+    margin: 0,
+    fontSize: '1.65rem',
+    lineHeight: 1.05,
+    fontWeight: 800,
+    color: '#102426',
+    letterSpacing: '-0.03em',
   },
   formSubtitle: {
     margin: 0,
-    fontSize: '0.84rem',
-    color: 'var(--text-secondary)',
+    fontSize: '0.92rem',
+    color: '#52696b',
+    lineHeight: 1.45,
   },
   errorBanner: {
-    padding: '10px 14px',
-    background: '#8b0000',
-    color: '#ffffff',
-    borderRadius: '10px',
-    fontSize: '0.85rem',
-    fontWeight: 600,
+    padding: '11px 14px',
+    background: 'linear-gradient(135deg, rgba(147, 35, 35, 0.14), rgba(180, 79, 79, 0.22))',
+    color: '#a02f2f',
+    borderRadius: '12px',
+    fontSize: '0.86rem',
+    fontWeight: 700,
+    border: '1px solid rgba(176, 79, 79, 0.24)',
   },
   fieldGroup: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '6px',
+    gap: '7px',
   },
   label: {
     fontSize: '0.84rem',
-    fontWeight: 600,
-    color: 'var(--text-primary)',
+    fontWeight: 700,
+    color: '#183235',
   },
   input: {
     width: '100%',
     boxSizing: 'border-box',
-    border: '1px solid var(--border-subtle)',
-    background: 'var(--surface)',
-    color: 'var(--text-primary)',
-    borderRadius: '12px',
-    padding: '12px 14px',
+    border: '1px solid rgba(16, 36, 38, 0.12)',
+    background: 'linear-gradient(180deg, #ffffff 0%, #fbfdfd 100%)',
+    color: '#102426',
+    borderRadius: '14px',
+    padding: '13px 14px',
     outline: 'none',
     fontSize: '0.92rem',
+    boxShadow: 'inset 0 1px 2px rgba(16, 36, 38, 0.05)',
   },
   inputError: {
     borderColor: '#e53e3e',
-    boxShadow: '0 0 0 1px #e53e3e',
+    boxShadow: '0 0 0 1px rgba(229, 62, 62, 0.45)',
   },
   errorText: {
     color: '#e53e3e',
     fontSize: '0.82rem',
-    fontWeight: 500,
+    fontWeight: 600,
     marginTop: '2px',
   },
   submitButton: {
     border: 'none',
-    borderRadius: '12px',
-    padding: '13px 18px',
-    background: '#f38808',
+    borderRadius: '14px',
+    padding: '14px 18px',
+    background: 'linear-gradient(135deg, #f7b552 0%, #f38808 48%, #d37105 100%)',
     color: '#ffffff',
-    fontWeight: 700,
+    fontWeight: 800,
     fontSize: '0.95rem',
     cursor: 'pointer',
-    boxShadow: '0 4px 14px rgba(243, 136, 8, 0.35)',
+    boxShadow: '0 14px 28px rgba(243, 136, 8, 0.34)',
     marginTop: '6px',
-  },
-  quickAccessBlock: {
-    marginTop: '10px',
-    padding: '12px',
-    borderRadius: '12px',
-    background: 'var(--surface-strong)',
-    border: '1px solid var(--border-subtle)',
-  },
-  quickAccessTitle: {
-    fontSize: '0.76rem',
-    fontWeight: 700,
-    color: 'var(--text-secondary)',
-    textTransform: 'uppercase',
-    letterSpacing: '0.06em',
-    marginBottom: '6px',
-  },
-  quickAccessBadges: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '6px',
-  },
-  badgeItem: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    fontSize: '0.82rem',
-  },
-  badgeRole: {
-    color: 'var(--text-secondary)',
-    fontWeight: 600,
-  },
-  code: {
-    background: '#2b435f',
-    color: '#ffffff',
-    padding: '2px 8px',
-    borderRadius: '6px',
-    fontFamily: 'monospace',
-    fontSize: '0.8rem',
   },
 };
 
