@@ -2,6 +2,7 @@ import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import type { User } from '@metro-fix/core-types';
 import { AdminWorkspace } from './AdminWorkspace';
 import { Sidebar, sidebarSections } from './Sidebar';
+import { useMediaQuery } from './useMediaQuery';
 
 export interface DashboardLayoutProps {
   children: ReactNode;
@@ -32,6 +33,8 @@ export function DashboardLayout({
   onLogout,
   onViewProfile,
 }: DashboardLayoutProps) {
+  const isMobile = useMediaQuery('(max-width: 768px)');
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [filterText, setFilterText] = useState('');
   const [isHeaderProfileOpen, setIsHeaderProfileOpen] = useState(false);
@@ -63,17 +66,38 @@ export function DashboardLayout({
         activeRoute={activeRoute}
         filterValue={filterText}
         onFilterChange={setFilterText}
-        onRouteChange={onRouteChange ?? (() => undefined)}
+        onRouteChange={(route) => {
+          if (isMobile) setIsDrawerOpen(false);
+          onRouteChange?.(route);
+        }}
         collapsed={isCollapsed}
         onToggleCollapsed={() => setIsCollapsed((value) => !value)}
         userProfile={userProfile}
         onLogout={onLogout}
         onViewProfile={onViewProfile}
+        isMobile={isMobile}
+        isOpen={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
       />
 
       <section style={styles.contentPane}>
         <header style={styles.header}>
-          <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {isMobile && (
+              <button
+                type="button"
+                onClick={() => setIsDrawerOpen(true)}
+                style={styles.hamburgerButton}
+                aria-label="Open menu"
+                className="metro-header-btn-icon"
+              >
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="3" y1="12" x2="21" y2="12" />
+                  <line x1="3" y1="6" x2="21" y2="6" />
+                  <line x1="3" y1="18" x2="21" y2="18" />
+                </svg>
+              </button>
+            )}
             <div style={styles.routeLabel}>{activeRoute}</div>
           </div>
 
@@ -193,6 +217,15 @@ const styles: Record<string, CSSProperties> = {
   dynamicActions: {
     display: 'flex',
     alignItems: 'center',
+  },
+  hamburgerButton: {
+    background: 'none',
+    border: 'none',
+    color: 'var(--text-primary)',
+    cursor: 'pointer',
+    padding: '4px',
+    display: 'grid',
+    placeItems: 'center',
   },
   routeLabel: {
     fontSize: '1.25rem',

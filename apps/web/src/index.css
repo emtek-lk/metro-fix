@@ -494,4 +494,18 @@ table tbody tr:hover {
   to { opacity: 1; transform: scale(1); }
 }
 
-
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+  .metro-header-btn-icon {
+    display: flex !important;
+  }
+  
+  /* Make kanban columns swipeable */
+  .boardShell {
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+  }
+  .boardShell > div > article {
+    scroll-snap-align: start;
+  }
+}

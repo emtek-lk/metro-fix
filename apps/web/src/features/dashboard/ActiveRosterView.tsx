@@ -1,4 +1,5 @@
 import { useState, useMemo, type CSSProperties } from 'react';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 
 export type RosterWorker = {
   id: string;
@@ -73,6 +74,7 @@ const statusStyles: Record<RosterWorker['status'], { label: string; bg: string; 
 
 export function ActiveRosterView() {
   const [searchQuery, setSearchQuery] = useState('');
+  const [showCharts, setShowCharts] = useState(true);
 
   const filteredRoster = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
@@ -86,8 +88,82 @@ export function ActiveRosterView() {
 
   const isFiltering = searchQuery.trim().length > 0;
 
+  // Prepare Chart Data
+  const statusCounts = useMemo(() => {
+    const counts = { IN_PROGRESS: 0, ON_ROUTE: 0, INSPECTION: 0, AVAILABLE: 0 };
+    rosterData.forEach((w) => counts[w.status]++);
+    return Object.entries(counts).map(([status, value]) => ({
+      name: statusStyles[status as RosterWorker['status']].label,
+      value,
+      color: statusStyles[status as RosterWorker['status']].color,
+    })).filter(item => item.value > 0);
+  }, []);
+
+  const ratingByZone = useMemo(() => {
+    const zones: Record<string, { total: number; count: number }> = {};
+    rosterData.forEach((w) => {
+      if (!zones[w.zone]) zones[w.zone] = { total: 0, count: 0 };
+      zones[w.zone].total += w.rating;
+      zones[w.zone].count += 1;
+    });
+    return Object.entries(zones).map(([zone, data]) => ({
+      name: zone,
+      rating: Number((data.total / data.count).toFixed(1)),
+    }));
+  }, []);
+
   return (
     <div style={styles.container}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '-10px' }}>
+        <button 
+          onClick={() => setShowCharts(!showCharts)} 
+          style={{ background: 'none', border: 'none', color: '#f38808', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}
+        >
+          {showCharts ? 'Hide Charts' : 'Show Charts'}
+        </button>
+      </div>
+      
+      {showCharts && (
+        <div style={styles.dashboardGrid}>
+          <div style={styles.chartCard}>
+            <h3 style={styles.chartTitle}>Worker Status Distribution</h3>
+            <div style={{ width: '100%', height: 200 }}>
+              <ResponsiveContainer>
+                <PieChart>
+                  <Pie data={statusCounts} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5}>
+                    {statusCounts.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: 'var(--surface-strong)', border: '1px solid var(--border-subtle)', borderRadius: '8px' }} 
+                    itemStyle={{ color: 'var(--text-primary)' }} 
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          
+          <div style={styles.chartCard}>
+            <h3 style={styles.chartTitle}>Average Rating by Zone</h3>
+            <div style={{ width: '100%', height: 200 }}>
+              <ResponsiveContainer>
+                <BarChart data={ratingByZone} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
+                  <XAxis dataKey="name" stroke="var(--text-secondary)" fontSize={12} tickLine={false} axisLine={false} />
+                  <YAxis stroke="var(--text-secondary)" fontSize={12} tickLine={false} axisLine={false} domain={[0, 5]} />
+                  <Tooltip 
+                    cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                    contentStyle={{ backgroundColor: 'var(--surface-strong)', border: '1px solid var(--border-subtle)', borderRadius: '8px' }} 
+                  />
+                  <Bar dataKey="rating" fill="#f38808" radius={[4, 4, 0, 0]} barSize={30} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modern Search bar */}
       <div className="metro-search-row">
         <div className="metro-search-wrap">
@@ -195,6 +271,28 @@ const styles: Record<string, CSSProperties> = {
     color: 'var(--text-primary)',
     gap: '12px',
   },
+  dashboardGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+    gap: '20px',
+    flexShrink: 0,
+  },
+  chartCard: {
+    background: 'var(--surface)',
+    border: '1px solid var(--border-subtle)',
+    borderRadius: '16px',
+    padding: '20px',
+    boxShadow: 'var(--shadow-elevated)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px',
+  },
+  chartTitle: {
+    margin: 0,
+    fontSize: '1.05rem',
+    fontWeight: 800,
+    color: 'var(--text-primary)',
+  },
   /* ─── Search row ─── */
   searchRow: {
     display: 'flex',
@@ -277,19 +375,13 @@ const styles: Record<string, CSSProperties> = {
   tableShell: {
     display: 'flex',
     flexDirection: 'column',
-    flex: 1,
-    minHeight: 0,
-    height: '100%',
-    overflow: 'hidden',
     background: 'var(--surface-strong)',
     borderRadius: '22px',
     border: '1px solid var(--border-subtle)',
+    overflow: 'hidden',
   },
   tableWrap: {
-    flex: 1,
-    minHeight: 0,
-    height: '100%',
-    overflowY: 'auto',
+    width: '100%',
     overflowX: 'auto',
     scrollbarWidth: 'none',
   },
@@ -301,7 +393,7 @@ const styles: Record<string, CSSProperties> = {
   th: {
     position: 'sticky',
     top: 0,
-    zIndex: 2,
+    zIndex: 10,
     textAlign: 'left',
     padding: '14px 16px',
     backgroundColor: '#2b435f',
