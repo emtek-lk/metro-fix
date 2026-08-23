@@ -355,20 +355,19 @@ export default function App() {
       case '/active-roster':
         return <ActiveRosterView />;
       case '/workers':
-        return <AdminWorkspace key={`workers-${refreshKey}`} activeView="workers" />;
+        return <AdminWorkspace activeView="workers" />;
       case '/customers':
         return (
           <AdminWorkspace
-            key={`customers-${refreshKey}`}
             activeView="customers"
             isCustomerModalOpen={isAddCustomerOpen}
             onCloseCustomerModal={() => setIsAddCustomerOpen(false)}
           />
         );
       case '/service-catalog':
-        return <AdminWorkspace key={`catalog-${refreshKey}`} activeView="service-catalog" />;
+        return <AdminWorkspace activeView="service-catalog" />;
       case '/subscriptions':
-        return <AdminWorkspace key={`subscriptions-${refreshKey}`} activeView="subscriptions" />;
+        return <AdminWorkspace activeView="subscriptions" />;
       case '/financials':
         return <AdminWorkspace activeView="financials" />;
       case '/dispatch':

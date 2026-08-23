@@ -74,26 +74,194 @@ a:focus-visible,
 .sidebar-navScroll,
 .dashboard-viewPanel {
   -ms-overflow-style: none;
-  scrollbar-width: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-subtle, rgba(255, 255, 255, 0.2)) transparent;
 }
 
-.sidebar-navScroll::-webkit-scrollbar,
-.dashboard-viewPanel::-webkit-scrollbar {
-  display: none;
+/* Custom Webkit Scrollbars for Tables, Modals, and Canvases */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--border-subtle, rgba(0, 0, 0, 0.2));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--text-muted, rgba(0, 0, 0, 0.4));
 }
 
 .sidebar-searchInput::placeholder {
   color: rgba(255, 255, 255, 0.45);
 }
 
+/* ─── Sidebar Nav Buttons (Hover, Focus, Collapsed States) ─── */
+.sidebar-nav-btn {
+  position: relative;
+  transition: transform 0.14s ease, background-color 0.14s ease, color 0.14s ease, box-shadow 0.14s ease;
+}
+
+.sidebar-nav-btn:hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
+}
+
+.sidebar-nav-btn:hover .sidebar-icon-box {
+  background-color: rgba(243, 136, 8, 0.22) !important;
+  color: #f38808 !important;
+  transform: scale(1.08);
+}
+
+.sidebar-nav-btn.collapsed {
+  width: 44px !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  padding: 0 !important;
+  margin: 0 auto !important;
+  border-radius: 12px !important;
+  justify-content: center !important;
+}
+
+.sidebar-nav-btn.collapsed:hover {
+  background-color: rgba(255, 255, 255, 0.12) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* ─── CSS Tooltip for Collapsed Sidebar ─── */
+.sidebar-nav-btn.collapsed::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: calc(100% + 14px);
+  background-color: var(--surface-strong, #1c2d40);
+  color: var(--text-primary, #ffffff);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(-6px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
+  z-index: 1000;
+}
+
+.sidebar-nav-btn.collapsed:hover::after,
+.sidebar-nav-btn.collapsed:focus-visible::after {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.sidebar-nav-btn.collapsed.active {
+  background-color: rgba(243, 136, 8, 0.2) !important;
+  border: 1px solid rgba(243, 136, 8, 0.45) !important;
+}
+
+.sidebar-nav-btn.collapsed.active .sidebar-icon-box {
+  background: linear-gradient(135deg, #f38808, #d37105) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(243, 136, 8, 0.35);
+}
+
+.sidebar-nav-btn:focus-visible {
+  outline: none !important;
+  box-shadow: 0 0 0 2px #f38808, 0 0 0 4px rgba(243, 136, 8, 0.25) !important;
+}
+
+.sidebar-icon-box {
+  transition: transform 0.14s ease, background-color 0.14s ease, color 0.14s ease, box-shadow 0.14s ease;
+}
+
+/* ─── Sidebar Profile Trigger Button & Popover Options ─── */
+.sidebar-profile-btn {
+  position: relative;
+  transition: background-color 0.14s ease, box-shadow 0.14s ease, transform 0.14s ease;
+}
+
+.sidebar-profile-btn:hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.sidebar-profile-btn:focus-visible {
+  outline: none !important;
+  box-shadow: 0 0 0 2px #f38808, 0 0 0 4px rgba(243, 136, 8, 0.25) !important;
+}
+
+.sidebar-popover-option {
+  transition: background-color 0.12s ease, transform 0.12s ease;
+  color: #f0f6fc !important;
+}
+
+.sidebar-popover-option:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+}
+
+/* ─── Header Popover Options (Theme-aware for main canvas) ─── */
+.header-popover-option {
+  transition: background-color 0.12s ease, color 0.12s ease, transform 0.12s ease;
+  color: var(--text-primary) !important;
+}
+
+.header-popover-option:hover {
+  background-color: rgba(243, 136, 8, 0.1) !important;
+  color: var(--accent, #f38808) !important;
+}
+
+.header-popover-logout {
+  background-color: rgba(243, 136, 8, 0.12) !important;
+  color: var(--accent, #f38808) !important;
+  border: 1px solid rgba(243, 136, 8, 0.28) !important;
+}
+
+.header-popover-logout:hover {
+  background-color: rgba(243, 136, 8, 0.2) !important;
+  color: var(--accent-hover, #d37105) !important;
+}
+
+/* ─── Header Profile Chip Button ─── */
+.header-profile-btn {
+  border: 1px solid var(--border-subtle);
+  cursor: pointer;
+  font: inherit;
+  transition: transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease;
+}
+
+.header-profile-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(14, 20, 21, 0.1) !important;
+  border-color: rgba(243, 136, 8, 0.4) !important;
+}
+
+.header-profile-btn:focus-visible {
+  outline: none !important;
+  box-shadow: 0 0 0 2px #f38808, 0 0 0 4px rgba(243, 136, 8, 0.25) !important;
+}
+
+
 /* ─── Table Row Hover ─────────────────────────────────── */
 table tbody tr {
-  transition: background-color 120ms ease;
+  transition: background-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
 }
 
 table tbody tr:hover td,
 table tbody tr:hover th {
-  background-color: rgba(243, 136, 8, 0.05);
+  background-color: rgba(243, 136, 8, 0.08);
+}
+
+table tbody tr:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  position: relative;
+  z-index: 10;
 }
 
 /* ─── Modal Animations ────────────────────────────────── */
@@ -190,4 +358,140 @@ table tbody tr:hover th {
   background-color: var(--surface) !important;
   transform: rotate(12deg);
 }
+
+/* ─── View Transition (silky smooth, no blank-page flicker) ─── */
+@keyframes metroViewIn {
+  from {
+    opacity: 0.82;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.metro-view-enter {
+  animation: metroViewIn 0.14s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* ─── Modern Search Bar System (Linear / Raycast Polish) ─── */
+.metro-search-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  margin-bottom: 2px;
+}
+
+.metro-search-wrap {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: 420px;
+}
+
+.metro-search-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 38px;
+  background: var(--surface-strong);
+  border: 1px solid var(--border-subtle);
+  border-radius: 11px;
+  padding: 0 10px 0 34px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+  box-sizing: border-box;
+}
+
+.metro-search-container:focus-within {
+  border-color: #f38808;
+  box-shadow: 0 0 0 3px rgba(243, 136, 8, 0.14);
+  background: var(--surface);
+}
+
+.metro-search-icon {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  pointer-events: none;
+  opacity: 0.75;
+  transition: color 0.15s ease, opacity 0.15s ease;
+}
+
+.metro-search-container:focus-within .metro-search-icon {
+  color: #f38808;
+  opacity: 1;
+}
+
+.metro-search-input,
+.metro-search-input:focus,
+.metro-search-input:focus-visible {
+  width: 100%;
+  height: 100%;
+  border: none !important;
+  background: transparent !important;
+  color: var(--text-primary) !important;
+  font-size: 0.86rem;
+  font-family: inherit;
+  outline: none !important;
+  box-shadow: none !important;
+  padding: 0;
+}
+
+.metro-search-input::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.65;
+  font-size: 0.85rem;
+}
+
+.metro-search-clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(140, 155, 170, 0.2);
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0;
+  margin-left: 6px;
+  transition: all 0.12s ease;
+  flex-shrink: 0;
+}
+
+.metro-search-clear:hover {
+  background: rgba(243, 136, 8, 0.25);
+  color: #f38808;
+  transform: scale(1.1);
+}
+
+.metro-search-count-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #f38808;
+  background: rgba(243, 136, 8, 0.09);
+  border: 1px solid rgba(243, 136, 8, 0.22);
+  border-radius: 8px;
+  padding: 4px 10px;
+  white-space: nowrap;
+  animation: metroBadgeIn 0.15s ease forwards;
+}
+
+@keyframes metroBadgeIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
 
