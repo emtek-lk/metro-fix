@@ -26,6 +26,9 @@ export interface SidebarProps {
   };
   onLogout?: () => void;
   onViewProfile?: () => void;
+  isMobile?: boolean;
+  isOpen?: boolean;
+  onClose?: () => void;
 }
 
 const SVGIcon = ({ children }: { children: React.ReactNode }) => (
@@ -76,6 +79,9 @@ export function Sidebar({
   userProfile,
   onLogout,
   onViewProfile,
+  isMobile,
+  isOpen,
+  onClose,
 }: SidebarProps) {
   const [isProfilePopoverOpen, setIsProfilePopoverOpen] = useState(false);
   const sidebarWidth = collapsed ? 80 : 260;
@@ -120,15 +126,46 @@ export function Sidebar({
     </button>
   );
 
+  const drawerStyles: CSSProperties = isMobile
+    ? {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        bottom: 0,
+        zIndex: 100000,
+        transform: isOpen ? 'translateX(0)' : 'translateX(-100%)',
+        transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        boxShadow: isOpen ? '0 0 24px rgba(0,0,0,0.5)' : 'none',
+      }
+    : {};
+
   return (
-    <aside
-      style={{
-        ...styles.sidebar,
-        width: sidebarWidth,
-        padding: collapsed ? '16px 0' : '16px',
-        alignItems: collapsed ? 'center' : 'stretch',
-      }}
-    >
+    <>
+      {isMobile && isOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            zIndex: 99999,
+            transition: 'opacity 0.3s',
+          }}
+          onClick={onClose}
+          aria-hidden="true"
+        />
+      )}
+      <aside
+        style={{
+          ...styles.sidebar,
+          width: sidebarWidth,
+          padding: collapsed ? '16px 0' : '16px',
+          alignItems: collapsed ? 'center' : 'stretch',
+          ...drawerStyles,
+        }}
+      >
       <div style={{ ...styles.topBlock, ...(collapsed ? styles.topBlockCollapsed : undefined), width: '100%' }}>
         <button
           type="button"
@@ -276,7 +313,8 @@ export function Sidebar({
           </div>
         )}
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }
 

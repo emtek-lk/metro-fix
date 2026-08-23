@@ -11,6 +11,7 @@ import {
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 export type FacilityType = 'Residential' | 'Commercial' | 'Industrial';
 export type SubscriptionTier = 'Basic' | 'Plus' | 'Premium';
@@ -629,6 +630,7 @@ export function AdminWorkspace({
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showCharts, setShowCharts] = useState(true);
 
   // Reset search whenever the user switches to a different view
   useEffect(() => { setSearchQuery(''); }, [activeView]);
@@ -809,6 +811,30 @@ export function AdminWorkspace({
   const filtered = filteredCountMap[activeView] ?? 0;
   const isFiltering = searchQuery.trim().length > 0;
 
+  // Prepare Financial Chart Data
+  const revenueTrend = useMemo(() => {
+    if (activeView !== 'financials') return [];
+    // Mock trend over the last 6 months
+    return [
+      { month: 'Mar', revenue: 12500 },
+      { month: 'Apr', revenue: 15000 },
+      { month: 'May', revenue: 13200 },
+      { month: 'Jun', revenue: 18400 },
+      { month: 'Jul', revenue: 21000 },
+      { month: 'Aug', revenue: 24500 },
+    ];
+  }, [activeView]);
+
+  const revenueByPillar = useMemo(() => {
+    if (activeView !== 'financials') return [];
+    const counts = { Hard: 0, Soft: 0, Strategic: 0 };
+    financials.forEach((f) => {
+      const val = parseFloat(f.amount.replace(/[^0-9.-]+/g,""));
+      counts[f.servicePillar] += val;
+    });
+    return Object.entries(counts).map(([name, value]) => ({ name, value }));
+  }, [activeView, financials]);
+
   const searchBar = (
     <div className="metro-search-row">
       <div className="metro-search-wrap">
@@ -902,12 +928,64 @@ export function AdminWorkspace({
       )}
 
       {activeView === 'financials' && (
-        <DataTable<FinancialRecord>
-          key={`financials-${searchQuery}`}
-          columns={financialColumns}
-          data={filteredFinancials}
-          emptyMessage={isFiltering ? 'No financial records match your search.' : 'No financial ledger entries found.'}
-        />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', flex: 1, minHeight: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '-10px' }}>
+            <button 
+              onClick={() => setShowCharts(!showCharts)} 
+              style={{ background: 'none', border: 'none', color: '#f38808', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}
+            >
+              {showCharts ? 'Hide Charts' : 'Show Charts'}
+            </button>
+          </div>
+          
+          {showCharts && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px', flexShrink: 0 }}>
+              <div style={{ background: 'var(--surface)', border: '1px solid var(--border-subtle)', borderRadius: '16px', padding: '20px', boxShadow: 'var(--shadow-elevated)' }}>
+                <h3 style={{ margin: '0 0 16px 0', fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>Revenue Trend (6 Months)</h3>
+                <div style={{ width: '100%', height: 200 }}>
+                  <ResponsiveContainer>
+                    <LineChart data={revenueTrend} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
+                      <XAxis dataKey="month" stroke="var(--text-secondary)" fontSize={12} tickLine={false} axisLine={false} />
+                      <YAxis stroke="var(--text-secondary)" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `$${val / 1000}k`} />
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: 'var(--surface-strong)', border: '1px solid var(--border-subtle)', borderRadius: '8px' }} 
+                        itemStyle={{ color: 'var(--text-primary)' }}
+                        formatter={(val: number) => [`$${val.toLocaleString()}`, 'Revenue']}
+                      />
+                      <Line type="monotone" dataKey="revenue" stroke="#f38808" strokeWidth={3} dot={{ fill: '#f38808', strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+              <div style={{ background: 'var(--surface)', border: '1px solid var(--border-subtle)', borderRadius: '16px', padding: '20px', boxShadow: 'var(--shadow-elevated)' }}>
+                <h3 style={{ margin: '0 0 16px 0', fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>Revenue by Pillar</h3>
+                <div style={{ width: '100%', height: 200 }}>
+                  <ResponsiveContainer>
+                    <BarChart data={revenueByPillar} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
+                      <XAxis dataKey="name" stroke="var(--text-secondary)" fontSize={12} tickLine={false} axisLine={false} />
+                      <YAxis stroke="var(--text-secondary)" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `$${val / 1000}k`} />
+                      <Tooltip 
+                        cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                        contentStyle={{ backgroundColor: 'var(--surface-strong)', border: '1px solid var(--border-subtle)', borderRadius: '8px' }}
+                        formatter={(val: number) => [`$${val.toLocaleString()}`, 'Revenue']}
+                      />
+                      <Bar dataKey="value" fill="#47bfff" radius={[4, 4, 0, 0]} barSize={30} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          <DataTable<FinancialRecord>
+            key={`financials-${searchQuery}`}
+            columns={financialColumns}
+            data={filteredFinancials}
+            emptyMessage={isFiltering ? 'No financial records match your search.' : 'No financial ledger entries found.'}
+          />
+        </div>
       )}
 
       {/* Creation Modal */}
@@ -924,12 +1002,11 @@ const styles: Record<string, CSSProperties> = {
   workspace: {
     display: 'flex',
     flexDirection: 'column',
-    height: '100%',
-    maxHeight: '100%',
-    minHeight: 0,
-    overflow: 'hidden',
+    flex: 1,
+    overflowY: 'auto',
     color: 'var(--text-primary)',
     gap: '12px',
+    paddingBottom: '24px', // Extra padding at bottom to ensure table is fully visible
   },
   /* ─── Search row ─── */
   searchRow: {
@@ -987,7 +1064,6 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: '10px',
     background: 'rgba(243, 136, 8, 0.08)',
     border: '1px solid rgba(243, 136, 8, 0.2)',
-    color: 'var(--accent)',
   },
   viewHeader: {
     display: 'flex',
@@ -1017,20 +1093,14 @@ const styles: Record<string, CSSProperties> = {
   tableShell: {
     display: 'flex',
     flexDirection: 'column',
-    flex: 1,
-    minHeight: 0,
-    height: '100%',
-    overflow: 'hidden',
     background: 'var(--surface-strong)',
     borderRadius: '22px',
     border: '1px solid var(--border-subtle)',
     boxSizing: 'border-box',
+    overflow: 'hidden',
   },
   tableWrap: {
-    flex: 1,
-    minHeight: 0,
-    height: '100%',
-    overflowY: 'auto',
+    width: '100%',
     overflowX: 'auto',
     scrollbarWidth: 'none',
   },
@@ -1042,7 +1112,7 @@ const styles: Record<string, CSSProperties> = {
   th: {
     position: 'sticky',
     top: 0,
-    zIndex: 2,
+    zIndex: 10,
     textAlign: 'left',
     padding: '14px 16px',
     backgroundColor: '#2b435f',
