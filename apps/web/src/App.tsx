@@ -41,18 +41,9 @@ const labelToPath: Record<string, string> = {
 
 // ─── Shared Styles ───────────────────────────────────────────────────
 
-const headerBtnStyle: CSSProperties = {
-  backgroundColor: '#f38808',
-  color: '#ffffff',
-  border: 'none',
-  borderRadius: '10px',
-  padding: '8px 16px',
-  fontWeight: 700,
-  fontSize: '0.84rem',
-  cursor: 'pointer',
-  boxShadow: '0 3px 10px rgba(243, 136, 8, 0.3)',
-  transition: 'background-color 150ms ease',
-};
+// Header action buttons use the .metro-header-btn CSS class (index.css)
+// so that :hover pseudo-class transitions fire correctly — inline styles
+// cannot respond to pseudo-selectors.
 
 const toastStyle: Record<string, CSSProperties> = {
   container: {
@@ -320,37 +311,37 @@ export default function App() {
     switch (currentPath) {
       case '/customers':
         return (
-          <button type="button" style={headerBtnStyle} onClick={() => setIsAddCustomerOpen(true)}>
+          <button type="button" className="metro-header-btn" onClick={() => setIsAddCustomerOpen(true)}>
             + Add New Customer
           </button>
         );
       case '/workers':
         return (
-          <button type="button" style={headerBtnStyle} onClick={() => setIsAddWorkerOpen(true)}>
+          <button type="button" className="metro-header-btn" onClick={() => setIsAddWorkerOpen(true)}>
             + Add New Worker
           </button>
         );
       case '/service-catalog':
         return (
-          <button type="button" style={headerBtnStyle} onClick={() => setIsAddServiceOpen(true)}>
+          <button type="button" className="metro-header-btn" onClick={() => setIsAddServiceOpen(true)}>
             + Add New Service
           </button>
         );
       case '/subscriptions':
         return (
-          <button type="button" style={headerBtnStyle} onClick={() => setIsAddSubscriptionOpen(true)}>
+          <button type="button" className="metro-header-btn" onClick={() => setIsAddSubscriptionOpen(true)}>
             + New Plan Tier
           </button>
         );
       case '/financials':
         return (
-          <button type="button" style={headerBtnStyle} onClick={handleExportFinancialReport}>
+          <button type="button" className="metro-header-btn" onClick={handleExportFinancialReport}>
             Export Report
           </button>
         );
       case '/active-roster':
         return (
-          <button type="button" style={headerBtnStyle} onClick={handlePingAllWorkers}>
+          <button type="button" className="metro-header-btn" onClick={handlePingAllWorkers}>
             + Ping All Field Units
           </button>
         );

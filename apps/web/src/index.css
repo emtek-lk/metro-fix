@@ -83,5 +83,111 @@ a:focus-visible,
 }
 
 .sidebar-searchInput::placeholder {
-  color: var(--color-text-secondary, #666);
+  color: rgba(255, 255, 255, 0.45);
 }
+
+/* ─── Table Row Hover ─────────────────────────────────── */
+table tbody tr {
+  transition: background-color 120ms ease;
+}
+
+table tbody tr:hover td,
+table tbody tr:hover th {
+  background-color: rgba(243, 136, 8, 0.05);
+}
+
+/* ─── Modal Animations ────────────────────────────────── */
+@keyframes metroModalIn {
+  from {
+    opacity: 0;
+    transform: scale(0.965) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes metroOverlayIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.metro-modal-card {
+  animation: metroModalIn 0.22s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.metro-modal-overlay {
+  animation: metroOverlayIn 0.18s ease forwards;
+}
+
+/* ─── Header Action Button ────────────────────────────── */
+.metro-header-btn {
+  background-color: #f38808;
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  padding: 8px 16px;
+  font-weight: 700;
+  font-size: 0.84rem;
+  cursor: pointer;
+  box-shadow: 0 3px 10px rgba(243, 136, 8, 0.3);
+  transition: background-color 150ms ease, box-shadow 150ms ease, transform 120ms ease;
+  font: inherit;
+}
+
+.metro-header-btn:hover {
+  background-color: #d37105;
+  box-shadow: 0 6px 18px rgba(243, 136, 8, 0.42);
+  transform: translateY(-1px);
+}
+
+.metro-header-btn:active {
+  transform: translateY(0px);
+  box-shadow: 0 2px 8px rgba(243, 136, 8, 0.3);
+}
+
+/* ─── Ghost / Close Button ────────────────────────────── */
+.metro-ghost-btn {
+  transition: background-color 150ms ease, opacity 150ms ease;
+}
+
+.metro-ghost-btn:hover {
+  background-color: rgba(243, 136, 8, 0.1) !important;
+}
+
+/* ─── Text Action Button (table View/Edit) ────────────── */
+.metro-text-btn {
+  transition: opacity 140ms ease, color 140ms ease;
+}
+
+.metro-text-btn:hover {
+  opacity: 0.65;
+}
+
+/* ─── Pagination Buttons ──────────────────────────────── */
+.metro-page-btn {
+  transition: background-color 140ms ease, border-color 140ms ease, opacity 140ms ease;
+}
+
+.metro-page-btn:hover:not(:disabled) {
+  background-color: rgba(243, 136, 8, 0.1) !important;
+  border-color: rgba(243, 136, 8, 0.4) !important;
+  color: var(--accent, #f38808) !important;
+}
+
+.metro-page-btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+/* ─── Theme Toggle ────────────────────────────────────── */
+.metro-theme-btn {
+  transition: background-color 150ms ease, transform 120ms ease;
+}
+
+.metro-theme-btn:hover {
+  background-color: var(--surface) !important;
+  transform: rotate(12deg);
+}
+

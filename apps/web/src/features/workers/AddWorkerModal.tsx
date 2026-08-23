@@ -80,7 +80,7 @@ export function AddWorkerModal({ isOpen, onClose, onWorkerAdded }: AddWorkerModa
   };
 
   return (
-    <div style={styles.overlay} onClick={onClose}>
+    <div style={styles.overlay} onClick={onClose} className="metro-modal-overlay">
       <div
         ref={modalRef}
         role="dialog"
@@ -88,6 +88,7 @@ export function AddWorkerModal({ isOpen, onClose, onWorkerAdded }: AddWorkerModa
         aria-labelledby="add-worker-title"
         tabIndex={-1}
         style={styles.modal}
+        className="metro-modal-card"
         onClick={(e) => e.stopPropagation()}
       >
         <div style={styles.header}>
@@ -95,7 +96,7 @@ export function AddWorkerModal({ isOpen, onClose, onWorkerAdded }: AddWorkerModa
             <h2 id="add-worker-title" style={styles.title}>Register New Field Technician</h2>
             <p style={styles.subtitle}>Add a new worker to the active dispatch roster</p>
           </div>
-          <button type="button" aria-label="Close modal" style={styles.closeBtn} onClick={onClose}>
+          <button type="button" aria-label="Close modal" className="metro-ghost-btn" style={styles.closeBtn} onClick={onClose}>
             ✕
           </button>
         </div>
@@ -215,7 +216,7 @@ export function AddWorkerModal({ isOpen, onClose, onWorkerAdded }: AddWorkerModa
           </div>
 
           <div style={styles.actions}>
-            <button type="button" style={styles.cancelBtn} onClick={onClose}>
+            <button type="button" className="metro-ghost-btn" style={styles.cancelBtn} onClick={onClose}>
               Cancel
             </button>
             <button type="submit" disabled={isLoading} style={styles.submitBtn}>
@@ -235,7 +236,7 @@ const styles: Record<string, CSSProperties> = {
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    backgroundColor: 'rgba(0, 0, 0, 0.72)',
     backdropFilter: 'blur(6px)',
     display: 'flex',
     alignItems: 'center',
@@ -244,45 +245,51 @@ const styles: Record<string, CSSProperties> = {
     padding: '20px',
   },
   modal: {
-    backgroundColor: '#2b435f',
-    color: '#ffffff',
-    borderRadius: '20px',
+    backgroundColor: 'var(--surface)',
+    color: 'var(--text-primary)',
+    borderRadius: '22px',
     padding: '24px',
     width: '100%',
     maxWidth: '560px',
-    border: '1px solid rgba(255, 255, 255, 0.15)',
-    boxShadow: '0 24px 48px rgba(0, 0, 0, 0.6)',
+    border: '1px solid var(--border-subtle)',
+    boxShadow: '0 30px 72px rgba(0, 0, 0, 0.32)',
+    maxHeight: '90vh',
+    overflowY: 'auto',
+    scrollbarWidth: 'none',
   },
   header: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: '16px',
+    marginBottom: '20px',
   },
   title: {
     margin: '0 0 4px',
     fontSize: '1.25rem',
     fontWeight: 800,
-    color: '#ffffff',
+    color: 'var(--text-primary)',
   },
   subtitle: {
     margin: 0,
     fontSize: '0.84rem',
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: 'var(--text-secondary)',
   },
   closeBtn: {
     background: 'none',
     border: 'none',
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: 'var(--text-secondary)',
     fontSize: '1.2rem',
     cursor: 'pointer',
-    padding: '4px',
+    padding: '6px 8px',
+    borderRadius: '8px',
+    lineHeight: 1,
   },
   errorBanner: {
-    backgroundColor: '#8b0000',
-    color: '#ffffff',
+    backgroundColor: 'rgba(243, 136, 8, 0.08)',
+    border: '1px solid rgba(243, 136, 8, 0.28)',
+    color: 'var(--text-primary)',
     padding: '10px 14px',
-    borderRadius: '10px',
+    borderRadius: '12px',
     fontSize: '0.85rem',
     marginBottom: '16px',
     fontWeight: 600,
@@ -305,24 +312,24 @@ const styles: Record<string, CSSProperties> = {
   label: {
     fontSize: '0.84rem',
     fontWeight: 600,
-    color: '#ffffff',
+    color: 'var(--text-primary)',
   },
   input: {
     padding: '10px 12px',
     borderRadius: '10px',
-    border: '1px solid rgba(255, 255, 255, 0.2)',
-    background: 'rgba(0, 0, 0, 0.25)',
-    color: '#ffffff',
+    border: '1px solid var(--border-subtle)',
+    background: 'var(--surface-strong)',
+    color: 'var(--text-primary)',
     boxSizing: 'border-box',
     fontSize: '0.9rem',
     outline: 'none',
   },
   inputError: {
-    borderColor: '#fc8181',
-    boxShadow: '0 0 0 1px #fc8181',
+    borderColor: '#d37105',
+    boxShadow: '0 0 0 1px #d37105',
   },
   fieldError: {
-    color: '#fc8181',
+    color: '#d37105',
     fontSize: '0.78rem',
   },
   pillarOptions: {
@@ -332,10 +339,10 @@ const styles: Record<string, CSSProperties> = {
   },
   pillarChip: {
     padding: '8px 12px',
-    borderRadius: '8px',
-    border: '1px solid rgba(255, 255, 255, 0.2)',
-    background: 'rgba(0, 0, 0, 0.2)',
-    color: 'rgba(255, 255, 255, 0.8)',
+    borderRadius: '10px',
+    border: '1px solid var(--border-subtle)',
+    background: 'var(--surface-strong)',
+    color: 'var(--text-secondary)',
     fontSize: '0.84rem',
     fontWeight: 600,
     cursor: 'pointer',
@@ -343,9 +350,9 @@ const styles: Record<string, CSSProperties> = {
     transition: 'all 0.15s ease',
   },
   pillarChipActive: {
-    background: 'rgba(243, 136, 8, 0.25)',
+    background: 'rgba(243, 136, 8, 0.14)',
     borderColor: '#f38808',
-    color: '#ffffff',
+    color: 'var(--text-primary)',
   },
   actions: {
     display: 'flex',
@@ -355,15 +362,15 @@ const styles: Record<string, CSSProperties> = {
   },
   cancelBtn: {
     background: 'transparent',
-    border: '1px solid rgba(255, 255, 255, 0.2)',
-    color: '#ffffff',
+    border: '1px solid var(--border-subtle)',
+    color: 'var(--text-primary)',
     padding: '10px 16px',
     borderRadius: '10px',
     cursor: 'pointer',
     fontWeight: 700,
   },
   submitBtn: {
-    background: '#f38808',
+    background: 'linear-gradient(135deg, #f38808, #d37105)',
     border: 'none',
     color: '#ffffff',
     padding: '10px 20px',

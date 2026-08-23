@@ -266,8 +266,8 @@ const customerColumns: ColumnDef<CustomerRecord>[] = [
     header: 'Actions',
     cell: () => (
       <div style={styles.inlineActions}>
-        <button type="button" style={styles.textButton}>View</button>
-        <button type="button" style={styles.textButton}>Edit</button>
+        <button type="button" className="metro-text-btn" style={styles.textButton}>View</button>
+        <button type="button" className="metro-text-btn" style={styles.textButton}>Edit</button>
       </div>
     ),
   },
@@ -406,14 +406,14 @@ function DataTable<TData>({ columns, data, emptyMessage }: { columns: ColumnDef<
         </table>
       </div>
 
-      <div style={styles.paginationRow}>
-        <button type="button" style={styles.pageButton} onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
+        <div style={styles.paginationRow}>
+        <button type="button" className="metro-page-btn" style={styles.pageButton} onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
           Previous
         </button>
         <div style={styles.pageMeta}>
           Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount() || 1}
         </div>
-        <button type="button" style={styles.pageButton} onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
+        <button type="button" className="metro-page-btn" style={styles.pageButton} onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
           Next
         </button>
       </div>
@@ -513,11 +513,11 @@ function AddCustomerModal({
   };
 
   return (
-    <div style={styles.modalOverlay}>
-      <div style={styles.modalContent}>
+    <div style={styles.modalOverlay} className="metro-modal-overlay">
+      <div style={styles.modalContent} className="metro-modal-card">
         <div style={styles.modalHeader}>
           <h3 style={styles.modalTitle}>Add New Customer Profile</h3>
-          <button type="button" style={styles.closeButton} onClick={onClose}>
+          <button type="button" className="metro-ghost-btn" style={styles.closeButton} onClick={onClose}>
             ✕
           </button>
         </div>
@@ -593,7 +593,7 @@ function AddCustomerModal({
           </div>
 
           <div style={styles.modalActions}>
-            <button type="button" style={styles.cancelBtn} onClick={onClose} disabled={isSubmitting}>
+            <button type="button" className="metro-ghost-btn" style={styles.cancelBtn} onClick={onClose} disabled={isSubmitting}>
               Cancel
             </button>
             <button type="submit" style={styles.primaryActionBtn} disabled={isSubmitting}>
@@ -885,7 +885,7 @@ const styles: Record<string, CSSProperties> = {
     height: '100%',
     overflow: 'hidden',
     background: 'var(--surface-strong)',
-    borderRadius: '18px',
+    borderRadius: '22px',
     border: '1px solid var(--border-subtle)',
     boxSizing: 'border-box',
   },
@@ -998,7 +998,7 @@ const styles: Record<string, CSSProperties> = {
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    backgroundColor: 'rgba(0, 0, 0, 0.72)',
     backdropFilter: 'blur(6px)',
     display: 'flex',
     alignItems: 'center',
@@ -1007,41 +1007,46 @@ const styles: Record<string, CSSProperties> = {
     padding: '20px',
   },
   modalContent: {
-    backgroundColor: '#2b435f',
-    color: '#ffffff',
-    borderRadius: '20px',
+    backgroundColor: 'var(--surface)',
+    color: 'var(--text-primary)',
+    borderRadius: '22px',
     padding: '24px',
     width: '100%',
     maxWidth: '520px',
-    border: '1px solid rgba(255, 255, 255, 0.15)',
-    boxShadow: '0 24px 48px rgba(0, 0, 0, 0.6)',
+    border: '1px solid var(--border-subtle)',
+    boxShadow: '0 30px 72px rgba(0, 0, 0, 0.32)',
+    maxHeight: '90vh',
+    overflowY: 'auto',
+    scrollbarWidth: 'none',
   },
   modalHeader: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: '16px',
+    marginBottom: '20px',
   },
   modalTitle: {
     margin: 0,
     fontSize: '1.25rem',
     fontWeight: 800,
-    color: '#ffffff',
+    color: 'var(--text-primary)',
   },
   closeButton: {
     background: 'none',
     border: 'none',
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: 'var(--text-secondary)',
     fontSize: '1.2rem',
     cursor: 'pointer',
-    padding: '4px',
+    padding: '6px 8px',
+    borderRadius: '8px',
+    lineHeight: 1,
   },
   errorBanner: {
-    backgroundColor: 'rgba(229, 62, 62, 0.2)',
-    border: '1px solid #e53e3e',
-    color: '#fc8181',
+    backgroundColor: 'rgba(243, 136, 8, 0.08)',
+    border: '1px solid rgba(243, 136, 8, 0.28)',
+    color: 'var(--text-primary)',
     padding: '10px 14px',
-    borderRadius: '10px',
+    borderRadius: '12px',
     fontSize: '0.85rem',
     marginBottom: '16px',
   },
@@ -1059,7 +1064,7 @@ const styles: Record<string, CSSProperties> = {
     display: 'block',
     fontSize: '0.72rem',
     fontWeight: 800,
-    color: '#81b1b3',
+    color: 'var(--sidebar-accent)',
     letterSpacing: '0.08em',
     marginBottom: '4px',
   },
@@ -1067,31 +1072,31 @@ const styles: Record<string, CSSProperties> = {
     width: '100%',
     padding: '10px 12px',
     borderRadius: '10px',
-    border: '1px solid rgba(255, 255, 255, 0.2)',
-    background: 'rgba(0, 0, 0, 0.25)',
-    color: '#ffffff',
+    border: '1px solid var(--border-subtle)',
+    background: 'var(--surface-strong)',
+    color: 'var(--text-primary)',
     boxSizing: 'border-box',
   },
   formSelect: {
     width: '100%',
     padding: '10px 12px',
     borderRadius: '10px',
-    border: '1px solid rgba(255, 255, 255, 0.2)',
-    background: '#2b435f',
-    color: '#ffffff',
+    border: '1px solid var(--border-subtle)',
+    background: 'var(--surface-strong)',
+    color: 'var(--text-primary)',
     boxSizing: 'border-box',
   },
   formTextarea: {
     width: '100%',
     padding: '10px 12px',
     borderRadius: '10px',
-    border: '1px solid rgba(255, 255, 255, 0.2)',
-    background: 'rgba(0, 0, 0, 0.25)',
-    color: '#ffffff',
+    border: '1px solid var(--border-subtle)',
+    background: 'var(--surface-strong)',
+    color: 'var(--text-primary)',
     boxSizing: 'border-box',
   },
   fieldError: {
-    color: '#fc8181',
+    color: '#d37105',
     fontSize: '0.76rem',
     marginTop: '4px',
     display: 'block',
@@ -1104,8 +1109,8 @@ const styles: Record<string, CSSProperties> = {
   },
   cancelBtn: {
     background: 'transparent',
-    border: '1px solid rgba(255, 255, 255, 0.2)',
-    color: '#ffffff',
+    border: '1px solid var(--border-subtle)',
+    color: 'var(--text-primary)',
     padding: '10px 16px',
     borderRadius: '10px',
     cursor: 'pointer',
@@ -1114,12 +1119,12 @@ const styles: Record<string, CSSProperties> = {
   infoBanner: {
     padding: '10px 16px',
     marginBottom: '12px',
-    background: '#2b435f',
-    color: '#ffffff',
-    borderRadius: '8px',
+    background: 'rgba(243, 136, 8, 0.08)',
+    color: 'var(--text-primary)',
+    borderRadius: '12px',
     fontSize: '0.85rem',
     fontWeight: 600,
-    border: '1px solid rgba(243, 136, 8, 0.4)',
+    border: '1px solid rgba(243, 136, 8, 0.28)',
   },
 };
 

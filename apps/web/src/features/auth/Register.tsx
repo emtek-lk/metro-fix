@@ -204,7 +204,7 @@ const styles: Record<string, CSSProperties> = {
     width: '100%',
     boxSizing: 'border-box',
     border: '1px solid var(--border-subtle)',
-    background: 'var(--surface)',
+    background: 'var(--surface-elevated)',
     color: 'var(--text-primary)',
     borderRadius: '14px',
     padding: '13px 14px',
@@ -218,7 +218,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: '0.92rem',
   },
   errorText: {
-    color: '#b14f4f',
+    color: '#d37105',
     fontSize: '0.84rem',
   },
   submitButton: {

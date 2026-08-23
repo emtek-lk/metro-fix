@@ -102,7 +102,7 @@ export function Sidebar({
 
   return (
     <aside style={{ ...styles.sidebar, width: sidebarWidth, padding: collapsed ? '12px' : '16px' }}>
-      <div style={styles.topBlock}>
+      <div style={{ ...styles.topBlock, ...(collapsed ? styles.topBlockCollapsed : undefined) }}>
         <button
           type="button"
           onClick={onToggleCollapsed}
@@ -114,11 +114,20 @@ export function Sidebar({
           }}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
-          <img
-            src={BrandLogo}
-            alt="Metro-Fix"
-            style={collapsed ? styles.brandLogoCollapsed : styles.brandLogoExpanded}
-          />
+          <div style={collapsed ? styles.brandBadgeCollapsed : styles.brandBadgeExpanded}>
+            <img
+              src={BrandLogo}
+              alt="Metro-Fix"
+              style={collapsed ? styles.brandLogoCollapsed : styles.brandLogoExpanded}
+            />
+          </div>
+
+          {!collapsed && (
+            <div style={styles.brandWordmark}>
+              <div style={styles.brandWordmarkTitle}>METRO-FIX</div>
+              <div style={styles.brandWordmarkSubtitle}>Facility control center</div>
+            </div>
+          )}
         </button>
 
         {!collapsed && (
@@ -267,23 +276,59 @@ const styles: Record<string, CSSProperties> = {
   topBlock: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '14px',
+    gap: '12px',
     flexShrink: 0,
+  },
+  topBlockCollapsed: {
+    alignItems: 'center',
+    gap: '10px',
   },
   headerToggle: {
     display: 'flex',
     alignItems: 'center',
     gap: '12px',
-    minHeight: '60px',
+    minHeight: '72px',
     width: '100%',
     margin: 0,
-    padding: 0,
+    padding: '12px',
+    borderRadius: '22px',
+    background: 'rgba(255, 255, 255, 0.96)',
+    border: '1px solid rgba(16, 36, 38, 0.08)',
+    boxShadow: '0 14px 30px rgba(0, 0, 0, 0.18)',
   },
   headerToggleExpanded: {
     justifyContent: 'flex-start',
   },
   headerToggleCollapsed: {
     justifyContent: 'center',
+    minHeight: '44px',
+    padding: '0',
+    borderRadius: '16px',
+    background: 'transparent',
+    border: 'none',
+    boxShadow: 'none',
+  },
+  brandBadgeExpanded: {
+    width: '50px',
+    height: '50px',
+    borderRadius: '16px',
+    background: '#ffffff',
+    border: '1px solid rgba(16, 36, 38, 0.08)',
+    display: 'grid',
+    placeItems: 'center',
+    flexShrink: 0,
+    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.8)',
+  },
+  brandBadgeCollapsed: {
+    width: '40px',
+    height: '40px',
+    borderRadius: '14px',
+    background: '#ffffff',
+    border: '1px solid rgba(16, 36, 38, 0.08)',
+    display: 'grid',
+    placeItems: 'center',
+    flexShrink: 0,
+    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.8)',
   },
   iconBox: {
     width: '36px',
@@ -308,20 +353,41 @@ const styles: Record<string, CSSProperties> = {
     color: 'var(--sidebar-text)',
   },
   brandLogoExpanded: {
-    height: '40px',
-    width: 'auto',
+    height: '34px',
+    width: '34px',
     objectFit: 'contain',
   },
   brandLogoCollapsed: {
-    maxWidth: '40px',
-    height: 'auto',
+    width: '26px',
+    height: '26px',
     objectFit: 'contain',
+  },
+  brandWordmark: {
+    display: 'flex',
+    flexDirection: 'column',
+    minWidth: 0,
+  },
+  brandWordmarkTitle: {
+    fontSize: '0.98rem',
+    fontWeight: 800,
+    letterSpacing: '0.08em',
+    color: '#102426',
+    lineHeight: 1.1,
+    whiteSpace: 'nowrap',
+  },
+  brandWordmarkSubtitle: {
+    fontSize: '0.72rem',
+    fontWeight: 600,
+    letterSpacing: '0.02em',
+    color: '#4b6769',
+    lineHeight: 1.2,
+    whiteSpace: 'nowrap',
   },
   searchContainer: {
     display: 'flex',
     flexDirection: 'column',
     gap: '6px',
-    marginBottom: '16px',
+    marginBottom: '12px',
   },
   filterLabel: {
     fontSize: '0.75rem',
@@ -333,10 +399,11 @@ const styles: Record<string, CSSProperties> = {
   filterInput: {
     width: '100%',
     borderRadius: '12px',
-    border: '1px solid var(--border-subtle)',
-    background: 'var(--surface-strong)',
-    color: 'var(--color-text-primary, #000)',
-    caretColor: 'var(--color-text-primary, #000)',
+    // Sidebar is always dark regardless of theme — use sidebar-specific glass styling
+    border: '1px solid rgba(255, 255, 255, 0.12)',
+    background: 'rgba(255, 255, 255, 0.07)',
+    color: '#f8fbfd',
+    caretColor: '#f8fbfd',
     padding: '10px 12px',
     boxSizing: 'border-box',
     fontSize: '0.88rem',
@@ -348,16 +415,17 @@ const styles: Record<string, CSSProperties> = {
     overflowX: 'hidden',
     msOverflowStyle: 'none',
     scrollbarWidth: 'none',
+    paddingRight: '2px',
   },
   nav: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '18px',
+    gap: '16px',
   },
   sectionBlock: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '10px',
+    gap: '8px',
   },
   sectionTitle: {
     color: 'var(--sidebar-accent)',
@@ -365,20 +433,21 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 800,
     textTransform: 'uppercase',
     letterSpacing: '0.12em',
-    paddingLeft: '62px',
+    // 10px (nav btn left-padding) + 36px (icon-box) + 12px (gap) = 58px
+    paddingLeft: '58px',
   },
   menuGroup: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '8px',
+    gap: '6px',
   },
   navButton: {
     display: 'flex',
     alignItems: 'center',
     gap: '12px',
     width: '100%',
-    minHeight: '60px',
-    padding: '0',
+    minHeight: '52px',
+    padding: '0 10px',
     margin: 0,
     borderRadius: '14px',
     border: '1px solid transparent',
@@ -386,6 +455,7 @@ const styles: Record<string, CSSProperties> = {
     color: 'var(--sidebar-text)',
     textAlign: 'left',
     cursor: 'pointer',
+    transition: 'transform 140ms ease, background-color 140ms ease, box-shadow 140ms ease',
     boxSizing: 'border-box',
   },
   navButtonCollapsed: {
@@ -396,6 +466,7 @@ const styles: Record<string, CSSProperties> = {
   },
   navButtonActive: {
     color: '#ffffff',
+    background: 'rgba(243, 136, 8, 0.14)',
   },
   navLabel: {
     color: 'currentColor',
@@ -405,9 +476,10 @@ const styles: Record<string, CSSProperties> = {
   bottomBlock: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '12px',
+    gap: '10px',
     flexShrink: 0,
-    paddingTop: '12px',
+    paddingTop: '10px',
+    borderTop: '1px solid rgba(255, 255, 255, 0.08)',
     position: 'relative',
   },
   footerSlot: {
@@ -442,7 +514,7 @@ const styles: Record<string, CSSProperties> = {
     alignItems: 'center',
     gap: '12px',
     width: '100%',
-    minHeight: '52px',
+    minHeight: '54px',
     padding: '6px 0',
     margin: 0,
     borderRadius: '14px',
@@ -470,6 +542,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 800,
     fontSize: '0.92rem',
     flexShrink: 0,
+    boxShadow: '0 6px 14px rgba(0, 0, 0, 0.18)',
   },
   avatarImg: {
     width: '36px',
