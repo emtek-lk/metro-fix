@@ -159,7 +159,7 @@ const styles: Record<string, CSSProperties> = {
     height: '100%',
     overflow: 'hidden',
     background: 'var(--surface-strong)',
-    borderRadius: '18px',
+    borderRadius: '22px',
     border: '1px solid var(--border-subtle)',
   },
   tableWrap: {
@@ -193,6 +193,7 @@ const styles: Record<string, CSSProperties> = {
     padding: '14px 16px',
     borderBottom: '1px solid var(--border-subtle)',
     fontSize: '0.9rem',
+    color: 'var(--text-primary)',
   },
   tdStrong: {
     padding: '14px 16px',

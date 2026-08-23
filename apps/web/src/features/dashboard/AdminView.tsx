@@ -148,19 +148,20 @@ const styles: Record<string, CSSProperties> = {
   view: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '22px',
-    color: '#eff7f7',
+    gap: '18px',
+    color: 'var(--text-primary)',
   },
   hero: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    padding: '2px 2px 0',
   },
   heroCompact: {
     flexDirection: 'column',
   },
   kicker: {
-    color: '#81b1b3',
+    color: 'var(--sidebar-accent)',
     textTransform: 'uppercase',
     letterSpacing: '0.14em',
     fontSize: '0.78rem',
@@ -172,7 +173,7 @@ const styles: Record<string, CSSProperties> = {
   },
   copy: {
     margin: 0,
-    color: 'rgba(234, 243, 243, 0.72)',
+    color: 'var(--text-secondary)',
     lineHeight: 1.6,
   },
   statGrid: {
@@ -185,9 +186,10 @@ const styles: Record<string, CSSProperties> = {
   },
   statCard: {
     padding: '20px',
-    borderRadius: '20px',
+    borderRadius: '22px',
     background: 'var(--surface-strong)',
     border: '1px solid var(--border-subtle)',
+    boxShadow: '0 10px 24px rgba(14, 20, 21, 0.06)',
   },
   statLabel: {
     color: 'var(--text-secondary)',
@@ -200,9 +202,10 @@ const styles: Record<string, CSSProperties> = {
   },
   panel: {
     padding: '22px',
-    borderRadius: '22px',
+    borderRadius: '24px',
     background: 'var(--surface-strong)',
     border: '1px solid var(--border-subtle)',
+    boxShadow: '0 12px 28px rgba(14, 20, 21, 0.06)',
   },
   panelHeader: {
     display: 'flex',
@@ -210,6 +213,7 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: 'space-between',
     gap: '12px',
     marginBottom: '16px',
+    paddingBottom: '2px',
   },
   panelTitle: {
     margin: 0,
@@ -266,8 +270,10 @@ const styles: Record<string, CSSProperties> = {
   serviceCard: {
     background: 'var(--surface)',
     color: 'var(--text-primary)',
-    borderRadius: '18px',
+    borderRadius: '20px',
     padding: '18px',
+    border: '1px solid var(--border-subtle)',
+    boxShadow: '0 10px 22px rgba(14, 20, 21, 0.05)',
   },
   serviceTopRow: {
     display: 'flex',

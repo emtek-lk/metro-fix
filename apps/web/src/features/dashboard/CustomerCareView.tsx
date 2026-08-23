@@ -705,8 +705,8 @@ export function CustomerCareView() {
       </DragDropContext>
 
       {isDispatchModalOpen && (
-        <div style={styles.modalOverlay} role="dialog" aria-modal="true" aria-label="Worker dispatch modal">
-          <div style={styles.modalCard}>
+        <div style={styles.modalOverlay} role="dialog" aria-modal="true" aria-label="Worker dispatch modal" className="metro-modal-overlay">
+          <div style={styles.modalCard} className="metro-modal-card">
             <div style={styles.modalHeader}>
               <div>
                 <div style={styles.kicker}>Dispatch Workflow</div>
@@ -802,6 +802,7 @@ const styles: Record<string, CSSProperties> = {
     overflowX: 'auto',
     overflowY: 'hidden',
     boxSizing: 'border-box',
+    paddingBottom: '2px',
   },
   boardShellCompact: {
     overflowX: 'visible',
@@ -829,10 +830,11 @@ const styles: Record<string, CSSProperties> = {
     maxHeight: '100%',
     overflow: 'hidden',
     padding: '14px',
-    borderRadius: '18px',
+    borderRadius: '22px',
     background: 'var(--surface-strong)',
     border: '1px solid var(--border-subtle)',
     boxSizing: 'border-box',
+    boxShadow: '0 12px 28px rgba(14, 20, 21, 0.06)',
   },
   columnHeader: {
     display: 'flex',
@@ -874,8 +876,8 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: '12px',
   },
   card: {
-    padding: '12px 14px',
-    borderRadius: '14px',
+    padding: '14px 14px 13px',
+    borderRadius: '16px',
     background: 'var(--surface)',
     color: 'var(--text-primary)',
     boxShadow: 'var(--shadow-elevated)',
@@ -883,9 +885,13 @@ const styles: Record<string, CSSProperties> = {
     cursor: 'grab',
     boxSizing: 'border-box',
     flexShrink: 0,
+    transition: 'transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease',
   },
   cardDragging: {
     cursor: 'grabbing',
+    transform: 'rotate(0.5deg) scale(1.01)',
+    boxShadow: '0 18px 38px rgba(0, 0, 0, 0.18)',
+    borderColor: 'rgba(243, 136, 8, 0.45)',
   },
   cardTopRow: {
     display: 'flex',
@@ -950,7 +956,7 @@ const styles: Record<string, CSSProperties> = {
     marginTop: '10px',
     padding: '8px 10px',
     borderRadius: '10px',
-    background: 'rgba(43, 67, 95, 0.08)',
+    background: 'var(--surface-strong)',
     color: 'var(--text-primary)',
     fontSize: '0.82rem',
   },
@@ -1006,13 +1012,14 @@ const styles: Record<string, CSSProperties> = {
   },
   modalCard: {
     width: 'min(680px, 100%)',
-    borderRadius: '20px',
+    borderRadius: '24px',
     background: 'var(--surface)',
     border: '1px solid var(--border-subtle)',
     padding: '20px',
     boxSizing: 'border-box',
     maxHeight: '85vh',
     overflowY: 'auto',
+    boxShadow: '0 30px 72px rgba(0, 0, 0, 0.32)',
   },
   modalHeader: {
     display: 'flex',
@@ -1065,10 +1072,12 @@ const styles: Record<string, CSSProperties> = {
     padding: '10px 12px',
     marginBottom: '8px',
     cursor: 'pointer',
+    transition: 'border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease',
   },
   workerRowSelected: {
     borderColor: '#f38808',
-    boxShadow: '0 0 0 1px #f38808 inset',
+    boxShadow: '0 0 0 1px #f38808 inset, 0 10px 22px rgba(243, 136, 8, 0.12)',
+    transform: 'translateY(-1px)',
   },
   workerTopRow: {
     display: 'flex',
