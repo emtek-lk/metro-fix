@@ -18,7 +18,6 @@ export interface SidebarProps {
   onRouteChange: (route: string) => void;
   collapsed: boolean;
   onToggleCollapsed: () => void;
-  footerSlot?: ReactNode;
   userProfile?: {
     fullName: string;
     email: string;
@@ -29,22 +28,38 @@ export interface SidebarProps {
   onViewProfile?: () => void;
 }
 
+const SVGIcon = ({ children }: { children: React.ReactNode }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    {children}
+  </svg>
+);
+
 export const sidebarSections: SidebarSection[] = [
   {
     title: 'CUSTOMER CARE',
     items: [
-      { id: 'dispatch-board', label: 'Dispatch Board', icon: '⌂' },
-      { id: 'active-roster', label: 'Active Roster', icon: '☰' },
+      { id: 'dispatch-board', label: 'Dispatch Board', icon: <SVGIcon><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" /><line x1="9" y1="3" x2="9" y2="18" /><line x1="15" y1="6" x2="15" y2="21" /></SVGIcon> },
+      { id: 'active-roster', label: 'Active Roster', icon: <SVGIcon><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></SVGIcon> },
     ],
   },
   {
     title: 'ADMINISTRATION',
     items: [
-      { id: 'workers', label: 'Workers', icon: '◫' },
-      { id: 'customers', label: 'Customers', icon: '◔' },
-      { id: 'service-catalog', label: 'Service Catalog', icon: '⚙' },
-      { id: 'subscriptions', label: 'Subscriptions', icon: '§' },
-      { id: 'financials', label: 'Financials', icon: '⟠' },
+      { id: 'workers', label: 'Workers', icon: <SVGIcon><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" /></SVGIcon> },
+      { id: 'customers', label: 'Customers', icon: <SVGIcon><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></SVGIcon> },
+      { id: 'service-catalog', label: 'Service Catalog', icon: <SVGIcon><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /><rect x="8" y="2" width="8" height="4" rx="1" ry="1" /></SVGIcon> },
+      { id: 'subscriptions', label: 'Subscriptions', icon: <SVGIcon><rect width="20" height="14" x="2" y="5" rx="2" /><line x1="2" x2="22" y1="10" y2="10" /></SVGIcon> },
+      { id: 'financials', label: 'Financials', icon: <SVGIcon><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></SVGIcon> },
     ],
   },
 ];
@@ -63,7 +78,7 @@ export function Sidebar({
   onViewProfile,
 }: SidebarProps) {
   const [isProfilePopoverOpen, setIsProfilePopoverOpen] = useState(false);
-  const sidebarWidth = collapsed ? 60 : 260;
+  const sidebarWidth = collapsed ? 80 : 260;
 
   const initials = userProfile?.fullName
     ? userProfile.fullName
@@ -86,8 +101,8 @@ export function Sidebar({
       key={key}
       type="button"
       onClick={onClick}
-      title={title}
-      className={active ? 'active' : ''}
+      data-tooltip={title}
+      className={`sidebar-nav-btn ${active ? 'active' : ''} ${collapsed ? 'collapsed' : ''}`}
       aria-current={active ? 'page' : undefined}
       style={{
         ...styles.navButton,
@@ -95,17 +110,30 @@ export function Sidebar({
         ...(active ? styles.navButtonActive : undefined),
       }}
     >
-      <div style={{ ...styles.iconBox, ...(active ? styles.iconBoxActive : styles.iconBoxInactive) }}>{icon}</div>
+      <div
+        className="sidebar-icon-box"
+        style={{ ...styles.iconBox, ...(active ? styles.iconBoxActive : styles.iconBoxInactive) }}
+      >
+        {icon}
+      </div>
       {!collapsed && <span style={styles.navLabel}>{label}</span>}
     </button>
   );
 
   return (
-    <aside style={{ ...styles.sidebar, width: sidebarWidth, padding: collapsed ? '12px' : '16px' }}>
-      <div style={{ ...styles.topBlock, ...(collapsed ? styles.topBlockCollapsed : undefined) }}>
+    <aside
+      style={{
+        ...styles.sidebar,
+        width: sidebarWidth,
+        padding: collapsed ? '16px 0' : '16px',
+        alignItems: collapsed ? 'center' : 'stretch',
+      }}
+    >
+      <div style={{ ...styles.topBlock, ...(collapsed ? styles.topBlockCollapsed : undefined), width: '100%' }}>
         <button
           type="button"
           onClick={onToggleCollapsed}
+          className={`sidebar-nav-btn ${collapsed ? 'collapsed' : ''}`}
           style={{
             ...styles.navButton,
             ...styles.headerToggle,
@@ -168,21 +196,10 @@ export function Sidebar({
         </nav>
       </div>
 
-      <div style={styles.bottomBlock}>
-        {footerSlot && (
-          <div
-            style={{
-              ...styles.footerSlot,
-              ...(collapsed ? styles.footerButtonWrapCollapsed : styles.footerButtonWrapExpanded),
-            }}
-          >
-            {footerSlot}
-          </div>
-        )}
-
+      <div style={{ ...styles.bottomBlock, ...(collapsed ? { alignItems: 'center' } : undefined), width: '100%' }}>
         {/* User Profile Block at Bottom */}
         {userProfile && (
-          <div style={styles.profileContainer}>
+          <div style={{ ...styles.profileContainer, ...(collapsed ? { display: 'flex', justifyContent: 'center' } : undefined) }}>
             {/* Logout / View Profile Popover Menu */}
             {isProfilePopoverOpen && (
               <>
@@ -193,8 +210,9 @@ export function Sidebar({
                 <div
                   style={{
                     ...styles.popoverMenu,
-                    ...(collapsed ? styles.popoverMenuCollapsed : styles.popoverMenuExpanded),
+                    ...(collapsed ? styles.popoverMenuCollapsed : undefined),
                   }}
+                  className="metro-modal-card"
                 >
                   <div style={styles.popoverHeader}>
                     <div style={styles.popoverName}>{userProfile.fullName}</div>
@@ -203,24 +221,26 @@ export function Sidebar({
                   <div style={styles.popoverDivider} />
                   <button
                     type="button"
+                    className="sidebar-popover-option"
                     style={styles.popoverOption}
                     onClick={() => {
                       setIsProfilePopoverOpen(false);
                       onViewProfile?.();
                     }}
                   >
-                    <span>👤</span>
+                    <SVGIcon><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></SVGIcon>
                     <span>View Profile</span>
                   </button>
                   <button
                     type="button"
+                    className="sidebar-popover-option"
                     style={{ ...styles.popoverOption, ...styles.popoverLogoutBtn }}
                     onClick={() => {
                       setIsProfilePopoverOpen(false);
                       onLogout?.();
                     }}
                   >
-                    <span>🚪</span>
+                    <SVGIcon><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></SVGIcon>
                     <span>Logout</span>
                   </button>
                 </div>
@@ -232,6 +252,7 @@ export function Sidebar({
               type="button"
               onClick={() => setIsProfilePopoverOpen((prev) => !prev)}
               title={collapsed ? `${userProfile.fullName} (${userProfile.role})` : undefined}
+              className="sidebar-profile-btn"
               style={{
                 ...styles.profileBlock,
                 ...(collapsed ? styles.profileBlockCollapsed : styles.profileBlockExpanded),
@@ -301,9 +322,12 @@ const styles: Record<string, CSSProperties> = {
   },
   headerToggleCollapsed: {
     justifyContent: 'center',
+    width: '44px',
+    height: '44px',
     minHeight: '44px',
     padding: '0',
-    borderRadius: '16px',
+    margin: '0 auto',
+    borderRadius: '12px',
     background: 'transparent',
     border: 'none',
     boxShadow: 'none',
@@ -320,9 +344,9 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.8)',
   },
   brandBadgeCollapsed: {
-    width: '40px',
-    height: '40px',
-    borderRadius: '14px',
+    width: '36px',
+    height: '36px',
+    borderRadius: '10px',
     background: '#ffffff',
     border: '1px solid rgba(16, 36, 38, 0.08)',
     display: 'grid',
@@ -331,9 +355,9 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.8)',
   },
   iconBox: {
-    width: '36px',
-    height: '36px',
-    borderRadius: '12px',
+    width: '34px',
+    height: '34px',
+    borderRadius: '10px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -415,17 +439,20 @@ const styles: Record<string, CSSProperties> = {
     overflowX: 'hidden',
     msOverflowStyle: 'none',
     scrollbarWidth: 'none',
-    paddingRight: '2px',
+    width: '100%',
+    padding: 0,
   },
   nav: {
     display: 'flex',
     flexDirection: 'column',
     gap: '16px',
+    width: '100%',
   },
   sectionBlock: {
     display: 'flex',
     flexDirection: 'column',
     gap: '8px',
+    width: '100%',
   },
   sectionTitle: {
     color: 'var(--sidebar-accent)',
@@ -440,6 +467,7 @@ const styles: Record<string, CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     gap: '6px',
+    width: '100%',
   },
   navButton: {
     display: 'flex',
@@ -460,9 +488,13 @@ const styles: Record<string, CSSProperties> = {
   },
   navButtonCollapsed: {
     justifyContent: 'center',
-    gap: 0,
+    width: '44px',
+    height: '44px',
+    minHeight: '44px',
     padding: '0',
-    margin: 0,
+    margin: '0 auto',
+    borderRadius: '12px',
+    gap: 0,
   },
   navButtonActive: {
     color: '#ffffff',
@@ -500,8 +532,8 @@ const styles: Record<string, CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    margin: '0',
-    width: '100%',
+    margin: '0 auto',
+    width: '44px',
     padding: '0',
     boxSizing: 'border-box',
   },
@@ -526,9 +558,17 @@ const styles: Record<string, CSSProperties> = {
   },
   profileBlockExpanded: {
     justifyContent: 'flex-start',
+    padding: '6px 8px',
+    borderRadius: '12px',
   },
   profileBlockCollapsed: {
     justifyContent: 'center',
+    width: '44px',
+    height: '44px',
+    minHeight: '44px',
+    padding: '0',
+    margin: '0 auto',
+    borderRadius: '12px',
   },
   avatarBox: {
     width: '36px',
@@ -561,7 +601,7 @@ const styles: Record<string, CSSProperties> = {
     textAlign: 'left',
   },
   profileFullName: {
-    color: 'var(--text-primary)',
+    color: '#ffffff',
     fontWeight: 700,
     fontSize: '0.88rem',
     whiteSpace: 'nowrap',
@@ -569,8 +609,11 @@ const styles: Record<string, CSSProperties> = {
     textOverflow: 'ellipsis',
   },
   profileRole: {
-    color: 'var(--text-secondary)',
-    fontSize: '0.76rem',
+    color: 'rgba(255, 255, 255, 0.65)',
+    fontSize: '0.74rem',
+    fontWeight: 600,
+    textTransform: 'uppercase',
+    letterSpacing: '0.06em',
     whiteSpace: 'nowrap',
   },
   popoverBackdrop: {
@@ -583,11 +626,11 @@ const styles: Record<string, CSSProperties> = {
     background: 'transparent',
   },
   popoverMenu: {
-    backgroundColor: '#2b435f',
-    border: '1px solid var(--border-subtle)',
+    backgroundColor: '#1c2d40',
+    border: '1px solid rgba(255, 255, 255, 0.14)',
     borderRadius: '16px',
     padding: '12px',
-    boxShadow: '0 16px 36px rgba(0, 0, 0, 0.6)',
+    boxShadow: '0 16px 36px rgba(0, 0, 0, 0.65)',
     zIndex: 99999,
     display: 'flex',
     flexDirection: 'column',
@@ -601,7 +644,7 @@ const styles: Record<string, CSSProperties> = {
   },
   popoverMenuCollapsed: {
     position: 'fixed',
-    left: '72px',
+    left: '84px',
     bottom: '16px',
     width: '220px',
   },
@@ -614,7 +657,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: '0.92rem',
   },
   popoverEmail: {
-    color: '#81b1b3',
+    color: 'rgba(255, 255, 255, 0.7)',
     fontSize: '0.78rem',
     marginTop: '2px',
   },
@@ -632,15 +675,16 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: '10px',
     border: 'none',
     background: 'transparent',
-    color: 'var(--text-primary)',
+    color: '#f0f6fc',
     fontSize: '0.88rem',
     fontWeight: 600,
     textAlign: 'left',
     cursor: 'pointer',
   },
   popoverLogoutBtn: {
-    backgroundColor: 'rgba(243, 136, 8, 0.15)',
+    backgroundColor: 'rgba(243, 136, 8, 0.16)',
     color: '#f38808',
+    border: '1px solid rgba(243, 136, 8, 0.35)',
     fontWeight: 800,
     marginTop: '2px',
   },

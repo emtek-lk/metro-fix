@@ -1,4 +1,4 @@
-import { type CSSProperties } from 'react';
+import { useState, useMemo, type CSSProperties } from 'react';
 
 export type RosterWorker = {
   id: string;
@@ -72,8 +72,66 @@ const statusStyles: Record<RosterWorker['status'], { label: string; bg: string; 
 };
 
 export function ActiveRosterView() {
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredRoster = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return rosterData;
+    return rosterData.filter((w) =>
+      [w.name, w.zone, w.currentTask, w.status.replace('_', ' ')].some((v) =>
+        v.toLowerCase().includes(q)
+      )
+    );
+  }, [searchQuery]);
+
+  const isFiltering = searchQuery.trim().length > 0;
+
   return (
     <div style={styles.container}>
+      {/* Modern Search bar */}
+      <div className="metro-search-row">
+        <div className="metro-search-wrap">
+          <div className="metro-search-container">
+            <div className="metro-search-icon" aria-hidden="true">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+            </div>
+            <input
+              type="text"
+              placeholder="Search roster..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="metro-search-input"
+              aria-label="Search active roster"
+              autoComplete="off"
+              spellCheck={false}
+            />
+            {isFiltering && (
+              <button
+                type="button"
+                aria-label="Clear search"
+                className="metro-search-clear"
+                onClick={() => setSearchQuery('')}
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            )}
+          </div>
+        </div>
+        {isFiltering && (
+          <div className="metro-search-count-pill">
+            {filteredRoster.length === 0
+              ? 'No matches'
+              : `${filteredRoster.length} of ${rosterData.length}`}
+          </div>
+        )}
+      </div>
+
       <div style={styles.tableShell}>
         <div style={styles.tableWrap}>
           <table style={styles.table}>
@@ -88,7 +146,14 @@ export function ActiveRosterView() {
               </tr>
             </thead>
             <tbody>
-              {rosterData.map((worker) => {
+              {filteredRoster.length === 0 ? (
+                <tr>
+                  <td colSpan={6} style={{ ...styles.td, textAlign: 'center', padding: '32px', color: 'var(--text-secondary)' }}>
+                    {isFiltering ? 'No workers match your search.' : 'No active roster data.'}
+                  </td>
+                </tr>
+              ) : (
+                filteredRoster.map((worker) => {
                 const s = statusStyles[worker.status];
                 return (
                   <tr key={worker.id}>
@@ -109,7 +174,8 @@ export function ActiveRosterView() {
                     <td style={styles.tdSubtle}>{worker.lastPing}</td>
                   </tr>
                 );
-              })}
+              })
+              )}
             </tbody>
           </table>
         </div>
@@ -127,6 +193,63 @@ const styles: Record<string, CSSProperties> = {
     minHeight: 0,
     overflow: 'hidden',
     color: 'var(--text-primary)',
+    gap: '12px',
+  },
+  /* ─── Search row ─── */
+  searchRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    flexShrink: 0,
+  },
+  searchBox: {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '10px 14px',
+    borderRadius: '14px',
+    border: '1px solid var(--border-subtle)',
+    background: 'var(--surface-strong)',
+    boxShadow: '0 2px 8px rgba(14, 20, 21, 0.04)',
+  },
+  searchIcon: {
+    color: 'var(--text-secondary)',
+    fontSize: '1.2rem',
+    lineHeight: 1,
+    flexShrink: 0,
+    userSelect: 'none',
+  },
+  searchInput: {
+    flex: 1,
+    border: 'none',
+    background: 'transparent',
+    color: 'var(--text-primary)',
+    fontSize: '0.92rem',
+    outline: 'none',
+    minWidth: 0,
+  },
+  searchClear: {
+    background: 'none',
+    border: 'none',
+    color: 'var(--text-secondary)',
+    cursor: 'pointer',
+    fontSize: '0.88rem',
+    padding: '2px 4px',
+    borderRadius: '6px',
+    flexShrink: 0,
+    lineHeight: 1,
+  },
+  searchCount: {
+    flexShrink: 0,
+    fontSize: '0.82rem',
+    fontWeight: 600,
+    whiteSpace: 'nowrap',
+    padding: '6px 12px',
+    borderRadius: '10px',
+    background: 'rgba(243, 136, 8, 0.08)',
+    border: '1px solid rgba(243, 136, 8, 0.2)',
+    color: '#f38808',
   },
   header: {
     display: 'flex',

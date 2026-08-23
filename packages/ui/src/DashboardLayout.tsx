@@ -34,6 +34,7 @@ export function DashboardLayout({
 }: DashboardLayoutProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [filterText, setFilterText] = useState('');
+  const [isHeaderProfileOpen, setIsHeaderProfileOpen] = useState(false);
 
   const filteredSections = useMemo(() => {
     const search = filterText.trim().toLowerCase();
@@ -65,7 +66,6 @@ export function DashboardLayout({
         onRouteChange={onRouteChange ?? (() => undefined)}
         collapsed={isCollapsed}
         onToggleCollapsed={() => setIsCollapsed((value) => !value)}
-        footerSlot={settingsSlot}
         userProfile={userProfile}
         onLogout={onLogout}
         onViewProfile={onViewProfile}
@@ -79,17 +79,77 @@ export function DashboardLayout({
 
           <div style={styles.headerActions}>
             {headerActions && <div style={styles.dynamicActions}>{headerActions}</div>}
-            <div style={styles.profileChip}>
-              <div style={styles.avatar}>{initials}</div>
-              <div>
-                <div style={styles.profileName}>{userProfile.fullName}</div>
-                <div style={styles.profileEmail}>{userProfile.role} · {userProfile.email}</div>
-              </div>
+            
+            {settingsSlot && <div style={styles.dynamicActions}>{settingsSlot}</div>}
+
+            <div style={styles.headerProfileWrapper}>
+              <button
+                type="button"
+                className="header-profile-btn"
+                onClick={() => setIsHeaderProfileOpen((prev) => !prev)}
+                style={styles.profileChip}
+                aria-label={`Open account menu for ${userProfile.fullName}`}
+              >
+                <div style={styles.avatar}>{initials}</div>
+                <div style={{ textAlign: 'left' }}>
+                  <div style={styles.profileName}>{userProfile.fullName}</div>
+                  <div style={styles.profileEmail}>{userProfile.role} · {userProfile.email}</div>
+                </div>
+                <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', marginLeft: '4px' }}>▼</span>
+              </button>
+
+              {isHeaderProfileOpen && (
+                <>
+                  <div
+                    style={styles.popoverBackdrop}
+                    onClick={() => setIsHeaderProfileOpen(false)}
+                  />
+                  <div style={styles.headerPopoverMenu} className="metro-modal-card">
+                    <div style={styles.popoverHeader}>
+                      <div style={styles.popoverName}>{userProfile.fullName}</div>
+                      <div style={styles.popoverEmail}>{userProfile.email}</div>
+                    </div>
+                    <div style={styles.popoverDivider} />
+                    <button
+                      type="button"
+                      className="header-popover-option"
+                      style={styles.popoverOption}
+                      onClick={() => {
+                        setIsHeaderProfileOpen(false);
+                        onViewProfile?.();
+                      }}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                      </svg>
+                      <span>View Profile</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="header-popover-option header-popover-logout"
+                      style={{ ...styles.popoverOption, ...styles.popoverLogoutBtn }}
+                      onClick={() => {
+                        setIsHeaderProfileOpen(false);
+                        onLogout?.();
+                      }}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/>
+                      </svg>
+                      <span>Logout</span>
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </header>
 
-        <main className="dashboard-viewPanel" style={styles.main}>{workspace}</main>
+        <main className="dashboard-viewPanel" style={styles.main}>
+          <div className="metro-view-enter" style={styles.viewPort}>
+            {workspace}
+          </div>
+        </main>
       </section>
     </div>
   );
@@ -113,6 +173,8 @@ const styles: Record<string, CSSProperties> = {
     overflow: 'hidden',
   },
   header: {
+    position: 'relative',
+    zIndex: 1000,
     flexShrink: 0,
     display: 'flex',
     alignItems: 'center',
@@ -168,6 +230,73 @@ const styles: Record<string, CSSProperties> = {
     color: 'var(--color-text-secondary)',
     fontSize: '0.76rem',
   },
+  headerProfileWrapper: {
+    position: 'relative',
+  },
+  popoverBackdrop: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 99998,
+    background: 'transparent',
+  },
+  headerPopoverMenu: {
+    position: 'absolute',
+    top: 'calc(100% + 8px)',
+    right: 0,
+    width: '230px',
+    backgroundColor: 'var(--surface-strong)',
+    border: '1px solid var(--border-subtle)',
+    borderRadius: '16px',
+    padding: '12px',
+    boxShadow: '0 18px 42px rgba(0, 0, 0, 0.22)',
+    zIndex: 99999,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+  },
+  popoverHeader: {
+    padding: '4px 6px',
+  },
+  popoverName: {
+    color: 'var(--text-primary)',
+    fontWeight: 800,
+    fontSize: '0.92rem',
+  },
+  popoverEmail: {
+    color: 'var(--text-secondary)',
+    fontSize: '0.78rem',
+    marginTop: '2px',
+  },
+  popoverDivider: {
+    height: '1px',
+    backgroundColor: 'var(--border-subtle)',
+    margin: '4px 0',
+  },
+  popoverOption: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    width: '100%',
+    padding: '10px 12px',
+    borderRadius: '10px',
+    border: 'none',
+    background: 'transparent',
+    color: 'var(--text-primary)',
+    fontSize: '0.88rem',
+    fontWeight: 600,
+    textAlign: 'left',
+    cursor: 'pointer',
+  },
+  popoverLogoutBtn: {
+    backgroundColor: 'rgba(243, 136, 8, 0.14)',
+    color: '#f38808',
+    border: '1px solid rgba(243, 136, 8, 0.3)',
+    fontWeight: 800,
+    marginTop: '2px',
+  },
   main: {
     flex: 1,
     minWidth: 0,
@@ -177,6 +306,14 @@ const styles: Record<string, CSSProperties> = {
     boxSizing: 'border-box',
     display: 'flex',
     flexDirection: 'column',
+    overflow: 'hidden',
+  },
+  viewPort: {
+    display: 'flex',
+    flexDirection: 'column',
+    flex: 1,
+    minHeight: 0,
+    height: '100%',
     overflow: 'hidden',
   },
 };

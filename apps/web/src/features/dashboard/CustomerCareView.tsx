@@ -238,6 +238,7 @@ export function CustomerCareView() {
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const showToast = (message: string, type: 'success' | 'error') => {
     setToast({ message, type });
@@ -315,6 +316,24 @@ export function CustomerCareView() {
   }, []);
 
   const grouped = useMemo(() => boardOrder.map((status) => ({ status, items: columns[status] })), [columns]);
+
+  // Filter cards across all columns by the search query
+  const filteredGrouped = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return grouped;
+    return grouped.map((col) => ({
+      ...col,
+      items: col.items.filter(
+        (card) =>
+          card.title.toLowerCase().includes(q) ||
+          card.customerName.toLowerCase().includes(q) ||
+          card.location.toLowerCase().includes(q) ||
+          card.serviceType.toLowerCase().includes(q) ||
+          card.urgency.toLowerCase().includes(q) ||
+          (card.assignedWorker?.fullName.toLowerCase().includes(q) ?? false)
+      ),
+    }));
+  }, [grouped, searchQuery]);
 
   const sortedWorkers = useMemo(
     () => [...workersList].sort((left, right) => calculateWorkerScore(right) - calculateWorkerScore(left)),
@@ -582,19 +601,6 @@ export function CustomerCareView() {
       <div className="sr-only" aria-live="polite" aria-atomic="true">
         {ariaAnnouncement}
       </div>
-      {isLoading && (
-        <div style={styles.loadingBanner}>
-          <div style={styles.spinner} />
-          <span>Fetching live service requests from NestJS API...</span>
-        </div>
-      )}
-
-      {fetchError && !isLoading && (
-        <div style={styles.errorBanner}>
-          <span>⚠️ {fetchError}</span>
-        </div>
-      )}
-
       {toast && (
         <div
           style={{
@@ -608,9 +614,60 @@ export function CustomerCareView() {
       )}
 
       <DragDropContext onDragEnd={handleDragEnd}>
+        {/* Modern Board-level search bar */}
+        {(() => {
+          const totalCards = grouped.reduce((acc, col) => acc + col.items.length, 0);
+          const filteredCards = filteredGrouped.reduce((acc, col) => acc + col.items.length, 0);
+          const isFiltering = searchQuery.trim().length > 0;
+          return (
+            <div className="metro-search-row">
+              <div className="metro-search-wrap">
+                <div className="metro-search-container">
+                  <div className="metro-search-icon" aria-hidden="true">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="11" cy="11" r="8" />
+                      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    </svg>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Search dispatch board..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="metro-search-input"
+                    aria-label="Search dispatch jobs"
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                  {isFiltering && (
+                    <button
+                      type="button"
+                      aria-label="Clear search"
+                      className="metro-search-clear"
+                      onClick={() => setSearchQuery('')}
+                    >
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              </div>
+              {isFiltering && (
+                <div className="metro-search-count-pill">
+                  {filteredCards === 0
+                    ? 'No matches'
+                    : `${filteredCards} of ${totalCards}`}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         <div style={{ ...styles.boardShell, ...(isCompact ? styles.boardShellCompact : undefined) }}>
           <div style={{ ...styles.board, ...(isCompact ? styles.boardCompact : undefined) }}>
-            {grouped.map(({ status, items }) => (
+            {filteredGrouped.map(({ status, items }) => (
               <article key={status} style={styles.column}>
                 <div style={styles.columnHeader}>
                   <span>{statusLabels[status]}</span>
@@ -775,6 +832,63 @@ const styles: Record<string, CSSProperties> = {
     color: 'var(--text-primary)',
     minWidth: 0,
     overflow: 'hidden',
+    gap: '10px',
+  },
+  /* ─── Board search bar ─── */
+  boardSearchRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    flexShrink: 0,
+  },
+  boardSearchBox: {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '10px 14px',
+    borderRadius: '14px',
+    border: '1px solid var(--border-subtle)',
+    background: 'var(--surface-strong)',
+    boxShadow: '0 2px 8px rgba(14, 20, 21, 0.04)',
+  },
+  boardSearchIcon: {
+    color: 'var(--text-secondary)',
+    fontSize: '1.2rem',
+    lineHeight: 1,
+    flexShrink: 0,
+    userSelect: 'none',
+  },
+  boardSearchInput: {
+    flex: 1,
+    border: 'none',
+    background: 'transparent',
+    color: 'var(--text-primary)',
+    fontSize: '0.92rem',
+    outline: 'none',
+    minWidth: 0,
+  },
+  boardSearchClear: {
+    background: 'none',
+    border: 'none',
+    color: 'var(--text-secondary)',
+    cursor: 'pointer',
+    fontSize: '0.88rem',
+    padding: '2px 4px',
+    borderRadius: '6px',
+    flexShrink: 0,
+    lineHeight: 1,
+  },
+  boardSearchCount: {
+    flexShrink: 0,
+    fontSize: '0.82rem',
+    fontWeight: 600,
+    whiteSpace: 'nowrap',
+    padding: '6px 12px',
+    borderRadius: '10px',
+    background: 'rgba(243, 136, 8, 0.08)',
+    border: '1px solid rgba(243, 136, 8, 0.2)',
+    color: '#f38808',
   },
   kicker: {
     color: '#f38808',
@@ -885,11 +999,10 @@ const styles: Record<string, CSSProperties> = {
     cursor: 'grab',
     boxSizing: 'border-box',
     flexShrink: 0,
-    transition: 'transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease',
+    transition: 'box-shadow 140ms ease, border-color 140ms ease',
   },
   cardDragging: {
     cursor: 'grabbing',
-    transform: 'rotate(0.5deg) scale(1.01)',
     boxShadow: '0 18px 38px rgba(0, 0, 0, 0.18)',
     borderColor: 'rgba(243, 136, 8, 0.45)',
   },

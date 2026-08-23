@@ -628,6 +628,56 @@ export function AdminWorkspace({
   const [financials, setFinancials] = useState<FinancialRecord[]>(initialFinancialRows);
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Reset search whenever the user switches to a different view
+  useEffect(() => { setSearchQuery(''); }, [activeView]);
+
+  // ─── Filtered datasets ─────────────────────────────────────────────
+  const filteredCustomers = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return customers;
+    return customers.filter((c) =>
+      [c.fullName, c.email, c.phone, c.facilityType, c.subscriptionTier, c.physicalAddress ?? '']
+        .some((v) => v.toLowerCase().includes(q))
+    );
+  }, [customers, searchQuery]);
+
+  const filteredWorkers = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return workers;
+    return workers.filter((w) =>
+      [w.fullName, w.email, w.phone, w.coverageZone, w.serviceTypes, w.status]
+        .some((v) => v.toLowerCase().includes(q))
+    );
+  }, [workers, searchQuery]);
+
+  const filteredServices = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return services;
+    return services.filter((s) =>
+      [s.serviceName, s.pillarCategory, s.basePrice, s.requiredSubscriptionTier, s.status]
+        .some((v) => v.toLowerCase().includes(q))
+    );
+  }, [services, searchQuery]);
+
+  const filteredSubscriptions = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return subscriptions;
+    return subscriptions.filter((s) =>
+      [s.tierName, s.targetFacility, s.monthlyFee, s.includedServices, s.status]
+        .some((v) => v.toLowerCase().includes(q))
+    );
+  }, [subscriptions, searchQuery]);
+
+  const filteredFinancials = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return financials;
+    return financials.filter((f) =>
+      [f.id, f.jobId, f.customerName, f.servicePillar, f.amount, f.paymentStatus]
+        .some((v) => v.toLowerCase().includes(q))
+    );
+  }, [financials, searchQuery]);
 
   useEffect(() => {
     let isMounted = true;
@@ -730,106 +780,134 @@ export function AdminWorkspace({
     setCustomers((prev) => [newCustomer, ...prev]);
   };
 
+  // ─── Search bar helper ────────────────────────────────────────────
+  const placeholders: Record<string, string> = {
+    customers: 'Search customers...',
+    workers: 'Search workers...',
+    'service-catalog': 'Search service catalog...',
+    subscriptions: 'Search plans...',
+    financials: 'Search invoices...',
+  };
+
+  const totalMap: Record<string, number> = {
+    customers: customers.length,
+    workers: workers.length,
+    'service-catalog': services.length,
+    subscriptions: subscriptions.length,
+    financials: financials.length,
+  };
+
+  const filteredCountMap: Record<string, number> = {
+    customers: filteredCustomers.length,
+    workers: filteredWorkers.length,
+    'service-catalog': filteredServices.length,
+    subscriptions: filteredSubscriptions.length,
+    financials: filteredFinancials.length,
+  };
+
+  const total = totalMap[activeView] ?? 0;
+  const filtered = filteredCountMap[activeView] ?? 0;
+  const isFiltering = searchQuery.trim().length > 0;
+
+  const searchBar = (
+    <div className="metro-search-row">
+      <div className="metro-search-wrap">
+        <div className="metro-search-container">
+          <div className="metro-search-icon" aria-hidden="true">
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+          </div>
+          <input
+            type="text"
+            placeholder={placeholders[activeView] ?? 'Search...'}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="metro-search-input"
+            aria-label={`Search ${activeView}`}
+            autoComplete="off"
+            spellCheck={false}
+          />
+          {isFiltering && (
+            <button
+              type="button"
+              aria-label="Clear search"
+              className="metro-search-clear"
+              onClick={() => setSearchQuery('')}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          )}
+        </div>
+      </div>
+      {isFiltering && (
+        <div className="metro-search-count-pill">
+          {filtered === 0 ? 'No matches' : `${filtered} of ${total}`}
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <section style={styles.workspace}>
+      {searchBar}
+
       {activeView === 'customers' && (
-        <>
-          {isLoading && (
-            <div style={styles.infoBanner}>
-              <span>🔄 Loading live customer records from NestJS API...</span>
-            </div>
-          )}
-          {fetchError && !isLoading && (
-            <div style={styles.errorBanner}>
-              <span>⚠️ {fetchError}</span>
-            </div>
-          )}
-          <DataTable<CustomerRecord>
-            columns={customerColumns}
-            data={customers}
-            emptyMessage="No customers found in directory."
-          />
-        </>
+        <DataTable<CustomerRecord>
+          key={`customers-${searchQuery}`}
+          columns={customerColumns}
+          data={filteredCustomers}
+          emptyMessage={isFiltering ? 'No customers match your search.' : 'No customers found in directory.'}
+        />
       )}
 
       {activeView === 'service-catalog' && (
-        <>
-          {isLoading && (
-            <div style={styles.infoBanner}>
-              <span>🔄 Loading live service catalog from NestJS API...</span>
-            </div>
-          )}
-          {fetchError && !isLoading && (
-            <div style={styles.errorBanner}>
-              <span>⚠️ {fetchError}</span>
-            </div>
-          )}
-          <DataTable<ServiceRecord>
-            columns={serviceColumns}
-            data={services}
-            emptyMessage="No service catalog records."
-          />
-        </>
+        <DataTable<ServiceRecord>
+          key={`services-${searchQuery}`}
+          columns={serviceColumns}
+          data={filteredServices}
+          emptyMessage={isFiltering ? 'No services match your search.' : 'No service catalog records.'}
+        />
       )}
 
       {activeView === 'workers' && (
-        <>
-          {isLoading && (
-            <div style={styles.infoBanner}>
-              <span>🔄 Loading live worker roster from NestJS API...</span>
-            </div>
-          )}
-          {fetchError && !isLoading && (
-            <div style={styles.errorBanner}>
-              <span>⚠️ {fetchError}</span>
-            </div>
-          )}
-          <DataTable<WorkerRecord>
-            columns={workerColumns}
-            data={workers}
-            emptyMessage="No workers registered in system."
-          />
-        </>
+        <DataTable<WorkerRecord>
+          key={`workers-${searchQuery}`}
+          columns={workerColumns}
+          data={filteredWorkers}
+          emptyMessage={isFiltering ? 'No workers match your search.' : 'No workers registered in system.'}
+        />
       )}
 
       {activeView === 'subscriptions' && (
-        <>
-          {isLoading && (
-            <div style={styles.infoBanner}>
-              <span>🔄 Loading live subscription plans from NestJS API...</span>
-            </div>
-          )}
-          {fetchError && !isLoading && (
-            <div style={styles.errorBanner}>
-              <span>⚠️ {fetchError}</span>
-            </div>
-          )}
-          <DataTable<SubscriptionPlanRecord>
-            columns={subscriptionColumns}
-            data={subscriptions}
-            emptyMessage="No subscription tiers defined."
-          />
-        </>
+        <DataTable<SubscriptionPlanRecord>
+          key={`subscriptions-${searchQuery}`}
+          columns={subscriptionColumns}
+          data={filteredSubscriptions}
+          emptyMessage={isFiltering ? 'No subscription tiers match your search.' : 'No subscription tiers defined.'}
+        />
       )}
 
       {activeView === 'financials' && (
-        <>
-          {isLoading && (
-            <div style={styles.infoBanner}>
-              <span>🔄 Loading live financial ledger from NestJS API...</span>
-            </div>
-          )}
-          {fetchError && !isLoading && (
-            <div style={styles.errorBanner}>
-              <span>⚠️ {fetchError}</span>
-            </div>
-          )}
-          <DataTable<FinancialRecord>
-            columns={financialColumns}
-            data={financials}
-            emptyMessage="No financial ledger entries found."
-          />
-        </>
+        <DataTable<FinancialRecord>
+          key={`financials-${searchQuery}`}
+          columns={financialColumns}
+          data={filteredFinancials}
+          emptyMessage={isFiltering ? 'No financial records match your search.' : 'No financial ledger entries found.'}
+        />
       )}
 
       {/* Creation Modal */}
@@ -851,6 +929,65 @@ const styles: Record<string, CSSProperties> = {
     minHeight: 0,
     overflow: 'hidden',
     color: 'var(--text-primary)',
+    gap: '12px',
+  },
+  /* ─── Search row ─── */
+  searchRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    flexShrink: 0,
+  },
+  searchBox: {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '10px 14px',
+    borderRadius: '14px',
+    border: '1px solid var(--border-subtle)',
+    background: 'var(--surface-strong)',
+    boxShadow: '0 2px 8px rgba(14, 20, 21, 0.04)',
+    transition: 'border-color 150ms ease, box-shadow 150ms ease',
+  },
+  searchIcon: {
+    color: 'var(--text-secondary)',
+    fontSize: '1.2rem',
+    lineHeight: 1,
+    flexShrink: 0,
+    userSelect: 'none',
+  },
+  searchInput: {
+    flex: 1,
+    border: 'none',
+    background: 'transparent',
+    color: 'var(--text-primary)',
+    fontSize: '0.92rem',
+    outline: 'none',
+    minWidth: 0,
+  },
+  searchClear: {
+    background: 'none',
+    border: 'none',
+    color: 'var(--text-secondary)',
+    cursor: 'pointer',
+    fontSize: '0.88rem',
+    padding: '2px 4px',
+    borderRadius: '6px',
+    flexShrink: 0,
+    lineHeight: 1,
+  },
+  searchCount: {
+    flexShrink: 0,
+    fontSize: '0.82rem',
+    fontWeight: 600,
+    color: 'var(--text-secondary)',
+    whiteSpace: 'nowrap',
+    padding: '6px 12px',
+    borderRadius: '10px',
+    background: 'rgba(243, 136, 8, 0.08)',
+    border: '1px solid rgba(243, 136, 8, 0.2)',
+    color: 'var(--accent)',
   },
   viewHeader: {
     display: 'flex',
