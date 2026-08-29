@@ -45,3 +45,7 @@ apps/mobile/ios/Pods/
 apps/mobile/ios/build/
 apps/mobile/ios/DerivedData/
 apps/mobile/ios/.xcode.env.local
+# Expo dev logs and cache
+apps/mobile/.expo/
+apps/mobile/.expo-shared/
+apps/mobile/.expo/dev/logs/
