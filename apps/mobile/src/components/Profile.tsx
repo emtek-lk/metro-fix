@@ -1,17 +1,36 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Card } from './ui/Card';
 import { Button } from './ui/Button';
+import { Icon, type FeatherIconName } from './ui/Icon';
+import { colors } from '../theme/colors';
+import { typography } from '../theme/typography';
+import { spacing, radius, layout, tabBarClearance } from '../theme/layout';
 import { useAuth } from '../context/AuthContext';
 
+const SETTINGS_ROWS: { icon: FeatherIconName; label: string; value: string }[] = [
+  { icon: 'radio', label: 'Telemetry GPS Auto-Sync', value: 'ACTIVE' },
+  { icon: 'zap', label: 'Service Pillars', value: 'HARD / SOFT' },
+  { icon: 'shield', label: 'Authentication Token', value: 'JWT Bearer' },
+];
+
 export const ProfileScreen: React.FC = () => {
+  const insets = useSafeAreaInsets();
   const { user, logout } = useAuth();
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent} bounces={false}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: tabBarClearance(insets) },
+        ]}
+        bounces={false}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Profile Card */}
-        <Card variant="elevated" borderRadius={28} padding={24} style={styles.profileCard}>
+        <Card variant="elevated" borderRadius={radius.xxl} padding={spacing.xxl} style={styles.profileCard}>
           <View style={styles.avatarContainer}>
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>
@@ -24,16 +43,17 @@ export const ProfileScreen: React.FC = () => {
           <Text style={styles.userName}>{user?.fullName || 'Field Technician'}</Text>
           <Text style={styles.userEmail}>{user?.email || 'worker@metro-fix.com'}</Text>
 
-          <View style={styles.roleTagContainer}>
-            <View style={styles.roleTag}>
-              <Text style={styles.roleTagText}>{user?.role || 'WORKER'} ACCOUNT</Text>
-            </View>
+          <View style={styles.roleTag}>
+            <Text style={styles.roleTagText}>{user?.role || 'WORKER'} ACCOUNT</Text>
           </View>
 
           {/* Rating & Stats */}
           <View style={styles.statsRow}>
             <View style={styles.statBox}>
-              <Text style={styles.statValue}>4.9 ★</Text>
+              <View style={styles.statValueRow}>
+                <Icon name="star" size={14} color={colors.brand} />
+                <Text style={styles.statValue}>4.9</Text>
+              </View>
               <Text style={styles.statLabel}>Internal Rating</Text>
             </View>
             <View style={styles.statDivider} />
@@ -50,29 +70,34 @@ export const ProfileScreen: React.FC = () => {
         </Card>
 
         {/* Dispatch Settings */}
-        <Text style={styles.sectionHeading}>DISPATCH & SYSTEM SETTINGS</Text>
+        <Text style={styles.sectionHeading}>Dispatch & system settings</Text>
 
-        <Card variant="elevated" borderRadius={20} padding={16} style={styles.settingsCard}>
-          <View style={styles.settingRow}>
-            <Text style={styles.settingLabel}>📡 Telemetry GPS Auto-Sync</Text>
-            <Text style={styles.settingValue}>ACTIVE</Text>
-          </View>
-          <View style={styles.divider} />
-          <View style={styles.settingRow}>
-            <Text style={styles.settingLabel}>⚡ Service Pillars</Text>
-            <Text style={styles.settingValue}>HARD / SOFT</Text>
-          </View>
-          <View style={styles.divider} />
-          <View style={styles.settingRow}>
-            <Text style={styles.settingLabel}>🔐 Authentication Token</Text>
-            <Text style={styles.settingValue}>JWT Bearer</Text>
-          </View>
+        <Card variant="elevated" borderRadius={radius.lg} padding={spacing.xs}>
+          {SETTINGS_ROWS.map((row, index) => (
+            <View key={row.label}>
+              {index > 0 ? <View style={styles.divider} /> : null}
+              <View style={styles.settingRow}>
+                <View style={styles.settingLabelGroup}>
+                  <Icon name={row.icon} size={16} color={colors.textSecondary} />
+                  <Text style={styles.settingLabel} numberOfLines={1}>
+                    {row.label}
+                  </Text>
+                </View>
+                <Text style={styles.settingValue}>{row.value}</Text>
+              </View>
+            </View>
+          ))}
         </Card>
 
         {/* Logout Button */}
-        <TouchableOpacity style={styles.logoutBtn} onPress={logout} activeOpacity={0.85}>
-          <Text style={styles.logoutBtnText}>🚪 LOGOUT & SIGN OUT</Text>
-        </TouchableOpacity>
+        <Button
+          title="Sign Out"
+          onPress={logout}
+          variant="danger"
+          size="large"
+          icon={<Icon name="log-out" size={17} color={colors.dangerText} />}
+          style={styles.logoutBtn}
+        />
       </ScrollView>
     </View>
   );
@@ -81,142 +106,146 @@ export const ProfileScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0F172A',
-    paddingHorizontal: 20,
-    paddingTop: 20,
+    backgroundColor: colors.bg,
   },
   scrollContent: {
-    paddingBottom: 110,
+    paddingHorizontal: layout.screenPadding,
+    paddingTop: spacing.xl,
   },
+
+  // ── Profile card ──
   profileCard: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: spacing.xxl,
   },
   avatarContainer: {
-    position: 'relative',
-    marginBottom: 12,
+    marginBottom: spacing.lg,
   },
   avatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: '#F97316',
-    justifyContent: 'center',
+    width: 84,
+    height: 84,
+    borderRadius: radius.pill,
+    backgroundColor: colors.brand,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   avatarText: {
-    color: '#FFFFFF',
-    fontSize: 32,
-    fontWeight: '900',
+    ...typography.display,
+    fontSize: 34,
+    lineHeight: 40,
+    color: colors.white,
   },
   onlineBadge: {
     position: 'absolute',
-    bottom: 2,
     right: 2,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#10B981',
-    borderWidth: 2,
-    borderColor: '#1E293B',
+    bottom: 2,
+    width: 20,
+    height: 20,
+    borderRadius: radius.pill,
+    backgroundColor: colors.success,
+    borderWidth: 3,
+    borderColor: colors.surface,
   },
   userName: {
-    color: '#F8FAFC',
-    fontSize: 20,
-    fontWeight: '900',
+    ...typography.h1,
+    color: colors.text,
+    textAlign: 'center',
   },
   userEmail: {
-    color: '#94A3B8',
-    fontSize: 13,
-    marginTop: 2,
-  },
-  roleTagContainer: {
-    marginTop: 10,
-    marginBottom: 20,
+    ...typography.body,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+    textAlign: 'center',
   },
   roleTag: {
-    backgroundColor: 'rgba(249, 115, 22, 0.15)',
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: radius.pill,
+    backgroundColor: colors.brandSubtle,
     borderWidth: 1,
-    borderColor: '#F97316',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 999,
+    borderColor: colors.brand,
   },
   roleTagText: {
-    color: '#F97316',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+    ...typography.overline,
+    color: colors.brand,
   },
+
+  // ── Stats ──
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-around',
-    width: '100%',
+    alignSelf: 'stretch',
+    marginTop: spacing.xl,
+    paddingTop: spacing.xl,
     borderTopWidth: 1,
-    borderTopColor: '#334155',
-    paddingTop: 16,
+    borderTopColor: colors.border,
   },
   statBox: {
+    flex: 1,
     alignItems: 'center',
+    gap: spacing.xs,
+  },
+  statValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
   },
   statValue: {
-    color: '#F8FAFC',
-    fontSize: 16,
-    fontWeight: '900',
+    ...typography.h2,
+    color: colors.text,
   },
   statLabel: {
-    color: '#64748B',
-    fontSize: 11,
-    marginTop: 2,
+    ...typography.caption,
+    color: colors.textMuted,
+    textAlign: 'center',
   },
   statDivider: {
     width: 1,
-    height: 24,
-    backgroundColor: '#334155',
+    alignSelf: 'stretch',
+    backgroundColor: colors.border,
   },
+
+  // ── Settings ──
   sectionHeading: {
-    color: '#94A3B8',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-    marginBottom: 12,
-  },
-  settingsCard: {
-    marginBottom: 24,
+    ...typography.overline,
+    color: colors.textSecondary,
+    marginBottom: spacing.md,
   },
   settingRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    minHeight: layout.minTap,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+  },
+  settingLabelGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    flex: 1,
+    minWidth: 0,
   },
   settingLabel: {
-    color: '#CBD5E1',
-    fontSize: 14,
-    fontWeight: '600',
+    ...typography.body,
+    color: colors.text,
+    flexShrink: 1,
   },
   settingValue: {
-    color: '#10B981',
-    fontSize: 12,
-    fontWeight: '800',
+    ...typography.caption,
+    fontWeight: '700',
+    color: colors.brand,
+    flexShrink: 0,
   },
   divider: {
     height: 1,
-    backgroundColor: '#334155',
+    backgroundColor: colors.border,
+    marginHorizontal: spacing.md,
   },
+
   logoutBtn: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-    borderWidth: 1,
-    borderColor: '#EF4444',
-    paddingVertical: 16,
-    borderRadius: 999,
-    alignItems: 'center',
-  },
-  logoutBtnText: {
-    color: '#FCA5A5',
-    fontSize: 14,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+    marginTop: spacing.xxl,
   },
 });

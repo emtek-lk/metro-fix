@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
-import {
-  Modal,
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-} from 'react-native';
+import { Modal, View, Text, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { JobStatus, ServiceRequest } from '@metro-fix/core-types';
 import { apiService } from '../services/api';
+
+import { Button } from './ui/Button';
+import { Icon } from './ui/Icon';
+import { MetaChip } from './ui/MetaChip';
+import { colors } from '../theme/colors';
+import { typography } from '../theme/typography';
+import { spacing, radius, layout } from '../theme/layout';
+import { elevation } from '../theme/elevation';
+import { PILLAR_ICON, FACILITY_ICON } from '../theme/status';
 
 interface NewJobAlertModalProps {
   visible: boolean;
@@ -27,6 +30,7 @@ export const NewJobAlertModal: React.FC<NewJobAlertModalProps> = ({
   onAccept,
   onReject,
 }) => {
+  const insets = useSafeAreaInsets();
   const [loadingAction, setLoadingAction] = useState<'accept' | 'reject' | null>(
     null,
   );
@@ -63,14 +67,20 @@ export const NewJobAlertModal: React.FC<NewJobAlertModalProps> = ({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent={false}>
+    <Modal visible={visible} animationType="slide" transparent>
       <View style={styles.overlay}>
-        <View style={styles.card}>
+        <View style={[styles.card, { paddingBottom: spacing.xxl + insets.bottom }]}>
+          <View style={styles.handle} />
+
           <View style={styles.badgeRow}>
             <View style={styles.alertBadge}>
-              <Text style={styles.alertBadgeText}>⚡ DISPATCH INCOMING</Text>
+              <Icon name="zap" size={13} color={colors.white} />
+              <Text style={styles.alertBadgeText}>Dispatch incoming</Text>
             </View>
-            <Text style={styles.distanceText}>{distanceKm} km away</Text>
+            <View style={styles.distanceGroup}>
+              <Icon name="map-pin" size={13} color={colors.textSecondary} />
+              <Text style={styles.distanceText}>{distanceKm} km away</Text>
+            </View>
           </View>
 
           <Text style={styles.title}>{job.title}</Text>
@@ -78,49 +88,51 @@ export const NewJobAlertModal: React.FC<NewJobAlertModalProps> = ({
 
           <View style={styles.detailGrid}>
             <View style={styles.detailItem}>
-              <Text style={styles.detailLabel}>SERVICE PILLAR</Text>
-              <Text style={styles.detailValue}>{job.servicePillar}</Text>
+              <Text style={styles.detailLabel}>Service pillar</Text>
+              <MetaChip
+                icon={PILLAR_ICON[job.servicePillar] ?? 'tool'}
+                label={job.servicePillar}
+                tint={colors.brand}
+              />
             </View>
             <View style={styles.detailItem}>
-              <Text style={styles.detailLabel}>FACILITY TYPE</Text>
-              <Text style={styles.detailValue}>{job.facilityType}</Text>
+              <Text style={styles.detailLabel}>Facility type</Text>
+              <MetaChip
+                icon={FACILITY_ICON[job.facilityType] ?? 'home'}
+                label={job.facilityType}
+              />
             </View>
           </View>
 
           <View style={styles.locationBox}>
-            <Text style={styles.locationLabel}>LOCATION</Text>
-            <Text style={styles.locationValue}>
-              {job.location?.latitude?.toFixed(4)}, {job.location?.longitude?.toFixed(4)}
-            </Text>
+            <Icon name="navigation" size={16} color={colors.info} />
+            <View style={styles.locationTextCol}>
+              <Text style={styles.locationLabel}>Location</Text>
+              <Text style={styles.locationValue}>
+                {job.location
+                  ? `${job.location.latitude.toFixed(4)}, ${job.location.longitude.toFixed(4)}`
+                  : 'Coordinates unavailable'}
+              </Text>
+            </View>
           </View>
 
-          {/* Action Buttons */}
           <View style={styles.buttonGroup}>
-            <TouchableOpacity
-              style={[styles.btn, styles.btnAccept]}
+            <Button
+              title="Accept Job"
               onPress={handleAccept}
+              isLoading={loadingAction === 'accept'}
               disabled={loadingAction !== null}
-              activeOpacity={0.8}
-            >
-              {loadingAction === 'accept' ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <Text style={styles.btnAcceptText}>ACCEPT JOB</Text>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.btn, styles.btnReject]}
+              variant="primary"
+              size="large"
+            />
+            <Button
+              title="Decline"
               onPress={handleReject}
+              isLoading={loadingAction === 'reject'}
               disabled={loadingAction !== null}
-              activeOpacity={0.8}
-            >
-              {loadingAction === 'reject' ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <Text style={styles.btnRejectText}>DECLINE</Text>
-              )}
-            </TouchableOpacity>
+              variant="danger"
+              size="large"
+            />
           </View>
         </View>
       </View>
@@ -131,126 +143,111 @@ export const NewJobAlertModal: React.FC<NewJobAlertModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: '#1c2d40',
-    justifyContent: 'center',
-    padding: 20,
+    backgroundColor: colors.overlay,
+    justifyContent: 'flex-end',
   },
   card: {
-    backgroundColor: '#2b435f',
-    borderRadius: 24,
-    padding: 24,
-    borderWidth: 2,
-    borderColor: '#f38808',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.xxl + 4,
+    borderTopRightRadius: radius.xxl + 4,
+    paddingHorizontal: layout.screenPadding,
+    paddingTop: spacing.md,
+    ...elevation.e3,
   },
+  handle: {
+    width: 40,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: colors.borderStrong,
+    alignSelf: 'center',
+    marginBottom: spacing.xl,
+  },
+
+  // ── Badges ──
   badgeRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    marginBottom: spacing.lg,
   },
   alertBadge: {
-    backgroundColor: 'rgba(243, 136, 8, 0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#f38808',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + 2,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: radius.pill,
+    backgroundColor: colors.brand,
   },
   alertBadgeText: {
-    color: '#f38808',
+    ...typography.caption,
     fontWeight: '800',
-    fontSize: 13,
-    letterSpacing: 0.5,
+    color: colors.white,
+  },
+  distanceGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + 2,
   },
   distanceText: {
-    color: '#81b1b3',
-    fontWeight: '700',
-    fontSize: 14,
+    ...typography.caption,
+    fontWeight: '600',
+    color: colors.textSecondary,
   },
+
+  // ── Content ──
   title: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#ffffff',
-    marginBottom: 10,
+    ...typography.h1,
+    color: colors.text,
   },
   description: {
-    fontSize: 15,
-    color: 'rgba(255, 255, 255, 0.8)',
-    lineHeight: 22,
-    marginBottom: 20,
+    ...typography.body,
+    color: colors.textSecondary,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xl,
   },
   detailGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 16,
+    gap: spacing.lg,
+    marginBottom: spacing.lg,
   },
   detailItem: {
     flex: 1,
+    gap: spacing.sm,
   },
   detailLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#81b1b3',
-    marginBottom: 4,
-    letterSpacing: 0.8,
+    ...typography.overline,
+    color: colors.textMuted,
   },
-  detailValue: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#ffffff',
-  },
+
+  // ── Location ──
   locationBox: {
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.bg,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  locationTextCol: {
+    flex: 1,
+    minWidth: 0,
   },
   locationLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#81b1b3',
-    marginBottom: 4,
-    letterSpacing: 0.8,
+    ...typography.overline,
+    color: colors.textMuted,
   },
   locationValue: {
-    fontSize: 14,
-    color: '#ffffff',
-    fontWeight: '600',
+    ...typography.bodyStrong,
+    color: colors.text,
+    marginTop: 2,
   },
+
   buttonGroup: {
-    gap: 12,
-  },
-  btn: {
-    height: 56,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  btnAccept: {
-    backgroundColor: '#f38808',
-  },
-  btnAcceptText: {
-    color: '#ffffff',
-    fontSize: 17,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  btnReject: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  btnRejectText: {
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: 16,
-    fontWeight: '700',
+    gap: spacing.md,
+    marginTop: spacing.xxl,
   },
 });

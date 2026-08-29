@@ -1,5 +1,8 @@
 import React from 'react';
 import { View, StyleSheet, ViewStyle, StyleProp } from 'react-native';
+import { colors } from '../../theme/colors';
+import { radius, spacing } from '../../theme/layout';
+import { elevation } from '../../theme/elevation';
 
 export interface CardProps {
   children: React.ReactNode;
@@ -13,8 +16,8 @@ export const Card: React.FC<CardProps> = ({
   children,
   style,
   variant = 'elevated',
-  borderRadius = 28,
-  padding = 20,
+  borderRadius = radius.xl,
+  padding = spacing.xl,
 }) => {
   return (
     <View
@@ -33,21 +36,18 @@ export const Card: React.FC<CardProps> = ({
 
 const styles = StyleSheet.create({
   baseCard: {
-    backgroundColor: '#1E293B',
+    backgroundColor: colors.surface,
     overflow: 'hidden',
   },
   elevatedCard: {
     borderWidth: 1,
-    borderColor: '#334155',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 6,
+    borderColor: colors.border,
+    ...elevation.e2,
   },
   borderedCard: {
     borderWidth: 1.5,
-    borderColor: '#334155',
-    backgroundColor: '#0F172A',
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
+    ...elevation.e0,
   },
 });

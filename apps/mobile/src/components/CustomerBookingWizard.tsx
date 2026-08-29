@@ -2,26 +2,63 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
-  TextInput,
+  Pressable,
   StyleSheet,
   ScrollView,
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ServicePillar, FacilityType, ServiceRequest } from '@metro-fix/core-types';
 import { apiService } from '../services/api';
 import { getCurrentWorkerLocation } from '../services/location';
+
+import { Button } from './ui/Button';
+import { Input } from './ui/Input';
+import { Icon, type FeatherIconName } from './ui/Icon';
+import { ScreenHeader } from './ui/ScreenHeader';
+import { colors } from '../theme/colors';
+import { typography } from '../theme/typography';
+import { spacing, radius, layout, tabBarClearance } from '../theme/layout';
 
 interface CustomerBookingWizardProps {
   customerId: string;
   onBookingComplete: (job: ServiceRequest) => void;
 }
 
+const PILLAR_OPTIONS: {
+  value: ServicePillar;
+  icon: FeatherIconName;
+  title: string;
+  desc: string;
+}[] = [
+  {
+    value: ServicePillar.HARD,
+    icon: 'tool',
+    title: 'HARD FM',
+    desc: 'HVAC, electrical, plumbing, mechanical & structural repairs',
+  },
+  {
+    value: ServicePillar.SOFT,
+    icon: 'droplet',
+    title: 'SOFT FM',
+    desc: 'Deep cleaning, sanitation, reception, groundskeeping & security',
+  },
+  {
+    value: ServicePillar.STRATEGIC,
+    icon: 'shield',
+    title: 'STRATEGIC FM',
+    desc: 'Energy audits, compliance inspections & vendor governance',
+  },
+];
+
+const TOTAL_STEPS = 3;
+
 export const CustomerBookingWizard: React.FC<CustomerBookingWizardProps> = ({
   customerId,
   onBookingComplete,
 }) => {
+  const insets = useSafeAreaInsets();
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
   // Form State
@@ -107,174 +144,175 @@ export const CustomerBookingWizard: React.FC<CustomerBookingWizardProps> = ({
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[styles.content, { paddingBottom: tabBarClearance(insets) }]}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+    >
       {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.kicker}>METRO-FIX CUSTOMER PORTAL</Text>
-        <Text style={styles.title}>Book Maintenance Service</Text>
-      </View>
+      <ScreenHeader
+        eyebrow="Metro-Fix customer portal"
+        title="Book Maintenance Service"
+      />
 
       {/* Multi-step Progress Indicator */}
       <View style={styles.stepIndicatorRow}>
-        <View style={[styles.stepDot, step >= 1 && styles.stepDotActive]}>
-          <Text style={styles.stepDotNum}>1</Text>
-        </View>
-        <View style={[styles.stepLine, step >= 2 && styles.stepLineActive]} />
-        <View style={[styles.stepDot, step >= 2 && styles.stepDotActive]}>
-          <Text style={styles.stepDotNum}>2</Text>
-        </View>
-        <View style={[styles.stepLine, step >= 3 && styles.stepLineActive]} />
-        <View style={[styles.stepDot, step >= 3 && styles.stepDotActive]}>
-          <Text style={styles.stepDotNum}>3</Text>
-        </View>
+        {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((n) => (
+          <React.Fragment key={n}>
+            {n > 1 && <View style={[styles.stepLine, step >= n && styles.stepLineActive]} />}
+            <View style={[styles.stepDot, step >= n && styles.stepDotActive]}>
+              {step > n ? (
+                <Icon name="check" size={14} color={colors.white} />
+              ) : (
+                <Text style={[styles.stepDotNum, step >= n && styles.stepDotNumActive]}>{n}</Text>
+              )}
+            </View>
+          </React.Fragment>
+        ))}
       </View>
 
       {/* STEP 1: SERVICE CATEGORY PILLAR */}
       {step === 1 && (
         <View style={styles.stepCard}>
-          <Text style={styles.stepTitle}>Step 1: Select Service Category</Text>
+          <Text style={styles.stepTitle}>Select Service Category</Text>
           <Text style={styles.stepSubtitle}>
             Choose the FM pillar matching your facility maintenance requirement.
           </Text>
 
-          <TouchableOpacity
-            style={[
-              styles.pillarCard,
-              servicePillar === ServicePillar.HARD && styles.pillarCardSelected,
-            ]}
-            onPress={() => setServicePillar(ServicePillar.HARD)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.pillarIcon}>⚡</Text>
-            <View style={styles.pillarInfo}>
-              <Text style={styles.pillarTitle}>HARD FM</Text>
-              <Text style={styles.pillarDesc}>
-                HVAC, electrical, plumbing, mechanical & structural repairs
-              </Text>
-            </View>
-          </TouchableOpacity>
+          <View style={styles.pillarList}>
+            {PILLAR_OPTIONS.map((option) => {
+              const selected = servicePillar === option.value;
+              return (
+                <Pressable
+                  key={option.value}
+                  style={({ pressed }) => [
+                    styles.pillarCard,
+                    selected && styles.pillarCardSelected,
+                    pressed && !selected && styles.pillarCardPressed,
+                  ]}
+                  onPress={() => setServicePillar(option.value)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
+                >
+                  <View style={[styles.pillarIconBox, selected && styles.pillarIconBoxSelected]}>
+                    <Icon
+                      name={option.icon}
+                      size={20}
+                      color={selected ? colors.white : colors.textSecondary}
+                    />
+                  </View>
+                  <View style={styles.pillarInfo}>
+                    <Text style={styles.pillarTitle}>{option.title}</Text>
+                    <Text style={styles.pillarDesc}>{option.desc}</Text>
+                  </View>
+                  {selected ? <Icon name="check-circle" size={19} color={colors.brand} /> : null}
+                </Pressable>
+              );
+            })}
+          </View>
 
-          <TouchableOpacity
-            style={[
-              styles.pillarCard,
-              servicePillar === ServicePillar.SOFT && styles.pillarCardSelected,
-            ]}
-            onPress={() => setServicePillar(ServicePillar.SOFT)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.pillarIcon}>🧹</Text>
-            <View style={styles.pillarInfo}>
-              <Text style={styles.pillarTitle}>SOFT FM</Text>
-              <Text style={styles.pillarDesc}>
-                Deep cleaning, sanitation, reception, groundskeeping & security
-              </Text>
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.pillarCard,
-              servicePillar === ServicePillar.STRATEGIC && styles.pillarCardSelected,
-            ]}
-            onPress={() => setServicePillar(ServicePillar.STRATEGIC)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.pillarIcon}>📊</Text>
-            <View style={styles.pillarInfo}>
-              <Text style={styles.pillarTitle}>STRATEGIC FM</Text>
-              <Text style={styles.pillarDesc}>
-                Energy audits, compliance inspections & vendor governance
-              </Text>
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.nextBtn} onPress={handleNextStep1}>
-            <Text style={styles.nextBtnText}>CONTINUE TO LOCATION ➔</Text>
-          </TouchableOpacity>
+          <Button
+            title="Continue to Location"
+            onPress={handleNextStep1}
+            variant="primary"
+            size="large"
+            style={styles.primaryAction}
+          />
         </View>
       )}
 
       {/* STEP 2: LOCATION & FACILITY */}
       {step === 2 && (
         <View style={styles.stepCard}>
-          <Text style={styles.stepTitle}>Step 2: Location & Facility</Text>
+          <Text style={styles.stepTitle}>Location & Facility</Text>
           <Text style={styles.stepSubtitle}>
             Specify facility type and confirm GPS site location coordinates.
           </Text>
 
-          <Text style={styles.inputLabel}>FACILITY TYPE</Text>
+          <Text style={styles.inputLabel}>Facility type</Text>
           <View style={styles.facilityRow}>
             {[
               FacilityType.RESIDENTIAL,
               FacilityType.COMMERCIAL,
               FacilityType.INDUSTRIAL,
-            ].map((type) => (
-              <TouchableOpacity
-                key={type}
-                style={[
-                  styles.facilityChip,
-                  facilityType === type && styles.facilityChipSelected,
-                ]}
-                onPress={() => setFacilityType(type)}
-              >
-                <Text
-                  style={[
-                    styles.facilityChipText,
-                    facilityType === type && styles.facilityChipTextSelected,
+            ].map((type) => {
+              const selected = facilityType === type;
+              return (
+                <Pressable
+                  key={type}
+                  style={({ pressed }) => [
+                    styles.facilityChip,
+                    selected && styles.facilityChipSelected,
+                    pressed && !selected && styles.facilityChipPressed,
                   ]}
+                  onPress={() => setFacilityType(type)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
                 >
-                  {type}
-                </Text>
-              </TouchableOpacity>
-            ))}
+                  <Text
+                    style={[
+                      styles.facilityChipText,
+                      selected && styles.facilityChipTextSelected,
+                    ]}
+                  >
+                    {type}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
 
           <View style={styles.gpsBox}>
             <View style={styles.gpsHeader}>
-              <Text style={styles.inputLabel}>SITE GPS COORDINATES</Text>
-              <TouchableOpacity onPress={fetchGpsLocation} disabled={loadingGps}>
+              <Text style={styles.inputLabel}>Site GPS coordinates</Text>
+              <Pressable
+                onPress={fetchGpsLocation}
+                disabled={loadingGps}
+                style={styles.gpsRefreshBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Detect GPS"
+              >
                 {loadingGps ? (
-                  <ActivityIndicator size="small" color="#f38808" />
+                  <ActivityIndicator size="small" color={colors.brand} />
                 ) : (
-                  <Text style={styles.gpsRefreshText}>📍 Detect GPS</Text>
+                  <>
+                    <Icon name="crosshair" size={14} color={colors.brand} />
+                    <Text style={styles.gpsRefreshText}>Detect GPS</Text>
+                  </>
                 )}
-              </TouchableOpacity>
+              </Pressable>
             </View>
 
             <View style={styles.coordInputsRow}>
-              <View style={styles.coordInputCol}>
-                <Text style={styles.coordLabel}>Latitude</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={latitude}
-                  onChangeText={setLatitude}
-                  keyboardType="numeric"
-                  placeholder="37.7749"
-                  placeholderTextColor="#81b1b3"
-                />
-              </View>
-              <View style={styles.coordInputCol}>
-                <Text style={styles.coordLabel}>Longitude</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={longitude}
-                  onChangeText={setLongitude}
-                  keyboardType="numeric"
-                  placeholder="-122.4194"
-                  placeholderTextColor="#81b1b3"
-                />
-              </View>
+              <Input
+                label="Latitude"
+                containerStyle={styles.coordInputCol}
+                value={latitude}
+                onChangeText={setLatitude}
+                keyboardType="numeric"
+                placeholder="37.7749"
+              />
+              <Input
+                label="Longitude"
+                containerStyle={styles.coordInputCol}
+                value={longitude}
+                onChangeText={setLongitude}
+                keyboardType="numeric"
+                placeholder="-122.4194"
+              />
             </View>
           </View>
 
           <View style={styles.navRow}>
-            <TouchableOpacity style={styles.backBtn} onPress={() => setStep(1)}>
-              <Text style={styles.backBtnText}>⬅ BACK</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={[styles.nextBtn, { flex: 1 }]} onPress={handleNextStep2}>
-              <Text style={styles.nextBtnText}>CONTINUE TO DETAILS ➔</Text>
-            </TouchableOpacity>
+            <Button title="Back" onPress={() => setStep(1)} variant="secondary" size="medium" />
+            <Button
+              title="Continue to Details"
+              onPress={handleNextStep2}
+              variant="primary"
+              size="medium"
+              style={styles.navPrimary}
+            />
           </View>
         </View>
       )}
@@ -282,70 +320,69 @@ export const CustomerBookingWizard: React.FC<CustomerBookingWizardProps> = ({
       {/* STEP 3: DETAILS & URGENCY */}
       {step === 3 && (
         <View style={styles.stepCard}>
-          <Text style={styles.stepTitle}>Step 3: Job Details & Urgency</Text>
+          <Text style={styles.stepTitle}>Job Details & Urgency</Text>
           <Text style={styles.stepSubtitle}>
             Describe the issue to help Customer Care dispatch the right technician.
           </Text>
 
-          <Text style={styles.inputLabel}>ISSUE TITLE</Text>
-          <TextInput
-            style={styles.textInput}
-            value={title}
-            onChangeText={setTitle}
-            placeholder="e.g. Roof HVAC Unit Pressure Fault"
-            placeholderTextColor="#81b1b3"
-          />
+          <View style={styles.fields}>
+            <Input
+              label="Issue title"
+              value={title}
+              onChangeText={setTitle}
+              placeholder="e.g. Roof HVAC Unit Pressure Fault"
+            />
 
-          <Text style={[styles.inputLabel, { marginTop: 14 }]}>DETAILED DESCRIPTION</Text>
-          <TextInput
-            style={[styles.textInput, styles.textArea]}
-            value={description}
-            onChangeText={setDescription}
-            multiline
-            numberOfLines={4}
-            placeholder="Describe symptoms, noise, or scope of maintenance needed..."
-            placeholderTextColor="#81b1b3"
-          />
+            <Input
+              label="Detailed description"
+              value={description}
+              onChangeText={setDescription}
+              multiline
+              numberOfLines={4}
+              placeholder="Describe symptoms, noise, or scope of maintenance needed…"
+            />
+          </View>
 
-          <Text style={[styles.inputLabel, { marginTop: 14 }]}>DISPATCH URGENCY LEVEL</Text>
+          <Text style={[styles.inputLabel, styles.urgencyLabel]}>Dispatch urgency level</Text>
           <View style={styles.urgencyGrid}>
-            {(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const).map((level) => (
-              <TouchableOpacity
-                key={level}
-                style={[
-                  styles.urgencyChip,
-                  urgency === level && styles.urgencyChipSelected,
-                ]}
-                onPress={() => setUrgency(level)}
-              >
-                <Text
-                  style={[
-                    styles.urgencyChipText,
-                    urgency === level && styles.urgencyChipTextSelected,
+            {(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const).map((level) => {
+              const selected = urgency === level;
+              return (
+                <Pressable
+                  key={level}
+                  style={({ pressed }) => [
+                    styles.urgencyChip,
+                    selected && styles.urgencyChipSelected,
+                    pressed && !selected && styles.facilityChipPressed,
                   ]}
+                  onPress={() => setUrgency(level)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
                 >
-                  {level}
-                </Text>
-              </TouchableOpacity>
-            ))}
+                  <Text
+                    style={[
+                      styles.urgencyChipText,
+                      selected && styles.urgencyChipTextSelected,
+                    ]}
+                  >
+                    {level}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
 
           <View style={styles.navRow}>
-            <TouchableOpacity style={styles.backBtn} onPress={() => setStep(2)}>
-              <Text style={styles.backBtnText}>⬅ BACK</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.nextBtn, styles.submitBtn, { flex: 1 }]}
+            <Button title="Back" onPress={() => setStep(2)} variant="secondary" size="medium" />
+            <Button
+              title="Submit Request"
               onPress={handleSubmit}
+              isLoading={isSubmitting}
               disabled={isSubmitting}
-            >
-              {isSubmitting ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <Text style={styles.nextBtnText}>🚀 SUBMIT SERVICE REQUEST</Text>
-              )}
-            </TouchableOpacity>
+              variant="primary"
+              size="medium"
+              style={styles.navPrimary}
+            />
           </View>
         </View>
       )}
@@ -356,246 +393,238 @@ export const CustomerBookingWizard: React.FC<CustomerBookingWizardProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1c2d40',
+    backgroundColor: colors.bg,
   },
   content: {
-    padding: 18,
-    paddingBottom: 40,
+    paddingHorizontal: layout.screenPadding,
   },
-  header: {
-    marginBottom: 20,
-  },
-  kicker: {
-    color: '#81b1b3',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
-  title: {
-    color: '#ffffff',
-    fontSize: 22,
-    fontWeight: '800',
-  },
+
+  // ── Step indicator ──
   stepIndicatorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
+    marginBottom: spacing.xxl,
   },
   stepDot: {
     width: 32,
     height: 32,
-    borderRadius: 16,
-    backgroundColor: '#2b435f',
-    justifyContent: 'center',
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
   },
   stepDotActive: {
-    backgroundColor: '#f38808',
-    borderColor: '#f38808',
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
   },
   stepDotNum: {
-    color: '#ffffff',
+    ...typography.caption,
     fontWeight: '800',
-    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  stepDotNumActive: {
+    color: colors.white,
   },
   stepLine: {
-    width: 40,
-    height: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    marginHorizontal: 6,
+    flex: 1,
+    height: 2,
+    backgroundColor: colors.border,
   },
   stepLineActive: {
-    backgroundColor: '#f38808',
+    backgroundColor: colors.brand,
   },
+
+  // ── Step card ──
   stepCard: {
-    backgroundColor: '#2b435f',
-    borderRadius: 22,
-    padding: 20,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xxl,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: colors.border,
+    padding: spacing.xl,
   },
   stepTitle: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '800',
-    marginBottom: 4,
+    ...typography.h1,
+    color: colors.text,
   },
   stepSubtitle: {
-    color: '#81b1b3',
-    fontSize: 13,
-    lineHeight: 18,
-    marginBottom: 20,
+    ...typography.body,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+    marginBottom: spacing.xl,
+  },
+  primaryAction: {
+    marginTop: spacing.xl,
+  },
+
+  // ── Pillar options ──
+  pillarList: {
+    gap: spacing.md,
   },
   pillarCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: 'transparent',
+    gap: spacing.lg,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.bg,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+  },
+  pillarCardPressed: {
+    backgroundColor: colors.surfaceRaised,
   },
   pillarCardSelected: {
-    borderColor: '#f38808',
-    backgroundColor: 'rgba(243, 136, 8, 0.12)',
+    borderColor: colors.brand,
+    backgroundColor: colors.brandSubtle,
   },
-  pillarIcon: {
-    fontSize: 26,
-    marginRight: 14,
+  pillarIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceRaised,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  pillarIconBoxSelected: {
+    backgroundColor: colors.brand,
   },
   pillarInfo: {
     flex: 1,
+    minWidth: 0,
   },
   pillarTitle: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '800',
-    marginBottom: 2,
+    ...typography.h3,
+    color: colors.text,
   },
   pillarDesc: {
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: 12,
-    lineHeight: 16,
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
   },
-  nextBtn: {
-    backgroundColor: '#f38808',
-    height: 54,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  submitBtn: {
-    backgroundColor: '#4aad83',
-  },
-  nextBtnText: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
+
+  // ── Fields ──
   inputLabel: {
-    color: '#81b1b3',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-    marginBottom: 8,
+    ...typography.label,
+    color: colors.textSecondary,
+    marginBottom: spacing.md,
+  },
+  fields: {
+    gap: spacing.lg,
   },
   facilityRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 20,
+    gap: spacing.sm,
+    marginBottom: spacing.xl,
   },
   facilityChip: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    paddingVertical: 12,
-    borderRadius: 12,
+    minHeight: layout.minTap,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.pill,
+    backgroundColor: colors.bg,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+  },
+  facilityChipPressed: {
+    backgroundColor: colors.surfaceRaised,
   },
   facilityChipSelected: {
-    backgroundColor: '#f38808',
-    borderColor: '#f38808',
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
   },
   facilityChipText: {
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: 12,
-    fontWeight: '800',
+    ...typography.caption,
+    fontWeight: '700',
+    color: colors.textSecondary,
   },
   facilityChipTextSelected: {
-    color: '#ffffff',
+    color: colors.white,
   },
+
+  // ── GPS ──
   gpsBox: {
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 16,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.bg,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   gpsHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  gpsRefreshBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + 2,
+    minHeight: 36,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.brandSubtle,
   },
   gpsRefreshText: {
-    color: '#f38808',
-    fontSize: 12,
-    fontWeight: '800',
+    ...typography.caption,
+    fontWeight: '700',
+    color: colors.brand,
   },
   coordInputsRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: spacing.md,
   },
   coordInputCol: {
     flex: 1,
   },
-  coordLabel: {
-    color: 'rgba(255, 255, 255, 0.6)',
-    fontSize: 11,
-    marginBottom: 4,
-  },
-  textInput: {
-    backgroundColor: '#1c2d40',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: '#ffffff',
-    fontSize: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
-  },
-  textArea: {
-    height: 90,
-    textAlignVertical: 'top',
-  },
-  navRow: {
-    flexDirection: 'row',
-    gap: 12,
-    alignItems: 'center',
-  },
-  backBtn: {
-    paddingHorizontal: 16,
-    height: 54,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  backBtnText: {
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontWeight: '800',
-    fontSize: 13,
+
+  // ── Urgency ──
+  urgencyLabel: {
+    marginTop: spacing.xl,
   },
   urgencyGrid: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 20,
+    flexWrap: 'wrap',
+    gap: spacing.sm,
   },
   urgencyChip: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    paddingVertical: 12,
-    borderRadius: 12,
+    flexGrow: 1,
+    flexBasis: '22%',
+    minHeight: layout.minTap,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.pill,
+    backgroundColor: colors.bg,
+    borderWidth: 1.5,
+    borderColor: colors.border,
   },
   urgencyChipSelected: {
-    backgroundColor: '#e53e3e',
-    borderColor: '#e53e3e',
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
   },
   urgencyChipText: {
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: 11,
-    fontWeight: '800',
+    ...typography.caption,
+    fontWeight: '700',
+    color: colors.textSecondary,
   },
   urgencyChipTextSelected: {
-    color: '#ffffff',
+    color: colors.white,
+  },
+
+  // ── Navigation ──
+  navRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginTop: spacing.xxl,
+  },
+  navPrimary: {
+    flex: 1,
   },
 });

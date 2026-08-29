@@ -1,8 +1,9 @@
 import React, { useState, useRef } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert,
-  TextInput, Image, ImageBackground, Modal, Dimensions,
+  View, Text, StyleSheet, ScrollView, Pressable, Alert,
+  Image, ImageBackground, Modal, Dimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import SignatureScreen from 'react-native-signature-canvas';
 import { ServiceRequest, JobStatus } from '@metro-fix/core-types';
@@ -10,6 +11,15 @@ import { ServiceRequest, JobStatus } from '@metro-fix/core-types';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { IconButton } from './ui/IconButton';
+import { Icon } from './ui/Icon';
+import { Input } from './ui/Input';
+import { StatusPill } from './ui/StatusPill';
+import { MetaChip } from './ui/MetaChip';
+import { colors } from '../theme/colors';
+import { typography } from '../theme/typography';
+import { spacing, radius, layout } from '../theme/layout';
+import { elevation } from '../theme/elevation';
+import { PILLAR_ICON, FACILITY_ICON } from '../theme/status';
 import { useJobDetail, useUpdateJobStatus, useSubmitQuote, useSubmitProof } from '../hooks/useJobs';
 import { startWorkerBackgroundTracking, stopWorkerBackgroundTracking } from '../services/location';
 import { openNativeNavigation } from '../services/linking';
@@ -23,39 +33,8 @@ export interface JobDetailProps {
   onJobUpdated?: (updatedJob: ServiceRequest) => void;
 }
 
-// --- Soft UI TextInput with orange focus border ---
-const SoftInput: React.FC<{
-  label: string; value: string; onChangeText: (t: string) => void;
-  placeholder?: string; keyboardType?: 'default' | 'numeric';
-  multiline?: boolean; numberOfLines?: number;
-}> = ({ label, value, onChangeText, placeholder, keyboardType, multiline, numberOfLines }) => {
-  const [focused, setFocused] = useState(false);
-  return (
-    <View style={{ marginTop: 10 }}>
-      <Text style={si.label}>{label}</Text>
-      <TextInput
-        style={[si.input, multiline && si.area, focused && si.inputFocused]}
-        placeholder={placeholder} placeholderTextColor="#64748B"
-        keyboardType={keyboardType || 'default'}
-        value={value} onChangeText={onChangeText}
-        multiline={multiline} numberOfLines={numberOfLines}
-        onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
-      />
-    </View>
-  );
-};
-const si = StyleSheet.create({
-  label: { color: '#CBD5E1', fontSize: 13, fontWeight: '700', marginBottom: 6 },
-  input: {
-    backgroundColor: '#0F172A', borderWidth: 1.5, borderColor: '#334155',
-    borderRadius: 999, paddingHorizontal: 20, paddingVertical: 14,
-    color: '#F8FAFC', fontSize: 15,
-  },
-  inputFocused: { borderColor: '#F97316' },
-  area: { borderRadius: 20, minHeight: 90, textAlignVertical: 'top', paddingTop: 14 },
-});
-
 export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId, onBack, onJobUpdated }) => {
+  const insets = useSafeAreaInsets();
   const { data: liveJob } = useJobDetail(initialJob.id);
   const currentJob = liveJob || initialJob;
 
@@ -73,14 +52,6 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
   const signatureRef = useRef<any>(null);
   const [signatureB64, setSignatureB64] = useState(currentJob.signature || '');
   const [photos, setPhotos] = useState<string[]>(currentJob.photos || []);
-
-  const statusColor = (s: JobStatus) => {
-    if (s === JobStatus.ON_ROUTE) return '#3B82F6';
-    if (s === JobStatus.INSPECTION) return '#8B5CF6';
-    if (s === JobStatus.IN_PROGRESS) return '#F97316';
-    if (s === JobStatus.COMPLETED) return '#10B981';
-    return '#64748B';
-  };
 
   const lifecycle = (s: JobStatus): { text: string; next: JobStatus } | null => {
     if (s === JobStatus.ASSIGNED) return { text: 'Start Travel', next: JobStatus.ON_ROUTE };
@@ -145,24 +116,36 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
 
   return (
     <View style={s.container}>
-      <ScrollView contentContainerStyle={s.scroll} bounces={false}>
+      <ScrollView
+        contentContainerStyle={[s.scroll, { paddingBottom: 96 + insets.bottom }]}
+        bounces={false}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Hero banner */}
         <ImageBackground
           source={{ uri: 'https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?w=800&auto=format&fit=crop&q=80' }}
           style={s.hero}
         >
-          <View style={s.heroOverlay}>
+          <View style={[s.heroOverlay, { paddingTop: spacing.md + insets.top }]}>
             <View style={s.navRow}>
-              <IconButton symbol="‹" onPress={onBack} backgroundColor="rgba(255,255,255,0.9)" color="#0F172A" size={44} />
-              <IconButton symbol="📍" onPress={() => {
-                if (!currentJob.location) return Alert.alert('No Coordinates');
-                openNativeNavigation({ latitude: currentJob.location.latitude, longitude: currentJob.location.longitude, label: currentJob.title });
-              }} backgroundColor="rgba(255,255,255,0.9)" color="#0F172A" size={44} />
+              <IconButton
+                onPress={onBack}
+                icon={<Icon name="chevron-left" size={22} color={colors.textInverse} />}
+                backgroundColor={colors.white}
+                size={44}
+              />
+              <IconButton
+                onPress={() => {
+                  if (!currentJob.location) return Alert.alert('No Coordinates');
+                  openNativeNavigation({ latitude: currentJob.location.latitude, longitude: currentJob.location.longitude, label: currentJob.title });
+                }}
+                icon={<Icon name="map-pin" size={19} color={colors.textInverse} />}
+                backgroundColor={colors.white}
+                size={44}
+              />
             </View>
-            <View style={{ marginBottom: 44 }}>
-              <View style={[s.badge, { backgroundColor: statusColor(currentJob.status) }]}>
-                <Text style={s.badgeText}>{currentJob.status}</Text>
-              </View>
+            <View style={s.heroFooter}>
+              <StatusPill status={currentJob.status} />
             </View>
           </View>
         </ImageBackground>
@@ -172,41 +155,66 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
           <View style={s.pill} />
           <View style={s.titleRow}>
             <Text style={s.ticketId}>TICKET #{currentJob.id.slice(-6).toUpperCase()}</Text>
-            <Text style={s.gps}>🛰️ {gpsStatus}</Text>
+            <View style={s.gpsRow}>
+              <Icon name="radio" size={13} color={colors.textSecondary} />
+              <Text style={s.gps}>{gpsStatus}</Text>
+            </View>
           </View>
           <Text style={s.jobTitle}>{currentJob.title}</Text>
 
-          <Card variant="elevated" borderRadius={24} padding={18} style={{ marginBottom: 16 }}>
-            <Text style={s.heading}>CUSTOMER & ADDRESS</Text>
-            <Text style={s.custName}>👤 {(currentJob as any).customerName || `Customer #${currentJob.customerId}`}</Text>
-            <Text style={s.loc}>📍 {(currentJob as any).address || (currentJob.location ? `${currentJob.location.latitude.toFixed(4)}, ${currentJob.location.longitude.toFixed(4)}` : 'Address Available')}</Text>
+          <Card variant="elevated" borderRadius={radius.xl} padding={spacing.lg + 2} style={s.cardGap}>
+            <Text style={s.heading}>Customer & address</Text>
+            <View style={s.infoLine}>
+              <Icon name="user" size={15} color={colors.textSecondary} />
+              <Text style={s.custName}>
+                {(currentJob as any).customerName || `Customer #${currentJob.customerId}`}
+              </Text>
+            </View>
+            <View style={s.infoLine}>
+              <Icon name="map-pin" size={15} color={colors.textMuted} />
+              <Text style={s.loc}>
+                {(currentJob as any).address || (currentJob.location ? `${currentJob.location.latitude.toFixed(4)}, ${currentJob.location.longitude.toFixed(4)}` : 'Address Available')}
+              </Text>
+            </View>
           </Card>
 
-          <Card variant="elevated" borderRadius={24} padding={18} style={{ marginBottom: 16 }}>
-            <Text style={s.heading}>SERVICE DESCRIPTION</Text>
+          <Card variant="elevated" borderRadius={radius.xl} padding={spacing.lg + 2} style={s.cardGap}>
+            <Text style={s.heading}>Service description</Text>
             <Text style={s.desc}>{currentJob.description}</Text>
             <View style={s.metaRow}>
-              <View style={s.chip}><Text style={s.chipText}>⚡ {currentJob.servicePillar}</Text></View>
-              <View style={s.chip}><Text style={s.chipText}>🏢 {currentJob.facilityType}</Text></View>
+              <MetaChip
+                icon={PILLAR_ICON[currentJob.servicePillar] ?? 'tool'}
+                label={currentJob.servicePillar}
+                tint={colors.brand}
+              />
+              <MetaChip
+                icon={FACILITY_ICON[currentJob.facilityType] ?? 'home'}
+                label={currentJob.facilityType}
+              />
             </View>
           </Card>
 
           {/* INSPECTION: Soft UI Quote Form */}
           {currentJob.status === JobStatus.INSPECTION && (
-            <Card variant="elevated" borderRadius={24} padding={20} style={{ marginBottom: 16 }}>
-              <Text style={s.formTitle}>📝 Inspection Quote</Text>
+            <Card variant="elevated" borderRadius={radius.xl} padding={spacing.xl} style={s.cardGap}>
+              <View style={s.formHeader}>
+                <Icon name="edit-3" size={17} color={colors.brand} />
+                <Text style={s.formTitle}>Inspection Quote</Text>
+              </View>
               <Text style={s.formDesc}>Provide cost estimate and labor hours</Text>
-              <SoftInput label="Estimated Cost ($)" value={quoteCost} onChangeText={setQuoteCost} placeholder="e.g. 450.00" keyboardType="numeric" />
-              <SoftInput label="Estimated Hours" value={quoteHours} onChangeText={setQuoteHours} placeholder="e.g. 2.5" keyboardType="numeric" />
-              <SoftInput label="Notes" value={quoteNotes} onChangeText={setQuoteNotes} placeholder="Describe findings…" multiline numberOfLines={3} />
-              <Button title="SUBMIT QUOTE → IN PROGRESS" onPress={handleQuote} isLoading={submitQuote.isPending} variant="primary" size="large" style={{ marginTop: 16 }} />
+              <View style={s.formFields}>
+                <Input label="Estimated Cost ($)" value={quoteCost} onChangeText={setQuoteCost} placeholder="e.g. 450.00" keyboardType="numeric" />
+                <Input label="Estimated Hours" value={quoteHours} onChangeText={setQuoteHours} placeholder="e.g. 2.5" keyboardType="numeric" />
+                <Input label="Notes" value={quoteNotes} onChangeText={setQuoteNotes} placeholder="Describe findings…" multiline numberOfLines={3} />
+              </View>
+              <Button title="SUBMIT QUOTE → IN PROGRESS" onPress={handleQuote} isLoading={submitQuote.isPending} variant="primary" size="large" style={s.formSubmit} />
             </Card>
           )}
         </View>
       </ScrollView>
 
       {/* Bottom CTA */}
-      <View style={s.bottomBar}>
+      <View style={[s.bottomBar, { bottom: layout.tabBarInset + insets.bottom }]}>
         {lc && (
           <Button title={`${lc.text} →`} onPress={handleLifecycle} isLoading={updateStatus.isPending} variant="primary" size="large" />
         )}
@@ -214,39 +222,51 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
           <Button title="Complete Job →" onPress={() => setProofModalVisible(true)} variant="primary" size="large" />
         )}
         {currentJob.status === JobStatus.COMPLETED && (
-          <Button title="✓ Ticket Completed" onPress={onBack} variant="secondary" size="large" />
+          <Button title="Ticket Completed" onPress={onBack} variant="secondary" size="large" />
         )}
       </View>
 
       {/* Proof of Work Bottom-Sheet Modal */}
       <Modal visible={proofModalVisible} animationType="slide" transparent>
         <View style={m.backdrop}>
-          <View style={m.sheet}>
+          <View style={[m.sheet, { paddingBottom: spacing.xxl + insets.bottom }]}>
             <View style={m.handle} />
-            <Text style={m.title}>📷 Work Completion Proof</Text>
+            <View style={m.sectionHeader}>
+              <Icon name="camera" size={17} color={colors.brand} />
+              <Text style={m.title}>Work Completion Proof</Text>
+            </View>
             <Text style={m.subtitle}>Capture photos and collect customer signature</Text>
 
             {/* Camera Button */}
-            <TouchableOpacity style={m.camBtn} onPress={handleTakePhoto} activeOpacity={0.85}>
-              <Text style={m.camBtnText}>📸 CAPTURE PHOTO</Text>
-            </TouchableOpacity>
+            <Pressable
+              style={({ pressed }) => [m.camBtn, pressed && m.camBtnPressed]}
+              onPress={handleTakePhoto}
+              accessibilityRole="button"
+              accessibilityLabel="Capture photo"
+            >
+              <Icon name="camera" size={17} color={colors.text} />
+              <Text style={m.camBtnText}>CAPTURE PHOTO</Text>
+            </Pressable>
 
             {photos.length > 0 && (
-              <ScrollView horizontal style={{ marginVertical: 10 }}>
+              <ScrollView horizontal style={m.thumbRow} showsHorizontalScrollIndicator={false}>
                 {photos.map((uri, i) => <Image key={i} source={{ uri }} style={m.thumb} />)}
               </ScrollView>
             )}
 
-            <Text style={[m.title, { marginTop: 16 }]}>✍️ Customer Signature</Text>
+            <View style={[m.sectionHeader, m.sectionHeaderSpaced]}>
+              <Icon name="edit-3" size={17} color={colors.brand} />
+              <Text style={m.title}>Customer Signature</Text>
+            </View>
             <View style={m.sigBox}>
               <SignatureScreen
                 ref={signatureRef}
                 onOK={(sig: string) => setSignatureB64(sig)}
-                webStyle={`.m-signature-pad{box-shadow:none;border:none;background-color:#0F172A}.m-signature-pad--body{border:none}.m-signature-pad--footer{display:none}`}
+                webStyle={`.m-signature-pad{box-shadow:none;border:none;background-color:${colors.bg}}.m-signature-pad--body{border:none}.m-signature-pad--footer{display:none}`}
               />
             </View>
 
-            <View style={{ gap: 10, marginTop: 16 }}>
+            <View style={m.modalActions}>
               <Button title="SUBMIT PROOF → COMPLETE" onPress={handleProofSubmit} isLoading={submitProof.isPending} variant="primary" size="large" />
               <Button title="Cancel" onPress={() => setProofModalVisible(false)} variant="outline" size="medium" />
             </View>
@@ -258,39 +278,115 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
 };
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0F172A' },
-  scroll: { paddingBottom: 110 },
+  container: { flex: 1, backgroundColor: colors.bg },
+  scroll: {},
   hero: { height: 260, width: '100%' },
-  heroOverlay: { flex: 1, backgroundColor: 'rgba(15,23,42,0.35)', paddingHorizontal: 20, paddingTop: 16, justifyContent: 'space-between' },
+  heroOverlay: {
+    flex: 1,
+    backgroundColor: colors.scrim,
+    paddingHorizontal: layout.screenPadding,
+    justifyContent: 'space-between',
+  },
   navRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  badge: { alignSelf: 'flex-start', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 999 },
-  badgeText: { color: '#FFF', fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
-  sheet: { marginTop: -36, borderTopLeftRadius: 32, borderTopRightRadius: 32, backgroundColor: '#0F172A', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 24, minHeight: 500 },
-  pill: { width: 40, height: 5, borderRadius: 3, backgroundColor: '#334155', alignSelf: 'center', marginBottom: 16 },
-  titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  ticketId: { color: '#F97316', fontSize: 12, fontWeight: '800', letterSpacing: 0.8 },
-  gps: { color: '#94A3B8', fontSize: 12, fontWeight: '600' },
-  jobTitle: { color: '#F8FAFC', fontSize: 24, fontWeight: '900', marginBottom: 20, lineHeight: 30 },
-  heading: { color: '#94A3B8', fontSize: 11, fontWeight: '800', letterSpacing: 0.8, marginBottom: 8 },
-  custName: { color: '#F8FAFC', fontSize: 16, fontWeight: '700', marginBottom: 6 },
-  loc: { color: '#CBD5E1', fontSize: 14, fontWeight: '500' },
-  desc: { color: '#E2E8F0', fontSize: 15, lineHeight: 22, marginBottom: 14 },
-  metaRow: { flexDirection: 'row', gap: 10 },
-  chip: { backgroundColor: '#334155', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
-  chipText: { color: '#F8FAFC', fontSize: 12, fontWeight: '700' },
-  formTitle: { color: '#F8FAFC', fontSize: 17, fontWeight: '800', marginBottom: 4 },
-  formDesc: { color: '#94A3B8', fontSize: 13, marginBottom: 6 },
-  bottomBar: { position: 'absolute', bottom: 24, left: 20, right: 20, zIndex: 999 },
+  heroFooter: { marginBottom: spacing.huge + spacing.xs },
+
+  sheet: {
+    marginTop: -36,
+    borderTopLeftRadius: radius.xxl + 4,
+    borderTopRightRadius: radius.xxl + 4,
+    backgroundColor: colors.bg,
+    paddingHorizontal: layout.screenPadding,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xxl,
+    minHeight: 500,
+  },
+  pill: {
+    width: 40,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: colors.border,
+    alignSelf: 'center',
+    marginBottom: spacing.lg,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  ticketId: { ...typography.overline, color: colors.brand },
+  gpsRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs + 2 },
+  gps: { ...typography.caption, fontWeight: '600', color: colors.textSecondary },
+  jobTitle: { ...typography.display, color: colors.text, marginBottom: spacing.xl },
+
+  cardGap: { marginBottom: spacing.lg },
+  heading: { ...typography.overline, color: colors.textSecondary, marginBottom: spacing.md },
+  infoLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
+  custName: { ...typography.h3, color: colors.text, flex: 1 },
+  loc: { ...typography.body, color: colors.textSecondary, flex: 1 },
+  desc: { ...typography.body, color: colors.text, marginBottom: spacing.lg },
+  metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+
+  formHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  formTitle: { ...typography.h2, color: colors.text },
+  formDesc: { ...typography.caption, color: colors.textSecondary, marginTop: spacing.xs },
+  formFields: { gap: spacing.lg, marginTop: spacing.lg },
+  formSubmit: { marginTop: spacing.xl },
+
+  bottomBar: {
+    position: 'absolute',
+    left: layout.screenPadding,
+    right: layout.screenPadding,
+    zIndex: 999,
+  },
 });
 
 const m = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-  sheet: { backgroundColor: '#1E293B', borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, paddingBottom: 40, maxHeight: SCREEN_H * 0.85 },
-  handle: { width: 40, height: 5, borderRadius: 3, backgroundColor: '#475569', alignSelf: 'center', marginBottom: 20 },
-  title: { color: '#F8FAFC', fontSize: 17, fontWeight: '800', marginBottom: 4 },
-  subtitle: { color: '#94A3B8', fontSize: 13, marginBottom: 16 },
-  camBtn: { backgroundColor: '#334155', borderRadius: 999, paddingVertical: 14, alignItems: 'center', marginBottom: 8 },
-  camBtnText: { color: '#F8FAFC', fontWeight: '800', fontSize: 14 },
-  thumb: { width: 72, height: 72, borderRadius: 14, marginRight: 10 },
-  sigBox: { height: 180, borderRadius: 20, overflow: 'hidden', borderWidth: 1.5, borderColor: '#334155', marginVertical: 10 },
+  backdrop: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
+  sheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.xxl + 4,
+    borderTopRightRadius: radius.xxl + 4,
+    padding: spacing.xxl,
+    maxHeight: SCREEN_H * 0.85,
+    ...elevation.e3,
+  },
+  handle: {
+    width: 40,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: colors.borderStrong,
+    alignSelf: 'center',
+    marginBottom: spacing.xl,
+  },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  sectionHeaderSpaced: { marginTop: spacing.lg },
+  title: { ...typography.h2, color: colors.text },
+  subtitle: { ...typography.caption, color: colors.textSecondary, marginTop: spacing.xs, marginBottom: spacing.lg },
+  camBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.pill,
+    minHeight: layout.minTap,
+    paddingVertical: spacing.md,
+  },
+  camBtnPressed: { backgroundColor: colors.border },
+  camBtnText: { ...typography.label, fontWeight: '800', color: colors.text },
+  thumbRow: { marginVertical: spacing.md },
+  thumb: { width: 72, height: 72, borderRadius: radius.md, marginRight: spacing.sm },
+  sigBox: {
+    height: 180,
+    borderRadius: radius.xl,
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    marginVertical: spacing.md,
+  },
+  modalActions: { gap: spacing.md, marginTop: spacing.lg },
 });

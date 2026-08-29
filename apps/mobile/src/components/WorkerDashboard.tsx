@@ -4,15 +4,26 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  TouchableOpacity,
+  Pressable,
   RefreshControl,
-  ActivityIndicator,
 } from 'react-native';
-import { ServiceRequest, JobStatus } from '@metro-fix/core-types';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ServiceRequest } from '@metro-fix/core-types';
 
 import { Card } from './ui/Card';
 import { Button } from './ui/Button';
 import { IconButton } from './ui/IconButton';
+import { Icon } from './ui/Icon';
+import { ScreenHeader } from './ui/ScreenHeader';
+import { StatusPill } from './ui/StatusPill';
+import { MetaChip } from './ui/MetaChip';
+import { EmptyState } from './ui/EmptyState';
+import { ErrorState } from './ui/ErrorState';
+import { SkeletonCard } from './ui/SkeletonCard';
+import { colors } from '../theme/colors';
+import { typography } from '../theme/typography';
+import { spacing, radius, layout, tabBarClearance } from '../theme/layout';
+import { PILLAR_ICON, FACILITY_ICON } from '../theme/status';
 import { useWorkerJobs } from '../hooks/useJobs';
 
 export interface WorkerDashboardProps {
@@ -28,39 +39,25 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({
   onSelectJob,
   onSimulateDispatchAlert,
 }) => {
+  const insets = useSafeAreaInsets();
+
   // 1. Fetch real jobs data using useWorkerJobs React Query hook
   const { data: jobs = [], isLoading, isError, error, isRefetching, refetch } = useWorkerJobs();
-
-  const getStatusColor = (status: JobStatus) => {
-    switch (status) {
-      case JobStatus.ON_ROUTE:
-        return '#3B82F6';
-      case JobStatus.INSPECTION:
-        return '#8B5CF6';
-      case JobStatus.IN_PROGRESS:
-        return '#F97316';
-      case JobStatus.COMPLETED:
-        return '#10B981';
-      default:
-        return '#64748B';
-    }
-  };
 
   // 2. Render each assigned job inside our Soft UI Card primitive
   const renderJobItem = ({ item }: { item: ServiceRequest }) => {
     return (
-      <TouchableOpacity
+      <Pressable
         onPress={() => onSelectJob(item)}
-        activeOpacity={0.88}
-        style={styles.cardContainer}
+        style={({ pressed }) => [styles.cardContainer, pressed && styles.cardPressed]}
+        accessibilityRole="button"
+        accessibilityLabel={`Open job ${item.title}`}
       >
-        <Card variant="elevated" borderRadius={28} padding={20}>
+        <Card variant="elevated" borderRadius={radius.xl} padding={spacing.xl}>
           {/* Card Header: Job ID & Status Badge */}
           <View style={styles.cardHeader}>
             <Text style={styles.ticketId}>TICKET #{item.id.slice(-6).toUpperCase()}</Text>
-            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-              <Text style={styles.statusBadgeText}>{item.status}</Text>
-            </View>
+            <StatusPill status={item.status} size="small" />
           </View>
 
           {/* Job Title & Description */}
@@ -73,97 +70,105 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({
 
           {/* Service Pillar & Facility Type */}
           <View style={styles.metaRow}>
-            <View style={styles.metaBadge}>
-              <Text style={styles.metaBadgeText}>⚡ {item.servicePillar}</Text>
-            </View>
-            <View style={styles.metaBadge}>
-              <Text style={styles.metaBadgeText}>🏢 {item.facilityType}</Text>
-            </View>
+            <MetaChip
+              icon={PILLAR_ICON[item.servicePillar] ?? 'tool'}
+              label={item.servicePillar}
+              tint={colors.brand}
+            />
+            <MetaChip
+              icon={FACILITY_ICON[item.facilityType] ?? 'home'}
+              label={item.facilityType}
+            />
           </View>
 
           {/* Customer Name / Address / GPS */}
           <View style={styles.cardFooter}>
             <View style={styles.customerBox}>
-              <Text style={styles.customerName}>
-                👤 {(item as any).customerName || `Customer #${item.customerId?.slice(-4) || 'Ref'}`}
-              </Text>
-              <Text style={styles.locationText} numberOfLines={1}>
-                📍{' '}
-                {(item as any).address ||
-                  (item.location
-                    ? `${item.location.latitude.toFixed(4)}, ${item.location.longitude.toFixed(4)}`
-                    : 'Site Address Available')}
-              </Text>
+              <View style={styles.footerLine}>
+                <Icon name="user" size={13} color={colors.textSecondary} />
+                <Text style={styles.customerName} numberOfLines={1}>
+                  {(item as any).customerName || `Customer #${item.customerId?.slice(-4) || 'Ref'}`}
+                </Text>
+              </View>
+              <View style={styles.footerLine}>
+                <Icon name="map-pin" size={13} color={colors.textMuted} />
+                <Text style={styles.locationText} numberOfLines={1}>
+                  {(item as any).address ||
+                    (item.location
+                      ? `${item.location.latitude.toFixed(4)}, ${item.location.longitude.toFixed(4)}`
+                      : 'Site Address Available')}
+                </Text>
+              </View>
             </View>
-            <Text style={styles.viewAction}>VIEW →</Text>
+            <View style={styles.viewAction}>
+              <Text style={styles.viewActionText}>VIEW</Text>
+              <Icon name="chevron-right" size={15} color={colors.brand} />
+            </View>
           </View>
         </Card>
-      </TouchableOpacity>
+      </Pressable>
     );
   };
 
   return (
     <View style={styles.container}>
       {/* Header section */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.headerSubtitle}>ASSIGNED ROSTER & WORKLOAD</Text>
-          <Text style={styles.headerTitle}>Field Dashboard</Text>
-        </View>
-        <IconButton
-          symbol="🔔"
-          onPress={onSimulateDispatchAlert}
-          backgroundColor="#1E293B"
-          color="#F97316"
-          size={44}
-        />
-      </View>
+      <ScreenHeader
+        eyebrow="Assigned roster & workload"
+        title="Field Dashboard"
+        style={styles.header}
+        right={
+          <IconButton
+            onPress={onSimulateDispatchAlert}
+            icon={<Icon name="bell" size={19} color={colors.brand} />}
+            backgroundColor={colors.surface}
+            size={44}
+          />
+        }
+      />
 
       {/* 3. Handle Loading State */}
       {isLoading ? (
-        <View style={styles.centeredBox}>
-          <ActivityIndicator size="large" color="#F97316" />
-          <Text style={styles.loaderText}>Syncing Assigned Workload...</Text>
+        <View style={styles.skeletonWrap}>
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
         </View>
       ) : isError ? (
         /* 4. Handle Error State with Retry Button */
-        <View style={styles.centeredBox}>
-          <Card variant="bordered" borderRadius={28} padding={24} style={styles.errorCard}>
-            <Text style={styles.errorTitle}>⚠️ Sync Connection Failed</Text>
-            <Text style={styles.errorText}>
-              {error?.message || 'Could not retrieve assigned workload from backend API.'}
-            </Text>
-            <Button
-              title="RETRY SYNC"
-              onPress={() => refetch()}
-              variant="primary"
-              size="medium"
-              style={{ marginTop: 16 }}
-            />
-          </Card>
-        </View>
+        <ErrorState
+          title="Sync connection failed"
+          message={error?.message || 'Could not retrieve assigned workload from backend API.'}
+          icon="wifi-off"
+          action={
+            <Button title="RETRY SYNC" onPress={() => refetch()} variant="primary" size="medium" />
+          }
+        />
       ) : (
         /* 5. FlatList Rendering & Pull-To-Refresh */
         <FlatList
           data={jobs}
           keyExtractor={(item) => item.id}
           renderItem={renderJobItem}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: tabBarClearance(insets) },
+          ]}
+          showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
               refreshing={isRefetching}
               onRefresh={refetch}
-              tintColor="#F97316"
-              colors={['#F97316']}
+              tintColor={colors.brand}
+              colors={[colors.brand]}
             />
           }
           ListEmptyComponent={
-            <Card variant="bordered" borderRadius={28} padding={28} style={styles.emptyCard}>
-              <Text style={styles.emptyTitle}>No Jobs Assigned</Text>
-              <Text style={styles.emptyText}>
-                Your workload queue is clear. Stand by for Customer Care dispatch notifications.
-              </Text>
-            </Card>
+            <EmptyState
+              icon="inbox"
+              title="No jobs assigned"
+              description="Your workload queue is clear. Stand by for Customer Care dispatch notifications."
+            />
           }
         />
       )}
@@ -174,155 +179,96 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: colors.bg,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 12,
+    paddingHorizontal: layout.screenPadding,
+    paddingTop: spacing.xs,
     borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
+    borderBottomColor: colors.surface,
   },
-  headerSubtitle: {
-    fontSize: 11,
-    color: '#F97316',
-    fontWeight: '800',
-    letterSpacing: 0.8,
-  },
-  headerTitle: {
-    fontSize: 26,
-    fontWeight: '900',
-    color: '#F8FAFC',
+  skeletonWrap: {
+    padding: layout.screenPadding,
+    gap: spacing.lg,
   },
   listContent: {
-    padding: 16,
-    paddingBottom: 100,
+    padding: layout.screenPadding,
+    gap: spacing.lg,
   },
+
+  // ── Job card ──
   cardContainer: {
-    marginBottom: 16,
+    borderRadius: radius.xl,
+  },
+  cardPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.995 }],
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    gap: spacing.md,
+    marginBottom: spacing.md,
   },
   ticketId: {
-    color: '#F97316',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 999,
-  },
-  statusBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '800',
+    ...typography.overline,
+    color: colors.brand,
   },
   jobTitle: {
-    color: '#F8FAFC',
-    fontSize: 19,
-    fontWeight: '800',
-    marginBottom: 6,
+    ...typography.h2,
+    color: colors.text,
+    marginBottom: spacing.xs + 2,
   },
   jobDesc: {
-    color: '#94A3B8',
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 14,
+    ...typography.body,
+    color: colors.textSecondary,
+    marginBottom: spacing.lg,
   },
   metaRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 16,
-  },
-  metaBadge: {
-    backgroundColor: '#334155',
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 999,
-  },
-  metaBadgeText: {
-    color: '#E2E8F0',
-    fontSize: 11,
-    fontWeight: '700',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
   },
   cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: '#334155',
-    paddingTop: 12,
+    borderTopColor: colors.border,
+    paddingTop: spacing.md,
   },
   customerBox: {
     flex: 1,
-    marginRight: 12,
+    minWidth: 0,
+    gap: spacing.xs,
+  },
+  footerLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
   customerName: {
-    color: '#F8FAFC',
-    fontSize: 13,
-    fontWeight: '700',
-    marginBottom: 2,
+    ...typography.label,
+    color: colors.text,
+    flexShrink: 1,
   },
   locationText: {
-    color: '#CBD5E1',
-    fontSize: 12,
+    ...typography.caption,
+    color: colors.textMuted,
+    flexShrink: 1,
   },
   viewAction: {
-    color: '#F97316',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  centeredBox: {
-    flex: 1,
-    justifyContent: 'center',
+    flexDirection: 'row',
     alignItems: 'center',
-    padding: 20,
+    gap: spacing.xs,
+    flexShrink: 0,
   },
-  loaderText: {
-    color: '#94A3B8',
-    marginTop: 12,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  errorCard: {
-    width: '100%',
-    alignItems: 'center',
-  },
-  errorTitle: {
-    color: '#EF4444',
-    fontSize: 17,
+  viewActionText: {
+    ...typography.caption,
     fontWeight: '800',
-    marginBottom: 8,
-  },
-  errorText: {
-    color: '#94A3B8',
-    fontSize: 14,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  emptyCard: {
-    marginTop: 24,
-    alignItems: 'center',
-  },
-  emptyTitle: {
-    color: '#F8FAFC',
-    fontSize: 18,
-    fontWeight: '800',
-    marginBottom: 8,
-  },
-  emptyText: {
-    color: '#94A3B8',
-    fontSize: 14,
-    textAlign: 'center',
-    lineHeight: 20,
+    color: colors.brand,
   },
 });

@@ -1,5 +1,8 @@
 import React from 'react';
-import { TouchableOpacity, StyleSheet, ViewStyle, StyleProp, Text } from 'react-native';
+import { Pressable, StyleSheet, ViewStyle, StyleProp, Text } from 'react-native';
+import { colors } from '../../theme/colors';
+import { layout } from '../../theme/layout';
+import { elevation } from '../../theme/elevation';
 
 export interface IconButtonProps {
   onPress: () => void;
@@ -16,35 +19,41 @@ export const IconButton: React.FC<IconButtonProps> = ({
   onPress,
   icon,
   symbol,
-  size = 44,
-  backgroundColor = '#FFFFFF',
-  color = '#0F172A',
+  size = layout.minTap,
+  backgroundColor = colors.surface,
+  color = colors.text,
   style,
   disabled = false,
 }) => {
+  // Never render below the minimum accessible tap target, even if a smaller
+  // visual size is requested.
+  const box = Math.max(size, layout.minTap);
+
   return (
-    <TouchableOpacity
-      style={[
+    <Pressable
+      style={({ pressed }) => [
         styles.circle,
         {
-          width: size,
-          height: size,
-          borderRadius: size / 2,
+          width: box,
+          height: box,
+          borderRadius: box / 2,
           backgroundColor,
         },
+        pressed && !disabled && styles.pressed,
         disabled && styles.disabled,
         style,
       ]}
       onPress={onPress}
       disabled={disabled}
-      activeOpacity={0.8}
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
     >
       {icon ? (
         icon
       ) : symbol ? (
-        <Text style={[styles.symbolText, { color, fontSize: size * 0.45 }]}>{symbol}</Text>
+        <Text style={[styles.symbolText, { color, fontSize: box * 0.42 }]}>{symbol}</Text>
       ) : null}
-    </TouchableOpacity>
+    </Pressable>
   );
 };
 
@@ -52,17 +61,18 @@ const styles = StyleSheet.create({
   circle: {
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...elevation.e1,
+  },
+  pressed: {
+    opacity: 0.75,
   },
   disabled: {
-    opacity: 0.5,
+    opacity: 0.45,
   },
   symbolText: {
-    fontWeight: '800',
+    fontWeight: '700',
     textAlign: 'center',
   },
 });
