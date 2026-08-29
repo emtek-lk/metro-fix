@@ -10,7 +10,7 @@ AppRegistry.registerComponent(appConfig.name, () => App);
 
 if (Platform.OS === 'web') {
   const rootTag = document.getElementById('root') || document.getElementById('main') || document.body;
-  AppRegistry.runApplication(name, {
+  AppRegistry.runApplication(appConfig.name, {
     initialProps: {},
     rootTag,
   });
