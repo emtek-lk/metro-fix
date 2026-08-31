@@ -19,8 +19,8 @@ export interface MobileLoginScreenProps {
 
 export function MobileLoginScreen({ onLoginSuccess }: MobileLoginScreenProps) {
   const { login } = useAuth();
-  const [email, setEmail] = useState('amina@metro-fix.com');
-  const [password, setPassword] = useState('Password123!');
+  const [email, setEmail] = useState('worker1@demo.local');
+  const [password, setPassword] = useState('Demo123!');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -123,31 +123,31 @@ export function MobileLoginScreen({ onLoginSuccess }: MobileLoginScreenProps) {
               <TouchableOpacity
                 style={styles.presetChip}
                 onPress={() => {
-                  setEmail('amina@metro-fix.com');
-                  setPassword('Password123!');
-                  handleLogin('amina@metro-fix.com', 'Password123!');
+                  setEmail('worker1@demo.local');
+                  setPassword('Demo123!');
+                  handleLogin('worker1@demo.local', 'Demo123!');
                 }}
               >
-                <Text style={styles.presetChipText}>👩‍🔧 Amina (4 Jobs)</Text>
+                <Text style={styles.presetChipText}>👨‍🔧 Worker 1</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={styles.presetChip}
                 onPress={() => {
-                  setEmail('omar@metro-fix.com');
-                  setPassword('Password123!');
-                  handleLogin('omar@metro-fix.com', 'Password123!');
+                  setEmail('worker2@demo.local');
+                  setPassword('Demo123!');
+                  handleLogin('worker2@demo.local', 'Demo123!');
                 }}
               >
-                <Text style={styles.presetChipText}>👨‍🔧 Omar (Worker)</Text>
+                <Text style={styles.presetChipText}>👩‍🔧 Worker 2</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={styles.presetChip}
                 onPress={() => {
-                  setEmail('admin@metro-fix.com');
-                  setPassword('Password123!');
-                  handleLogin('admin@metro-fix.com', 'Password123!');
+                  setEmail('admin@demo.local');
+                  setPassword('Demo123!');
+                  handleLogin('admin@demo.local', 'Demo123!');
                 }}
               >
                 <Text style={styles.presetChipText}>👑 Admin</Text>

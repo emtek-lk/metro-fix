@@ -125,16 +125,16 @@ export function AuthShell({ onAuthenticated }: AuthShellProps) {
 
               <div style={styles.demoCard}>
                 <div style={styles.demoTitle}>
-                  Demo Credentials <span style={styles.demoHint}>(Password: Password123!)</span>
+                  Demo Credentials <span style={styles.demoHint}>(Password: Demo123!)</span>
                 </div>
                 <div style={styles.demoRows}>
                   <div style={styles.demoRow}>
                     <span style={styles.demoLabel}>Admin:</span>
-                    <code style={styles.demoCode}>admin@metro-fix.com</code>
+                    <code style={styles.demoCode}>admin@demo.local</code>
                   </div>
                   <div style={styles.demoRow}>
                     <span style={styles.demoLabel}>Dispatcher:</span>
-                    <code style={styles.demoCode}>dispatch@metro-fix.com</code>
+                    <code style={styles.demoCode}>dispatch@demo.local</code>
                   </div>
                 </div>
               </div>

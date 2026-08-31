@@ -3,6 +3,7 @@ import { DragDropContext, Draggable, Droppable, type DropResult } from '@hello-p
 import { JobStatus, ServiceType } from '@metro-fix/core-types';
 import { useMediaQuery } from '@metro-fix/ui';
 import { API_BASE_URL } from '../../lib/api';
+import { WebSocketService } from '../../lib/websocket';
 
 const boardOrder = [
   JobStatus.Requested,
@@ -312,6 +313,75 @@ export function CustomerCareView() {
 
     return () => {
       isMounted = false;
+    };
+  }, []);
+
+  // Setup WebSocket for real-time job updates
+  useEffect(() => {
+    const wsService = new WebSocketService(API_BASE_URL);
+    wsService.connect();
+
+    // Listen for new jobs
+    const unsubscribeCreate = wsService.on('job.created', (newJob) => {
+      setColumns((prevColumns) => {
+        const updated = { ...prevColumns };
+        const card: DispatchCard = {
+          id: newJob.id,
+          title: newJob.title || 'Service Request',
+          customerName: 'New Job',
+          serviceType: (newJob.servicePillar as ServiceType) || ServiceType.Hard,
+          urgency: 'Medium',
+          location: newJob.facilityType || 'Site Location',
+          assignedWorker: null,
+          status: (newJob.status as JobStatus) || JobStatus.Requested,
+          summary: newJob.description || 'Service request description',
+          createdAt: newJob.createdAt || new Date().toISOString(),
+        };
+        updated[card.status] = [...(updated[card.status] || []), card];
+        return updated;
+      });
+      showToast('New service request received!', 'success');
+    });
+
+    // Listen for job updates
+    const unsubscribeUpdate = wsService.on('job.updated', (updatedJob) => {
+      setColumns((prevColumns) => {
+        const updated = { ...prevColumns };
+        let cardFound = false;
+
+        // Remove from old status column
+        Object.keys(updated).forEach((status) => {
+          updated[status as JobStatus] = updated[status as JobStatus].filter((card) => {
+            if (card.id === updatedJob.id) {
+              cardFound = true;
+              return false;
+            }
+            return true;
+          });
+        });
+
+        // Add to new status column
+        const newCard: DispatchCard = {
+          id: updatedJob.id,
+          title: updatedJob.title || 'Service Request',
+          customerName: 'Updated Job',
+          serviceType: (updatedJob.servicePillar as ServiceType) || ServiceType.Hard,
+          urgency: 'Medium',
+          location: updatedJob.facilityType || 'Site Location',
+          assignedWorker: null,
+          status: (updatedJob.status as JobStatus) || JobStatus.Requested,
+          summary: updatedJob.description || 'Service request description',
+          createdAt: updatedJob.createdAt || new Date().toISOString(),
+        };
+        updated[newCard.status] = [...(updated[newCard.status] || []), newCard];
+        return updated;
+      });
+    });
+
+    return () => {
+      unsubscribeCreate();
+      unsubscribeUpdate();
+      wsService.disconnect();
     };
   }, []);
 

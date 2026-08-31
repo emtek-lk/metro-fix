@@ -89,7 +89,7 @@ function getInitialState(): { user: User | null; route: string } {
       user: {
         id: 'usr_demo_001',
         fullName: bypassRole === Role.ADMIN ? 'System Administrator' : 'Customer Care Dispatcher',
-        email: bypassRole === Role.ADMIN ? 'admin@metro-fix.com' : 'dispatch@metro-fix.com',
+        email: bypassRole === Role.ADMIN ? 'admin@demo.local' : 'dispatch@demo.local',
         role: bypassRole,
         createdAt: new Date().toISOString(),
       },

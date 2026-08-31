@@ -20,7 +20,7 @@ export interface CreateJobInput {
 }
 
 export interface LoginResponse {
-  access_token: string;
+  accessToken: string;
   user: User;
 }
 
