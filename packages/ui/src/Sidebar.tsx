@@ -18,14 +18,6 @@ export interface SidebarProps {
   onRouteChange: (route: string) => void;
   collapsed: boolean;
   onToggleCollapsed: () => void;
-  userProfile?: {
-    fullName: string;
-    email: string;
-    role: string;
-    avatarUrl?: string;
-  };
-  onLogout?: () => void;
-  onViewProfile?: () => void;
   isMobile?: boolean;
   isOpen?: boolean;
   onClose?: () => void;
@@ -76,24 +68,11 @@ export function Sidebar({
   collapsed,
   onToggleCollapsed,
   footerSlot,
-  userProfile,
-  onLogout,
-  onViewProfile,
   isMobile,
   isOpen,
   onClose,
 }: SidebarProps) {
-  const [isProfilePopoverOpen, setIsProfilePopoverOpen] = useState(false);
   const sidebarWidth = collapsed ? 80 : 260;
-
-  const initials = userProfile?.fullName
-    ? userProfile.fullName
-        .split(' ')
-        .map((part) => part[0])
-        .slice(0, 2)
-        .join('')
-        .toUpperCase()
-    : 'U';
 
   const renderNavButton = (
     key: string,
@@ -234,83 +213,13 @@ export function Sidebar({
       </div>
 
       <div style={{ ...styles.bottomBlock, ...(collapsed ? { alignItems: 'center' } : undefined), width: '100%' }}>
-        {/* User Profile Block at Bottom */}
-        {userProfile && (
-          <div style={{ ...styles.profileContainer, ...(collapsed ? { display: 'flex', justifyContent: 'center' } : undefined) }}>
-            {/* Logout / View Profile Popover Menu */}
-            {isProfilePopoverOpen && (
-              <>
-                <div
-                  style={styles.popoverBackdrop}
-                  onClick={() => setIsProfilePopoverOpen(false)}
-                />
-                <div
-                  style={{
-                    ...styles.popoverMenu,
-                    ...(collapsed ? styles.popoverMenuCollapsed : undefined),
-                  }}
-                  className="metro-modal-card"
-                >
-                  <div style={styles.popoverHeader}>
-                    <div style={styles.popoverName}>{userProfile.fullName}</div>
-                    <div style={styles.popoverEmail}>{userProfile.email}</div>
-                  </div>
-                  <div style={styles.popoverDivider} />
-                  <button
-                    type="button"
-                    className="sidebar-popover-option"
-                    style={styles.popoverOption}
-                    onClick={() => {
-                      setIsProfilePopoverOpen(false);
-                      onViewProfile?.();
-                    }}
-                  >
-                    <SVGIcon><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></SVGIcon>
-                    <span>View Profile</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="sidebar-popover-option"
-                    style={{ ...styles.popoverOption, ...styles.popoverLogoutBtn }}
-                    onClick={() => {
-                      setIsProfilePopoverOpen(false);
-                      onLogout?.();
-                    }}
-                  >
-                    <SVGIcon><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></SVGIcon>
-                    <span>Logout</span>
-                  </button>
-                </div>
-              </>
-            )}
-
-            {/* Profile Trigger Button */}
-            <button
-              type="button"
-              onClick={() => setIsProfilePopoverOpen((prev) => !prev)}
-              title={collapsed ? `${userProfile.fullName} (${userProfile.role})` : undefined}
-              className="sidebar-profile-btn"
-              style={{
-                ...styles.profileBlock,
-                ...(collapsed ? styles.profileBlockCollapsed : styles.profileBlockExpanded),
-              }}
-            >
-              <div style={styles.avatarBox}>
-                {userProfile.avatarUrl ? (
-                  <img src={userProfile.avatarUrl} alt={userProfile.fullName} style={styles.avatarImg} />
-                ) : (
-                  <span style={styles.avatarInitials}>{initials}</span>
-                )}
-              </div>
-
-              {!collapsed && (
-                <div style={styles.profileTextWrapper}>
-                  <div style={styles.profileFullName}>{userProfile.fullName}</div>
-                  <div style={styles.profileRole}>{userProfile.role}</div>
-                </div>
-              )}
-            </button>
-          </div>
+        {renderNavButton(
+          'settings',
+          'Settings',
+          <SVGIcon><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></SVGIcon>,
+          activeRoute === 'Settings',
+          () => alert('Settings feature coming soon!'),
+          collapsed ? 'Settings' : undefined
         )}
       </div>
       </aside>

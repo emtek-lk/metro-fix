@@ -72,9 +72,6 @@ export function DashboardLayout({
         }}
         collapsed={isCollapsed}
         onToggleCollapsed={() => setIsCollapsed((value) => !value)}
-        userProfile={userProfile}
-        onLogout={onLogout}
-        onViewProfile={onViewProfile}
         isMobile={isMobile}
         isOpen={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}

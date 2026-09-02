@@ -3,18 +3,19 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import {
+  UserEntity,
+  WorkerEntity,
+  CustomerEntity,
+  ServiceRequestEntity,
+  ServiceCatalogEntity,
+} from '../entities';
+import {
   Role,
+  ServicePillar,
   FacilityType,
   SubscriptionTier,
-  ServicePillar,
   JobStatus,
 } from '@metro-fix/core-types';
-import {
-  UserEntity,
-  CustomerEntity,
-  WorkerEntity,
-  ServiceRequestEntity,
-} from '../entities';
 
 @Injectable()
 export class SeedService implements OnApplicationBootstrap {
@@ -22,231 +23,190 @@ export class SeedService implements OnApplicationBootstrap {
 
   constructor(
     @InjectRepository(UserEntity)
-    private readonly userRepo: Repository<UserEntity>,
-    @InjectRepository(CustomerEntity)
-    private readonly customerRepo: Repository<CustomerEntity>,
+    private readonly userRepository: Repository<UserEntity>,
     @InjectRepository(WorkerEntity)
-    private readonly workerRepo: Repository<WorkerEntity>,
+    private readonly workerRepository: Repository<WorkerEntity>,
+    @InjectRepository(CustomerEntity)
+    private readonly customerRepository: Repository<CustomerEntity>,
     @InjectRepository(ServiceRequestEntity)
-    private readonly jobRepo: Repository<ServiceRequestEntity>,
+    private readonly jobRepository: Repository<ServiceRequestEntity>,
+    @InjectRepository(ServiceCatalogEntity)
+    private readonly catalogRepository: Repository<ServiceCatalogEntity>,
   ) {}
 
   async onApplicationBootstrap() {
-    try {
-      await this.seedData();
-    } catch (err) {
-      this.logger.warn(`Database seed deferred: ${err?.message || err}`);
-    }
-  }
+    this.logger.log('Starting seed process...');
 
-  async seedData() {
-    const defaultPassword = await bcrypt.hash('Password123!', 10);
+    const saltRounds = 10;
+    const password = await bcrypt.hash('Demo123!', saltRounds);
 
-    // Ensure all seed users exist with valid hashed passwords
-    const usersToSeed = [
-      {
-        fullName: 'Omar Hassan',
-        email: 'omar@metro-fix.com',
-        phoneNumber: '+1 (555) 019-9988',
-        role: Role.WORKER,
-        isWorkerProfile: true,
-      },
+    const usersData = [
       {
         fullName: 'System Administrator',
-        email: 'admin@metro-fix.com',
-        phoneNumber: '+1 (555) 000-0000',
+        email: 'admin@demo.local',
         role: Role.ADMIN,
-        isWorkerProfile: false,
       },
       {
-        fullName: 'Amina Yusuf',
-        email: 'amina@metro-fix.com',
-        phoneNumber: '+1 (555) 012-4491',
-        role: Role.WORKER,
-        isWorkerProfile: true,
+        fullName: 'Customer Care Dispatcher',
+        email: 'dispatch@demo.local',
+        role: Role.CUSTOMER_CARE,
       },
       {
-        fullName: 'Malik Thompson',
-        email: 'malik@metro-fix.com',
-        phoneNumber: '+1 (555) 012-7720',
+        fullName: 'Carlos Rivera',
+        email: 'worker1@demo.local',
         role: Role.WORKER,
-        isWorkerProfile: true,
+      },
+      {
+        fullName: 'Priya Sharma',
+        email: 'worker2@demo.local',
+        role: Role.WORKER,
       },
     ];
 
-    for (const u of usersToSeed) {
-      let user = await this.userRepo.findOne({ where: { email: u.email } });
-      if (!user) {
-        user = await this.userRepo.save(
-          this.userRepo.create({
-            fullName: u.fullName,
-            email: u.email,
-            password: defaultPassword,
-            phoneNumber: u.phoneNumber,
-            role: u.role,
-          }),
-        );
-      } else {
-        user.password = defaultPassword;
-        await this.userRepo.save(user);
-      }
+    const users: Record<string, UserEntity> = {};
 
-      if (u.isWorkerProfile) {
-        const existingWorker = await this.workerRepo.findOne({ where: { userId: user.id } });
-        if (!existingWorker) {
-          await this.workerRepo.save(
-            this.workerRepo.create({
-              userId: user.id,
-              rating: 5.0,
-              servicePillars: [ServicePillar.HARD, ServicePillar.SOFT, ServicePillar.STRATEGIC],
-              isAvailable: true,
-              activeJobs: 1,
-              latitude: 37.7749,
-              longitude: -122.4194,
-            }),
-          );
-        }
+    for (const data of usersData) {
+      let user = await this.userRepository.findOne({ where: { email: data.email } });
+      if (!user) {
+        user = this.userRepository.create({
+          ...data,
+          password,
+        });
+        await this.userRepository.save(user);
+        this.logger.log(`Created user: ${data.email}`);
+      } else {
+        user.password = password;
+        await this.userRepository.save(user);
+        this.logger.log(`Updated password for: ${data.email}`);
       }
+      users[data.email] = user;
     }
 
-    const omarUser = await this.userRepo.findOne({ where: { email: 'omar@metro-fix.com' } });
-    const omarWorker = await this.workerRepo.findOne({ where: { userId: omarUser?.id } });
-
-    const existingCount = await this.jobRepo.count();
-    if (existingCount > 0) {
-      if (omarWorker) {
-        // Re-assign all jobs to Omar worker so his mobile dashboard shows active tasks
-        const unassignedJobs = await this.jobRepo.find();
-        for (const j of unassignedJobs) {
-          if (!j.workerId) {
-            j.workerId = omarWorker.id;
-            await this.jobRepo.save(j);
-          }
-        }
-      }
-      this.logger.log('Database users synced & jobs assigned. Skipping initial job seed.');
+    const jobCount = await this.jobRepository.count();
+    if (jobCount > 0) {
+      this.logger.log('Data already seeded. Skipping seed process.');
       return;
     }
 
-    this.logger.log('Seeding initial METRO-FIX database records...');
+    const worker1Data = {
+      user: users['worker1@demo.local'],
+      rating: 4.8,
+      servicePillars: [ServicePillar.HARD, ServicePillar.STRATEGIC],
+      isAvailable: true,
+      activeJobs: 2,
+      latitude: 6.9220,
+      longitude: 79.8560,
+    };
+    
+    let worker1 = await this.workerRepository.findOne({ where: { user: { id: users['worker1@demo.local'].id } } });
+    if (!worker1) {
+       worker1 = await this.workerRepository.save(this.workerRepository.create(worker1Data as Partial<WorkerEntity>));
+    }
 
-    // Seed Customer Users & Customer Records
-    const cust1User = await this.userRepo.save(
-      this.userRepo.create({
-        fullName: 'Eleanor Vance',
-        email: 'eleanor@example.com',
-        password: defaultPassword,
-        phoneNumber: '+1 (555) 019-2834',
-        role: Role.CUSTOMER,
-      }),
-    );
-    const customer1 = await this.customerRepo.save(
-      this.customerRepo.create({
-        userId: cust1User.id,
+    const worker2Data = {
+      user: users['worker2@demo.local'],
+      rating: 4.5,
+      servicePillars: [ServicePillar.SOFT],
+      isAvailable: true,
+      activeJobs: 0,
+      latitude: 6.9310,
+      longitude: 79.8480,
+    };
+    let worker2 = await this.workerRepository.findOne({ where: { user: { id: users['worker2@demo.local'].id } } });
+    if (!worker2) {
+      worker2 = await this.workerRepository.save(this.workerRepository.create(worker2Data as Partial<WorkerEntity>));
+    }
+
+    const customersData = [
+      {
+        user: { fullName: 'Eleanor Vance', email: 'eleanor@skylinetowers.com', role: Role.CUSTOMER, password },
         facilityType: FacilityType.COMMERCIAL,
         subscriptionTier: SubscriptionTier.PREMIUM,
-        latitude: 37.7749,
-        longitude: -122.4194,
-      }),
-    );
-
-    const cust2User = await this.userRepo.save(
-      this.userRepo.create({
-        fullName: 'Marcus Aurelius',
-        email: 'marcus@example.com',
-        password: defaultPassword,
-        phoneNumber: '+1 (555) 012-9988',
-        role: Role.CUSTOMER,
-      }),
-    );
-    const customer2 = await this.customerRepo.save(
-      this.customerRepo.create({
-        userId: cust2User.id,
+        latitude: 6.9271,
+        longitude: 79.8612,
+      },
+      {
+        user: { fullName: 'Marcus Wijesinghe', email: 'marcus@residences.lk', role: Role.CUSTOMER, password },
         facilityType: FacilityType.RESIDENTIAL,
         subscriptionTier: SubscriptionTier.PLUS,
-        latitude: 37.7833,
-        longitude: -122.4089,
-      }),
-    );
-
-    const cust3User = await this.userRepo.save(
-      this.userRepo.create({
-        fullName: 'Sophia Martinez',
-        email: 'sophia@example.com',
-        password: defaultPassword,
-        phoneNumber: '+1 (555) 018-4421',
-        role: Role.CUSTOMER,
-      }),
-    );
-    const customer3 = await this.customerRepo.save(
-      this.customerRepo.create({
-        userId: cust3User.id,
+        latitude: 6.9344,
+        longitude: 79.8428,
+      },
+      {
+        user: { fullName: 'Sophia Martinez', email: 'sophia@industrialpark.com', role: Role.CUSTOMER, password },
         facilityType: FacilityType.INDUSTRIAL,
         subscriptionTier: SubscriptionTier.BASIC,
-        latitude: 37.79,
-        longitude: -122.399,
-      }),
-    );
+        latitude: 6.9147,
+        longitude: 79.8773,
+      },
+    ];
 
-    const aminaUser = await this.userRepo.findOne({ where: { email: 'amina@metro-fix.com' } });
-    const aminaWorker = await this.workerRepo.findOne({ where: { userId: aminaUser?.id } });
+    const customers: Record<string, CustomerEntity> = {};
+    for (const data of customersData) {
+      let user = await this.userRepository.findOne({ where: { email: data.user.email } });
+      if (!user) {
+        user = await this.userRepository.save(this.userRepository.create(data.user as Partial<UserEntity>));
+      }
+      
+      let customer = await this.customerRepository.findOne({ where: { user: { id: user.id } } });
+      if (!customer) {
+        customer = await this.customerRepository.save(this.customerRepository.create({
+            user,
+            facilityType: data.facilityType,
+            subscriptionTier: data.subscriptionTier,
+            latitude: data.latitude,
+            longitude: data.longitude,
+        } as Partial<CustomerEntity>));
+      }
+      customers[data.user.email] = customer!;
+    }
 
-    // Seed Service Requests (Jobs)
-    const seedJobs = [
+    const catalogData = [
+      {
+        serviceName: 'HVAC System Maintenance',
+        pillarCategory: ServicePillar.HARD,
+        basePrice: '$850.00',
+        requiredSubscriptionTier: SubscriptionTier.BASIC,
+      },
+      {
+        serviceName: 'Commercial Deep Sanitization',
+        pillarCategory: ServicePillar.SOFT,
+        basePrice: '$450.00',
+        requiredSubscriptionTier: SubscriptionTier.PLUS,
+      },
+      {
+        serviceName: 'Electrical Compliance Audit',
+        pillarCategory: ServicePillar.STRATEGIC,
+        basePrice: '$1,200.00',
+        requiredSubscriptionTier: SubscriptionTier.PREMIUM,
+      },
+    ];
+
+    for (const data of catalogData) {
+       let catalog = await this.catalogRepository.findOne({ where: { serviceName: data.serviceName } });
+       if (!catalog) {
+           await this.catalogRepository.save(this.catalogRepository.create(data as Partial<ServiceCatalogEntity>));
+       }
+    }
+
+    const jobsData = [
       {
         title: 'HVAC Chiller Unit Maintenance',
         description: 'Compressor vibration anomaly detected during routine site audit.',
         servicePillar: ServicePillar.HARD,
         facilityType: FacilityType.COMMERCIAL,
         status: JobStatus.REQUESTED,
-        customerId: customer1.id,
-        workerId: null,
-        latitude: 37.7749,
-        longitude: -122.4194,
+        customer: customers['eleanor@skylinetowers.com'],
+        worker: null,
       },
       {
         title: 'Emergency Main Pipe Water Leak',
         description: 'Burst water pipe in basement storage area requiring urgent shutoff.',
         servicePillar: ServicePillar.HARD,
         facilityType: FacilityType.RESIDENTIAL,
-        status: JobStatus.PENDING_ACCEPTANCE,
-        customerId: customer2.id,
-        workerId: omarWorker?.id || null,
-        latitude: 37.7833,
-        longitude: -122.4089,
-      },
-      {
-        title: 'Electrical Substation Compliance Audit',
-        description: 'Annual high-voltage switchgear inspection and thermal imaging test.',
-        servicePillar: ServicePillar.STRATEGIC,
-        facilityType: FacilityType.INDUSTRIAL,
         status: JobStatus.ASSIGNED,
-        customerId: customer3.id,
-        workerId: omarWorker?.id || null,
-        latitude: 37.79,
-        longitude: -122.399,
-      },
-      {
-        title: 'Commercial Deep Sanitization Routine',
-        description: 'Post-event deep sanitization and HVAC duct misting for office floors 4-8.',
-        servicePillar: ServicePillar.SOFT,
-        facilityType: FacilityType.COMMERCIAL,
-        status: JobStatus.ON_ROUTE,
-        customerId: customer1.id,
-        workerId: aminaWorker?.id || null,
-        latitude: 37.7749,
-        longitude: -122.4194,
-      },
-      {
-        title: 'Elevator Shaft Safety Inspection',
-        description: 'On-site technical evaluation to issue quote for brake pad replacement.',
-        servicePillar: ServicePillar.HARD,
-        facilityType: FacilityType.COMMERCIAL,
-        status: JobStatus.INSPECTION,
-        customerId: customer1.id,
-        workerId: omarWorker?.id || null,
-        latitude: 37.7749,
-        longitude: -122.4194,
+        customer: customers['marcus@residences.lk'],
+        worker: worker1,
       },
       {
         title: 'Roof Solar Panel Inverter Service',
@@ -254,17 +214,15 @@ export class SeedService implements OnApplicationBootstrap {
         servicePillar: ServicePillar.STRATEGIC,
         facilityType: FacilityType.INDUSTRIAL,
         status: JobStatus.IN_PROGRESS,
-        customerId: customer3.id,
-        workerId: omarWorker?.id || null,
-        latitude: 37.79,
-        longitude: -122.399,
+        customer: customers['sophia@industrialpark.com'],
+        worker: worker1,
       },
     ];
 
-    for (const jobData of seedJobs) {
-      await this.jobRepo.save(this.jobRepo.create(jobData));
+    for (const data of jobsData) {
+      await this.jobRepository.save(this.jobRepository.create(data as Partial<ServiceRequestEntity>));
     }
 
-    this.logger.log('Initial METRO-FIX database seeding complete!');
+    this.logger.log('Seed process completed.');
   }
 }

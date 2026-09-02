@@ -40,8 +40,8 @@ const DEV_ACCOUNTS: { label: string; email: string; password: string }[] = __DEV
 
 export function MobileLoginScreen({ onLoginSuccess }: MobileLoginScreenProps) {
   const { login } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('worker1@demo.local');
+  const [password, setPassword] = useState('Demo123!');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

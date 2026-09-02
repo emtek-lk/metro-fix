@@ -1,297 +1,249 @@
-/**
- * METRO-FIX: Database Seed Script
- *
- * Clears all existing data and inserts mock records:
- *   - 2 Admin/Dispatcher Users
- *   - 3 Customers (with linked User records)
- *   - 2 Workers (with linked User records)
- *   - 5 Service Requests spread across different Kanban statuses
- *
- * Usage:  npx ts-node -r dotenv/config src/scripts/seed.ts
- */
+import 'reflect-metadata';
 import { DataSource } from 'typeorm';
+import * as bcrypt from 'bcrypt';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
-import {
-  Role,
-  FacilityType,
-  SubscriptionTier,
-  ServicePillar,
-  JobStatus,
-} from '@metro-fix/core-types';
+
 import {
   UserEntity,
   WorkerEntity,
   CustomerEntity,
   ServiceRequestEntity,
+  ServiceCatalogEntity,
+  SubscriptionPlanEntity,
 } from '../entities';
 
-// Load environment variables from apps/api/.env
+import {
+  Role,
+  ServicePillar,
+  FacilityType,
+  SubscriptionTier,
+  JobStatus
+} from '@metro-fix/core-types';
+
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
-async function seed(): Promise<void> {
-  console.log('='.repeat(60));
-  console.log('[METRO-FIX] Database Seed Script');
-  console.log('='.repeat(60));
+const AppDataSource = new DataSource({
+  type: 'mssql',
+  url: process.env.DATABASE_URL,
+  host: process.env.DB_HOST || 'localhost',
+  port: process.env.DB_PORT ? parseInt(process.env.DB_PORT) : 1433,
+  username: process.env.DB_USERNAME || 'sa',
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_DATABASE || 'metrofix',
+  options: {
+    encrypt: true,
+    trustServerCertificate: true,
+  },
+  synchronize: true,
+  dropSchema: true,
+  entities: [
+    UserEntity,
+    WorkerEntity,
+    CustomerEntity,
+    ServiceRequestEntity,
+    ServiceCatalogEntity,
+    SubscriptionPlanEntity,
+  ],
+});
 
-  const dataSource = new DataSource({
-    type: 'mssql',
-    host: process.env.DB_HOST || 'localhost',
-    port: parseInt(process.env.DB_PORT || '1433', 10),
-    username: process.env.DB_USERNAME || 'sa',
-    password: process.env.DB_PASSWORD || 'YourPassword123!',
-    database: process.env.DB_NAME || 'metrofix_db',
-    options: {
-      trustServerCertificate: true,
-      encrypt: false,
-    },
-    entities: [UserEntity, WorkerEntity, CustomerEntity, ServiceRequestEntity],
-    synchronize: true,
-    dropSchema: true,
-    logging: ['error', 'warn'],
-  });
-
+async function run() {
   try {
-    console.log('[1/5] Connecting to database...');
-    await dataSource.initialize();
-    console.log('  ✓ Connected & schema synchronized.');
+    console.log('Connecting to database...');
+    await AppDataSource.initialize();
+    console.log('Database connected, schema synchronized.');
 
-    // Obtain repositories
-    const userRepo = dataSource.getRepository(UserEntity);
-    const customerRepo = dataSource.getRepository(CustomerEntity);
-    const workerRepo = dataSource.getRepository(WorkerEntity);
-    const jobRepo = dataSource.getRepository(ServiceRequestEntity);
+    const userRepo = AppDataSource.getRepository(UserEntity);
+    const workerRepo = AppDataSource.getRepository(WorkerEntity);
+    const customerRepo = AppDataSource.getRepository(CustomerEntity);
+    const catalogRepo = AppDataSource.getRepository(ServiceCatalogEntity);
+    const jobRepo = AppDataSource.getRepository(ServiceRequestEntity);
 
-    // Tables are already empty — dropSchema: true in DataSource config
-    // drops and recreates all tables on every seed run.
-    console.log('[2/5] Schema dropped & recreated (clean slate).');
+    console.log('Generating seed data...');
 
-    // ----- SEED ADMIN & DISPATCHER USERS -----
-    console.log('[3/5] Seeding Admin & Dispatcher users...');
-    const adminUser = await userRepo.save(
-      userRepo.create({
-        fullName: 'Rajesh Perera',
-        email: 'admin@metro-fix.com',
-        password: 'Password123!',
-        phoneNumber: '+94 77 234 5678',
+    const defaultPassword = await bcrypt.hash('Demo123!', 10);
+
+    // 1. Users
+    const usersData = [
+      {
+        fullName: 'System Administrator',
+        email: 'admin@demo.local',
         role: Role.ADMIN,
-      }),
-    );
-    console.log(`  ✓ Admin: ${adminUser.fullName} (${adminUser.email})`);
-
-    const dispatcherUser = await userRepo.save(
-      userRepo.create({
-        fullName: 'Kavinda Silva',
-        email: 'dispatch@metro-fix.com',
-        password: 'Password123!',
-        phoneNumber: '+94 77 345 6789',
+        password: defaultPassword,
+      },
+      {
+        fullName: 'Customer Care Dispatcher',
+        email: 'dispatch@demo.local',
         role: Role.CUSTOMER_CARE,
-      }),
-    );
-    console.log(`  ✓ Dispatcher: ${dispatcherUser.fullName} (${dispatcherUser.email})`);
-
-    // ----- SEED CUSTOMERS -----
-    console.log('[4/5] Seeding Customers & Workers...');
-
-    const cust1User = await userRepo.save(
-      userRepo.create({
+        password: defaultPassword,
+      },
+      {
+        fullName: 'Carlos Rivera',
+        email: 'worker1@demo.local',
+        role: Role.WORKER,
+        password: defaultPassword,
+      },
+      {
+        fullName: 'Priya Sharma',
+        email: 'worker2@demo.local',
+        role: Role.WORKER,
+        password: defaultPassword,
+      },
+      {
         fullName: 'Eleanor Vance',
         email: 'eleanor@skylinetowers.com',
-        password: 'Password123!',
-        phoneNumber: '+94 71 019 2834',
         role: Role.CUSTOMER,
-      }),
-    );
-    const customer1 = await customerRepo.save(
-      customerRepo.create({
-        userId: cust1User.id,
-        facilityType: FacilityType.COMMERCIAL,
-        subscriptionTier: SubscriptionTier.PREMIUM,
-        latitude: 6.9271,
-        longitude: 79.8612,
-      }),
-    );
-    console.log(`  ✓ Customer: ${cust1User.fullName} (${customer1.facilityType} / ${customer1.subscriptionTier})`);
-
-    const cust2User = await userRepo.save(
-      userRepo.create({
+        password: defaultPassword,
+      },
+      {
         fullName: 'Marcus Wijesinghe',
         email: 'marcus@residences.lk',
-        password: 'Password123!',
-        phoneNumber: '+94 71 012 9988',
         role: Role.CUSTOMER,
-      }),
-    );
-    const customer2 = await customerRepo.save(
-      customerRepo.create({
-        userId: cust2User.id,
-        facilityType: FacilityType.RESIDENTIAL,
-        subscriptionTier: SubscriptionTier.PLUS,
-        latitude: 6.9344,
-        longitude: 79.8428,
-      }),
-    );
-    console.log(`  ✓ Customer: ${cust2User.fullName} (${customer2.facilityType} / ${customer2.subscriptionTier})`);
-
-    const cust3User = await userRepo.save(
-      userRepo.create({
+        password: defaultPassword,
+      },
+      {
         fullName: 'Sophia Martinez',
         email: 'sophia@industrialpark.com',
-        password: 'Password123!',
-        phoneNumber: '+94 71 018 4421',
         role: Role.CUSTOMER,
-      }),
-    );
-    const customer3 = await customerRepo.save(
-      customerRepo.create({
-        userId: cust3User.id,
-        facilityType: FacilityType.INDUSTRIAL,
-        subscriptionTier: SubscriptionTier.BASIC,
-        latitude: 6.9147,
-        longitude: 79.8773,
-      }),
-    );
-    console.log(`  ✓ Customer: ${cust3User.fullName} (${customer3.facilityType} / ${customer3.subscriptionTier})`);
-
-    // ----- SEED WORKERS -----
-    const wrk1User = await userRepo.save(
-      userRepo.create({
-        fullName: 'Amina Yusuf',
-        email: 'amina@metro-fix.com',
-        password: 'Password123!',
-        phoneNumber: '+94 77 012 4491',
-        role: Role.WORKER,
-      }),
-    );
-    const worker1 = await workerRepo.save(
-      workerRepo.create({
-        userId: wrk1User.id,
-        rating: 4.9,
-        servicePillars: [ServicePillar.HARD, ServicePillar.STRATEGIC],
-        isAvailable: true,
-        activeJobs: 2,
-        latitude: 6.9220,
-        longitude: 79.8560,
-      }),
-    );
-    console.log(`  ✓ Worker: ${wrk1User.fullName} (Rating: ${worker1.rating})`);
-
-    const wrk2User = await userRepo.save(
-      userRepo.create({
-        fullName: 'Malik Thompson',
-        email: 'malik@metro-fix.com',
-        password: 'Password123!',
-        phoneNumber: '+94 77 012 7720',
-        role: Role.WORKER,
-      }),
-    );
-    const worker2 = await workerRepo.save(
-      workerRepo.create({
-        userId: wrk2User.id,
-        rating: 4.7,
-        servicePillars: [ServicePillar.SOFT],
-        isAvailable: true,
-        activeJobs: 1,
-        latitude: 6.9310,
-        longitude: 79.8480,
-      }),
-    );
-    console.log(`  ✓ Worker: ${wrk2User.fullName} (Rating: ${worker2.rating})`);
-
-    // ----- SEED SERVICE REQUESTS -----
-    console.log('[5/5] Seeding Service Requests across Kanban stages...');
-
-    const seedJobs = [
-      {
-        title: 'HVAC Chiller Unit Maintenance',
-        description: 'Compressor vibration anomaly detected during routine site audit. Requires immediate triage and replacement scheduling.',
-        servicePillar: ServicePillar.HARD,
-        facilityType: FacilityType.COMMERCIAL,
-        status: JobStatus.REQUESTED,
-        customerId: customer1.id,
-        workerId: null as string | null,
-        latitude: 6.9271,
-        longitude: 79.8612,
-      },
-      {
-        title: 'Emergency Main Pipe Water Leak',
-        description: 'Burst water pipe in basement storage area requiring urgent shutoff and pipe replacement.',
-        servicePillar: ServicePillar.HARD,
-        facilityType: FacilityType.RESIDENTIAL,
-        status: JobStatus.ASSIGNED,
-        customerId: customer2.id,
-        workerId: worker1.id,
-        latitude: 6.9344,
-        longitude: 79.8428,
-      },
-      {
-        title: 'Electrical Substation Compliance Audit',
-        description: 'Annual high-voltage switchgear inspection, thermal imaging test and certification renewal.',
-        servicePillar: ServicePillar.STRATEGIC,
-        facilityType: FacilityType.INDUSTRIAL,
-        status: JobStatus.ON_ROUTE,
-        customerId: customer3.id,
-        workerId: worker1.id,
-        latitude: 6.9147,
-        longitude: 79.8773,
-      },
-      {
-        title: 'Commercial Deep Sanitization Routine',
-        description: 'Post-event deep sanitization and HVAC duct misting for office floors 4-8.',
-        servicePillar: ServicePillar.SOFT,
-        facilityType: FacilityType.COMMERCIAL,
-        status: JobStatus.REQUESTED,
-        customerId: customer1.id,
-        workerId: null as string | null,
-        latitude: 6.9271,
-        longitude: 79.8612,
-      },
-      {
-        title: 'Elevator Shaft Safety Inspection',
-        description: 'On-site technical evaluation and quote generation for brake pad replacement in service elevator bank.',
-        servicePillar: ServicePillar.HARD,
-        facilityType: FacilityType.COMMERCIAL,
-        status: JobStatus.INSPECTION,
-        customerId: customer1.id,
-        workerId: worker2.id,
-        latitude: 6.9271,
-        longitude: 79.8612,
+        password: defaultPassword,
       },
     ];
 
-    for (const jobData of seedJobs) {
-      const job = await jobRepo.save(jobRepo.create(jobData));
-      console.log(`  ✓ Job: "${job.title}" → ${job.status}`);
+    const savedUsers: UserEntity[] = [];
+    for (const u of usersData) {
+      const user = userRepo.create(u);
+      savedUsers.push(await userRepo.save(user));
     }
+    
+    const worker1User = savedUsers.find(u => u.email === 'worker1@demo.local')!;
+    const worker2User = savedUsers.find(u => u.email === 'worker2@demo.local')!;
+    const cust1User = savedUsers.find(u => u.email === 'eleanor@skylinetowers.com')!;
+    const cust2User = savedUsers.find(u => u.email === 'marcus@residences.lk')!;
+    const cust3User = savedUsers.find(u => u.email === 'sophia@industrialpark.com')!;
 
-    // ----- SUMMARY -----
-    const counts = {
-      users: await userRepo.count(),
-      customers: await customerRepo.count(),
-      workers: await workerRepo.count(),
-      jobs: await jobRepo.count(),
-    };
+    // 2. Workers
+    const worker1 = workerRepo.create({
+      user: worker1User,
+      rating: 4.8,
+      servicePillars: [ServicePillar.HARD, ServicePillar.STRATEGIC],
+      isAvailable: true,
+      activeJobs: 2,
+      latitude: 6.9220,
+      longitude: 79.8560,
+    } as Partial<WorkerEntity>);
+    
+    const worker2 = workerRepo.create({
+      user: worker2User,
+      rating: 4.5,
+      servicePillars: [ServicePillar.SOFT],
+      isAvailable: true,
+      activeJobs: 0,
+      latitude: 6.9310,
+      longitude: 79.8480,
+    } as Partial<WorkerEntity>);
 
-    console.log('-'.repeat(60));
-    console.log('[METRO-FIX] Seed complete! Database summary:');
-    console.log(`  Users:             ${counts.users}`);
-    console.log(`  Customers:         ${counts.customers}`);
-    console.log(`  Workers:           ${counts.workers}`);
-    console.log(`  Service Requests:  ${counts.jobs}`);
-    console.log('='.repeat(60));
-  } catch (error: any) {
-    console.error('\n[ERROR] Seed script failed:');
-    console.error(`  ${error.message}`);
-    if (error.message?.includes('Login failed')) {
-      console.error('  → Check your .env DB_USERNAME / DB_PASSWORD credentials.');
-    }
-    if (error.message?.includes('Could not open a connection')) {
-      console.error('  → Is MSSQL running? Have you run `npm run db:init` first?');
-    }
-    process.exit(1);
+    await workerRepo.save([worker1, worker2]);
+
+    // 3. Customers
+    const customer1 = customerRepo.create({
+      user: cust1User,
+      facilityType: FacilityType.COMMERCIAL,
+      subscriptionTier: SubscriptionTier.PREMIUM,
+      latitude: 6.9271,
+      longitude: 79.8612,
+    } as Partial<CustomerEntity>);
+
+    const customer2 = customerRepo.create({
+      user: cust2User,
+      facilityType: FacilityType.RESIDENTIAL,
+      subscriptionTier: SubscriptionTier.PLUS,
+      latitude: 6.9344,
+      longitude: 79.8428,
+    } as Partial<CustomerEntity>);
+
+    const customer3 = customerRepo.create({
+      user: cust3User,
+      facilityType: FacilityType.INDUSTRIAL,
+      subscriptionTier: SubscriptionTier.BASIC,
+      latitude: 6.9147,
+      longitude: 79.8773,
+    } as Partial<CustomerEntity>);
+
+    await customerRepo.save([customer1, customer2, customer3]);
+
+    // 4. Service Catalog
+    const catalog1 = catalogRepo.create({
+      serviceName: 'HVAC System Maintenance',
+      pillarCategory: ServicePillar.HARD,
+      basePrice: '$850.00',
+      requiredSubscriptionTier: SubscriptionTier.BASIC,
+    });
+
+    const catalog2 = catalogRepo.create({
+      serviceName: 'Commercial Deep Sanitization',
+      pillarCategory: ServicePillar.SOFT,
+      basePrice: '$450.00',
+      requiredSubscriptionTier: SubscriptionTier.PLUS,
+    });
+
+    const catalog3 = catalogRepo.create({
+      serviceName: 'Electrical Compliance Audit',
+      pillarCategory: ServicePillar.STRATEGIC,
+      basePrice: '$1,200.00',
+      requiredSubscriptionTier: SubscriptionTier.PREMIUM,
+    });
+
+    await catalogRepo.save([catalog1, catalog2, catalog3]);
+
+    // 5. Jobs
+    const job1 = jobRepo.create({
+      title: 'HVAC Chiller Unit Maintenance',
+      description: 'Compressor vibration anomaly detected during routine site audit.',
+      servicePillar: ServicePillar.HARD,
+      facilityType: FacilityType.COMMERCIAL,
+      status: JobStatus.REQUESTED,
+      customer: customer1,
+    } as Partial<ServiceRequestEntity>);
+
+    const job2 = jobRepo.create({
+      title: 'Emergency Main Pipe Water Leak',
+      description: 'Burst water pipe in basement storage area requiring urgent shutoff.',
+      servicePillar: ServicePillar.HARD,
+      facilityType: FacilityType.RESIDENTIAL,
+      status: JobStatus.ASSIGNED,
+      customer: customer2,
+      worker: worker1,
+    } as Partial<ServiceRequestEntity>);
+
+    const job3 = jobRepo.create({
+      title: 'Roof Solar Panel Inverter Service',
+      description: 'Replacing faulty String Inverter #3 on commercial rooftop array.',
+      servicePillar: ServicePillar.STRATEGIC,
+      facilityType: FacilityType.INDUSTRIAL,
+      status: JobStatus.IN_PROGRESS,
+      customer: customer3,
+      worker: worker1,
+    } as Partial<ServiceRequestEntity>);
+
+    await jobRepo.save([job1, job2, job3]);
+
+    console.log('\n--- Seed Summary ---');
+    console.table([
+      { Entity: 'Users', Count: savedUsers.length },
+      { Entity: 'Workers', Count: 2 },
+      { Entity: 'Customers', Count: 3 },
+      { Entity: 'Service Catalog', Count: 3 },
+      { Entity: 'Jobs', Count: 3 },
+    ]);
+    console.log('Seed completed successfully!');
+  } catch (error) {
+    console.error('Error during seed:', error);
   } finally {
-    await dataSource.destroy();
+    if (AppDataSource.isInitialized) {
+      await AppDataSource.destroy();
+      console.log('Database connection closed.');
+    }
   }
 }
 
-seed();
+run();

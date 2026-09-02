@@ -1,10 +1,11 @@
+import { Platform } from 'react-native';
 import axios from 'axios';
 import { storage, TOKEN_KEY } from './storage';
 
 const getBaseUrl = (): string => {
   if (process.env.EXPO_PUBLIC_API_URL) return process.env.EXPO_PUBLIC_API_URL;
   if (process.env.VITE_API_URL) return process.env.VITE_API_URL;
-  return 'http://localhost:3000';
+  return Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
 };
 
 export const apiClient = axios.create({

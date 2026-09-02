@@ -10,8 +10,10 @@ export function useWorkerJobs() {
     queryKey: ['workerJobs'],
     queryFn: async () => {
       try {
-        const response = await apiClient.get<ServiceRequest[]>('/workers/me/jobs');
-        return Array.isArray(response.data) ? response.data : [];
+        const response = await apiClient.get('/workers/me/jobs');
+        const payload = response.data;
+        const jobs: ServiceRequest[] = Array.isArray(payload) ? payload : (payload?.jobs ?? []);
+        return jobs;
       } catch (err: any) {
         if (err.response?.status === 401) {
           const fallback = await apiClient.get<ServiceRequest[]>('/jobs');
