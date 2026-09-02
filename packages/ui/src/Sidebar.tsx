@@ -67,7 +67,6 @@ export function Sidebar({
   onRouteChange,
   collapsed,
   onToggleCollapsed,
-  footerSlot,
   isMobile,
   isOpen,
   onClose,

@@ -951,7 +951,7 @@ export function AdminWorkspace({
                       <Tooltip 
                         contentStyle={{ backgroundColor: 'var(--surface-strong)', border: '1px solid var(--border-subtle)', borderRadius: '8px' }} 
                         itemStyle={{ color: 'var(--text-primary)' }}
-                        formatter={(val: number) => [`$${val.toLocaleString()}`, 'Revenue']}
+                        formatter={(val: any) => [`$${val.toLocaleString()}`, 'Revenue']}
                       />
                       <Line type="monotone" dataKey="revenue" stroke="#f38808" strokeWidth={3} dot={{ fill: '#f38808', strokeWidth: 2 }} activeDot={{ r: 6 }} />
                     </LineChart>
@@ -969,7 +969,7 @@ export function AdminWorkspace({
                       <Tooltip 
                         cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                         contentStyle={{ backgroundColor: 'var(--surface-strong)', border: '1px solid var(--border-subtle)', borderRadius: '8px' }}
-                        formatter={(val: number) => [`$${val.toLocaleString()}`, 'Revenue']}
+                        formatter={(val: any) => [`$${val.toLocaleString()}`, 'Revenue']}
                       />
                       <Bar dataKey="value" fill="#47bfff" radius={[4, 4, 0, 0]} barSize={30} />
                     </BarChart>

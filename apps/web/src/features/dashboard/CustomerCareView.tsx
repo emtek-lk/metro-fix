@@ -335,7 +335,7 @@ export function CustomerCareView() {
           assignedWorker: null,
           status: (newJob.status as JobStatus) || JobStatus.Requested,
           summary: newJob.description || 'Service request description',
-          createdAt: newJob.createdAt || new Date().toISOString(),
+          createdAt: typeof newJob.createdAt === "string" ? newJob.createdAt : newJob.createdAt instanceof Date ? newJob.createdAt.toISOString() : new Date().toISOString(),
         };
         updated[card.status] = [...(updated[card.status] || []), card];
         return updated;
@@ -371,7 +371,7 @@ export function CustomerCareView() {
           assignedWorker: null,
           status: (updatedJob.status as JobStatus) || JobStatus.Requested,
           summary: updatedJob.description || 'Service request description',
-          createdAt: updatedJob.createdAt || new Date().toISOString(),
+          createdAt: typeof updatedJob.createdAt === "string" ? updatedJob.createdAt : updatedJob.createdAt instanceof Date ? updatedJob.createdAt.toISOString() : new Date().toISOString(),
         };
         updated[newCard.status] = [...(updated[newCard.status] || []), newCard];
         return updated;
