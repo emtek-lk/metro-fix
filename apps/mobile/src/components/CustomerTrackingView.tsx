@@ -1,33 +1,42 @@
 import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-} from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { JobStatus, ServiceRequest } from '@metro-fix/core-types';
 import { realtimeSocket } from '../services/websocket';
+
+import { Button } from './ui/Button';
+import { Icon } from './ui/Icon';
+import { ScreenHeader } from './ui/ScreenHeader';
+import { colors } from '../theme/colors';
+import { typography } from '../theme/typography';
+import { spacing, radius, layout, tabBarClearance } from '../theme/layout';
+import { getStatusPresentation } from '../theme/status';
 
 interface CustomerTrackingViewProps {
   job: ServiceRequest;
   onNewBooking: () => void;
 }
 
-const LIFECYCLE_STAGES: { status: JobStatus; label: string; icon: string }[] = [
-  { status: JobStatus.REQUESTED, label: 'Requested', icon: '📝' },
-  { status: JobStatus.PENDING_ACCEPTANCE, label: 'Dispatching', icon: '📡' },
-  { status: JobStatus.ASSIGNED, label: 'Technician Assigned', icon: '👨‍🔧' },
-  { status: JobStatus.ON_ROUTE, label: 'Worker On Route', icon: '🚗' },
-  { status: JobStatus.INSPECTION, label: 'Inspection / Quote', icon: '🔍' },
-  { status: JobStatus.IN_PROGRESS, label: 'Work In Progress', icon: '⚙️' },
-  { status: JobStatus.COMPLETED, label: 'Completed & Paid', icon: '✅' },
+/**
+ * Timeline order for the 7-stage lifecycle. Order only — the label, icon and
+ * colour for each stage come from the shared status map so the timeline stays
+ * consistent with every StatusPill elsewhere in the app.
+ */
+const LIFECYCLE_STAGES: JobStatus[] = [
+  JobStatus.REQUESTED,
+  JobStatus.PENDING_ACCEPTANCE,
+  JobStatus.ASSIGNED,
+  JobStatus.ON_ROUTE,
+  JobStatus.INSPECTION,
+  JobStatus.IN_PROGRESS,
+  JobStatus.COMPLETED,
 ];
 
 export const CustomerTrackingView: React.FC<CustomerTrackingViewProps> = ({
   job: initialJob,
   onNewBooking,
 }) => {
+  const insets = useSafeAreaInsets();
   const [currentJob, setCurrentJob] = useState<ServiceRequest>(initialJob);
 
   useEffect(() => {
@@ -43,75 +52,81 @@ export const CustomerTrackingView: React.FC<CustomerTrackingViewProps> = ({
   }, [currentJob.id]);
 
   const currentStageIndex = LIFECYCLE_STAGES.findIndex(
-    (s) => s.status === currentJob.status,
+    (s) => s === currentJob.status,
   );
 
-  return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerTitleRow}>
-          <Text style={styles.kicker}>LIVE SERVICE TRACKING</Text>
-          <View style={styles.liveBadge}>
-            <View style={styles.greenDot} />
-            <Text style={styles.liveBadgeText}>WEBSOCKET LIVE</Text>
-          </View>
-        </View>
-        <Text style={styles.title}>{currentJob.title}</Text>
-        <Text style={styles.ticketId}>Ticket #{currentJob.id}</Text>
-      </View>
+  const current = getStatusPresentation(currentJob.status);
 
-      {/* Main Status Hero Card */}
-      <View style={styles.heroCard}>
-        <Text style={styles.heroStatusLabel}>CURRENT STAGE</Text>
-        <Text style={styles.heroStatusValue}>{currentJob.status}</Text>
+  return (
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[styles.content, { paddingBottom: tabBarClearance(insets) }]}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* Header */}
+      <ScreenHeader
+        eyebrow="Live service tracking"
+        title={currentJob.title}
+        subtitle={`Ticket #${currentJob.id.slice(-6).toUpperCase()}`}
+        right={
+          <View style={styles.liveBadge}>
+            <View style={styles.liveDot} />
+            <Text style={styles.liveBadgeText}>Live</Text>
+          </View>
+        }
+      />
+
+      {/* Current Stage Hero */}
+      <View style={[styles.heroCard, { borderColor: current.color }]}>
+        <Text style={styles.heroStatusLabel}>Current stage</Text>
+        <View style={styles.heroStatusRow}>
+          <View style={[styles.heroIconBox, { backgroundColor: current.color }]}>
+            <Icon name={current.icon} size={20} color={colors.white} />
+          </View>
+          <Text style={styles.heroStatusValue}>{current.label}</Text>
+        </View>
         <Text style={styles.heroDesc}>{currentJob.description}</Text>
       </View>
 
-      {/* 7-Stage Visual Lifecycle Progress Tracker */}
+      {/* Lifecycle Tracker */}
       <View style={styles.trackerCard}>
-        <Text style={styles.trackerTitle}>SERVICE LIFECYCLE PROGRESS</Text>
+        <Text style={styles.trackerTitle}>Service lifecycle progress</Text>
 
         <View style={styles.stageList}>
-          {LIFECYCLE_STAGES.map((stage, idx) => {
-            const isDone = idx < currentStageIndex;
-            const isCurrent = idx === currentStageIndex;
+          {LIFECYCLE_STAGES.map((status, index) => {
+            const stage = getStatusPresentation(status);
+            const isComplete = index < currentStageIndex;
+            const isCurrent = index === currentStageIndex;
+            const isDone = isComplete || isCurrent;
+            const isLast = index === LIFECYCLE_STAGES.length - 1;
 
             return (
-              <View key={stage.status} style={styles.stageRow}>
+              <View key={status} style={styles.stageRow}>
                 <View style={styles.stageIconCol}>
                   <View
                     style={[
-                      styles.stageNode,
-                      isDone && styles.stageNodeDone,
-                      isCurrent && styles.stageNodeCurrent,
+                      styles.stageIcon,
+                      isDone && { backgroundColor: stage.color, borderColor: stage.color },
                     ]}
                   >
-                    <Text style={styles.stageIconText}>{stage.icon}</Text>
+                    <Icon
+                      name={isComplete ? 'check' : stage.icon}
+                      size={14}
+                      color={isDone ? colors.white : colors.textMuted}
+                    />
                   </View>
-                  {idx < LIFECYCLE_STAGES.length - 1 && (
+                  {!isLast && (
                     <View
-                      style={[
-                        styles.stageConnector,
-                        isDone && styles.stageConnectorDone,
-                      ]}
+                      style={[styles.stageConnector, isComplete && { backgroundColor: stage.color }]}
                     />
                   )}
                 </View>
 
                 <View style={styles.stageContentCol}>
-                  <Text
-                    style={[
-                      styles.stageLabel,
-                      isCurrent && styles.stageLabelCurrent,
-                      isDone && styles.stageLabelDone,
-                    ]}
-                  >
+                  <Text style={[styles.stageLabel, isDone && styles.stageLabelActive]}>
                     {stage.label}
                   </Text>
-                  {isCurrent && (
-                    <Text style={styles.activeTag}>IN PROGRESS AT SITE</Text>
-                  )}
+                  {isCurrent && <Text style={styles.activeTag}>In progress at site</Text>}
                 </View>
               </View>
             );
@@ -122,33 +137,38 @@ export const CustomerTrackingView: React.FC<CustomerTrackingViewProps> = ({
       {/* Assigned Technician Card */}
       {currentJob.workerId ? (
         <View style={styles.workerCard}>
-          <Text style={styles.workerCardTitle}>ASSIGNED SERVICE TECHNICIAN</Text>
+          <Text style={styles.workerCardTitle}>Assigned service technician</Text>
           <View style={styles.workerRow}>
             <View style={styles.avatarBox}>
-              <Text style={styles.avatarText}>👨‍🔧</Text>
+              <Icon name="user" size={22} color={colors.brand} />
             </View>
             <View style={styles.workerInfo}>
               <Text style={styles.workerName}>Alex Rivers (Field Tech #88)</Text>
-              <Text style={styles.workerMeta}>⭐ 4.9 Rating • Hard & Soft FM Certified</Text>
+              <View style={styles.workerMetaRow}>
+                <Icon name="star" size={12} color={colors.brand} />
+                <Text style={styles.workerMeta}>4.9 Rating • Hard & Soft FM Certified</Text>
+              </View>
             </View>
           </View>
         </View>
       ) : (
         <View style={styles.dispatchingBox}>
+          <Icon name="radio" size={17} color={colors.info} />
           <Text style={styles.dispatchingText}>
-            📡 Customer Care is currently selecting the nearest certified technician for your site location.
+            Customer Care is currently selecting the nearest certified technician for your site location.
           </Text>
         </View>
       )}
 
       {/* Action Footer */}
-      <TouchableOpacity
-        style={styles.newBookingBtn}
+      <Button
+        title="Book Another Service"
         onPress={onNewBooking}
-        activeOpacity={0.8}
-      >
-        <Text style={styles.newBookingBtnText}>➕ BOOK ANOTHER SERVICE</Text>
-      </TouchableOpacity>
+        variant="outline"
+        size="large"
+        icon={<Icon name="plus" size={17} color={colors.brand} />}
+        style={styles.newBookingBtn}
+      />
     </ScrollView>
   );
 };
@@ -156,233 +176,201 @@ export const CustomerTrackingView: React.FC<CustomerTrackingViewProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1c2d40',
+    backgroundColor: colors.bg,
   },
   content: {
-    padding: 18,
-    paddingBottom: 40,
+    paddingHorizontal: layout.screenPadding,
   },
-  header: {
-    marginBottom: 16,
-  },
-  headerTitleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  kicker: {
-    color: '#81b1b3',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
+
+  // ── Live badge ──
   liveBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(74, 173, 131, 0.15)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 14,
+    gap: spacing.xs + 2,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: radius.pill,
+    backgroundColor: colors.successSubtle,
     borderWidth: 1,
-    borderColor: '#4aad83',
+    borderColor: colors.success,
   },
-  greenDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#4aad83',
-    marginRight: 6,
+  liveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: colors.success,
   },
   liveBadgeText: {
-    color: '#4aad83',
-    fontSize: 10,
-    fontWeight: '800',
+    ...typography.caption,
+    fontWeight: '700',
+    color: colors.success,
   },
-  title: {
-    color: '#ffffff',
-    fontSize: 22,
-    fontWeight: '800',
-  },
-  ticketId: {
-    color: '#81b1b3',
-    fontSize: 13,
-    fontWeight: '600',
-    marginTop: 2,
-  },
+
+  // ── Hero ──
   heroCard: {
-    backgroundColor: '#f38808',
-    borderRadius: 22,
-    padding: 20,
-    marginBottom: 16,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xxl,
+    borderWidth: 1.5,
+    padding: spacing.xl,
+    marginBottom: spacing.lg,
   },
   heroStatusLabel: {
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1,
-    marginBottom: 4,
+    ...typography.overline,
+    color: colors.textSecondary,
+  },
+  heroStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginTop: spacing.md,
+  },
+  heroIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   heroStatusValue: {
-    color: '#ffffff',
-    fontSize: 24,
-    fontWeight: '900',
-    marginBottom: 8,
+    ...typography.h1,
+    color: colors.text,
+    flex: 1,
   },
   heroDesc: {
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontSize: 14,
-    lineHeight: 20,
+    ...typography.body,
+    color: colors.textSecondary,
+    marginTop: spacing.lg,
   },
+
+  // ── Tracker ──
   trackerCard: {
-    backgroundColor: '#2b435f',
-    borderRadius: 22,
-    padding: 20,
-    marginBottom: 16,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xxl,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: colors.border,
+    padding: spacing.xl,
+    marginBottom: spacing.lg,
   },
   trackerTitle: {
-    color: '#81b1b3',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-    marginBottom: 16,
+    ...typography.overline,
+    color: colors.textSecondary,
+    marginBottom: spacing.lg,
   },
   stageList: {
     gap: 0,
   },
   stageRow: {
     flexDirection: 'row',
-    minHeight: 48,
+    gap: spacing.lg,
   },
   stageIconCol: {
-    width: 40,
     alignItems: 'center',
-  },
-  stageNode: {
     width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    justifyContent: 'center',
+  },
+  stageIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: radius.pill,
+    backgroundColor: colors.bg,
+    borderWidth: 1.5,
+    borderColor: colors.border,
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  stageNodeDone: {
-    backgroundColor: '#4aad83',
-    borderColor: '#4aad83',
-  },
-  stageNodeCurrent: {
-    backgroundColor: '#f38808',
-    borderColor: '#ffffff',
-  },
-  stageIconText: {
-    fontSize: 14,
+    justifyContent: 'center',
   },
   stageConnector: {
     width: 2,
     flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    marginVertical: 2,
-  },
-  stageConnectorDone: {
-    backgroundColor: '#4aad83',
+    minHeight: 22,
+    backgroundColor: colors.border,
   },
   stageContentCol: {
     flex: 1,
-    paddingLeft: 12,
-    justifyContent: 'center',
-    paddingBottom: 16,
+    paddingBottom: spacing.xl,
+    paddingTop: spacing.xs + 2,
   },
   stageLabel: {
-    color: 'rgba(255, 255, 255, 0.5)',
-    fontSize: 14,
+    ...typography.body,
+    color: colors.textMuted,
+  },
+  stageLabelActive: {
+    color: colors.text,
     fontWeight: '700',
   },
-  stageLabelCurrent: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  stageLabelDone: {
-    color: '#81b1b3',
-  },
   activeTag: {
-    color: '#f38808',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-    marginTop: 2,
+    ...typography.caption,
+    fontWeight: '700',
+    color: colors.brand,
+    marginTop: spacing.xs,
   },
+
+  // ── Technician ──
   workerCard: {
-    backgroundColor: '#2b435f',
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 20,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: colors.border,
+    padding: spacing.xl,
+    marginBottom: spacing.lg,
   },
   workerCardTitle: {
-    color: '#81b1b3',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-    marginBottom: 12,
+    ...typography.overline,
+    color: colors.textSecondary,
+    marginBottom: spacing.lg,
   },
   workerRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.lg,
   },
   avatarBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(243, 136, 8, 0.2)',
-    justifyContent: 'center',
+    width: 48,
+    height: 48,
+    borderRadius: radius.pill,
+    backgroundColor: colors.brandSubtle,
+    borderWidth: 1,
+    borderColor: colors.brand,
     alignItems: 'center',
-    marginRight: 12,
-  },
-  avatarText: {
-    fontSize: 22,
+    justifyContent: 'center',
   },
   workerInfo: {
     flex: 1,
+    minWidth: 0,
   },
   workerName: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '800',
+    ...typography.h3,
+    color: colors.text,
+  },
+  workerMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + 2,
+    marginTop: spacing.xs,
   },
   workerMeta: {
-    color: '#81b1b3',
-    fontSize: 12,
-    marginTop: 2,
+    ...typography.caption,
+    color: colors.textSecondary,
+    flex: 1,
   },
+
+  // ── Dispatching ──
   dispatchingBox: {
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 20,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.xl,
+    marginBottom: spacing.lg,
   },
   dispatchingText: {
-    color: '#81b1b3',
-    fontSize: 13,
-    lineHeight: 18,
+    ...typography.body,
+    color: colors.textSecondary,
+    flex: 1,
   },
+
   newBookingBtn: {
-    backgroundColor: '#2b435f',
-    borderWidth: 1.5,
-    borderColor: '#f38808',
-    height: 52,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  newBookingBtnText: {
-    color: '#f38808',
-    fontSize: 14,
-    fontWeight: '800',
+    marginTop: spacing.xs,
   },
 });

@@ -49,5 +49,4 @@ apps/mobile/ios/.xcode.env.local
 apps/mobile/.expo/
 apps/mobile/.expo-shared/
 apps/mobile/.expo/dev/logs/
-.turbo/
-build/
+.expo/

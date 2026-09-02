@@ -3,19 +3,40 @@ import {
   StyleSheet,
   View,
   Text,
-  TextInput,
-  TouchableOpacity,
-  ActivityIndicator,
+  Pressable,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { User } from '@metro-fix/core-types';
 import { useAuth } from '../context/AuthContext';
+import { Button } from './ui/Button';
+import { Input } from './ui/Input';
+import { Icon } from './ui/Icon';
+import { colors } from '../theme/colors';
+import { typography } from '../theme/typography';
+import { spacing, radius, layout } from '../theme/layout';
+import { elevation } from '../theme/elevation';
 
 export interface MobileLoginScreenProps {
   onLoginSuccess?: (user: User, token: string) => void;
 }
+
+/**
+ * Development-only convenience accounts.
+ *
+ * Guarded by `__DEV__` at the point of definition, not just at the point of
+ * use: the bundler replaces `__DEV__` with `false` in release builds, so the
+ * literals below are dead code and never reach a shipped bundle.
+ */
+const DEV_ACCOUNTS: { label: string; email: string; password: string }[] = __DEV__
+  ? [
+      { label: 'Amina', email: 'amina@metro-fix.com', password: 'Password123!' },
+      { label: 'Omar', email: 'omar@metro-fix.com', password: 'Password123!' },
+      { label: 'Admin', email: 'admin@metro-fix.com', password: 'Password123!' },
+    ]
+  : [];
 
 export function MobileLoginScreen({ onLoginSuccess }: MobileLoginScreenProps) {
   const { login } = useAuth();
@@ -49,270 +70,229 @@ export function MobileLoginScreen({ onLoginSuccess }: MobileLoginScreenProps) {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        {/* Brand Header */}
-        <View style={styles.header}>
-          <View style={styles.logoBadge}>
-            <Text style={styles.logoBadgeText}>MF</Text>
-          </View>
-          <Text style={styles.brandTitle}>METRO-FIX</Text>
-          <Text style={styles.brandSubtitle}>Field Technician & Service Portal</Text>
-        </View>
-
-        {/* Login Form Container */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Sign In to Workstation</Text>
-          <Text style={styles.cardDesc}>Enter your dispatch credentials to manage jobs</Text>
-
-          {error ? (
-            <View style={styles.errorBox}>
-              <Text style={styles.errorText}>{error}</Text>
+    <SafeAreaView style={styles.safeArea}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.container}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Brand Header */}
+          <View style={styles.header}>
+            <View style={styles.logoBadge}>
+              <Text style={styles.logoBadgeText}>MF</Text>
             </View>
-          ) : null}
-
-          {/* Email Input */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Email Address</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g. tech@metro-fix.com"
-              placeholderTextColor="#64748B"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              value={email}
-              onChangeText={setEmail}
-            />
+            <Text style={styles.brandTitle}>METRO-FIX</Text>
+            <Text style={styles.brandSubtitle}>Field Technician & Service Portal</Text>
           </View>
 
-          {/* Password Input */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Password</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="••••••••"
-              placeholderTextColor="#64748B"
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-            />
-          </View>
+          {/* Login Form Container */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Sign in to your workspace</Text>
+            <Text style={styles.cardDesc}>Enter your dispatch credentials to manage jobs</Text>
 
-          {/* Submit Button */}
-          <TouchableOpacity
-            style={[styles.submitButton, isLoading && styles.submitButtonDisabled]}
-            onPress={() => handleLogin()}
-            disabled={isLoading}
-            activeOpacity={0.85}
-          >
-            {isLoading ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
-            ) : (
-              <Text style={styles.submitButtonText}>ACCESS WORKSTATION →</Text>
+            {error ? (
+              <View style={styles.errorBox}>
+                <Icon name="alert-circle" size={16} color={colors.dangerText} />
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            ) : null}
+
+            <View style={styles.fields}>
+              <Input
+                label="Email Address"
+                icon="mail"
+                placeholder="you@metro-fix.com"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                textContentType="emailAddress"
+                value={email}
+                onChangeText={setEmail}
+              />
+
+              <Input
+                label="Password"
+                icon="lock"
+                placeholder="Enter your password"
+                secureTextEntry
+                textContentType="password"
+                value={password}
+                onChangeText={setPassword}
+              />
+            </View>
+
+            {/* Submit Button */}
+            <Button
+              title="Sign In"
+              onPress={() => handleLogin()}
+              isLoading={isLoading}
+              variant="primary"
+              size="large"
+              style={styles.submitButton}
+            />
+
+            {/* Quick Preset Buttons for Testing — development builds only */}
+            {__DEV__ && (
+              <View style={styles.presetContainer}>
+                <Text style={styles.presetHeading}>Quick dev sign-in</Text>
+                <View style={styles.presetRow}>
+                  {DEV_ACCOUNTS.map((account) => (
+                    <Pressable
+                      key={account.email}
+                      style={({ pressed }) => [
+                        styles.presetChip,
+                        pressed && styles.presetChipPressed,
+                      ]}
+                      onPress={() => {
+                        setEmail(account.email);
+                        setPassword(account.password);
+                        handleLogin(account.email, account.password);
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Sign in as ${account.label}`}
+                    >
+                      <Text style={styles.presetChipText}>{account.label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
             )}
-          </TouchableOpacity>
-
-          {/* Quick Preset Buttons for Testing */}
-          <View style={styles.presetContainer}>
-            <Text style={styles.presetHeading}>Quick Dev Sign-In</Text>
-            <View style={styles.presetRow}>
-              <TouchableOpacity
-                style={styles.presetChip}
-                onPress={() => {
-                  setEmail('worker1@demo.local');
-                  setPassword('Demo123!');
-                  handleLogin('worker1@demo.local', 'Demo123!');
-                }}
-              >
-                <Text style={styles.presetChipText}>👨‍🔧 Worker 1</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.presetChip}
-                onPress={() => {
-                  setEmail('worker2@demo.local');
-                  setPassword('Demo123!');
-                  handleLogin('worker2@demo.local', 'Demo123!');
-                }}
-              >
-                <Text style={styles.presetChipText}>👩‍🔧 Worker 2</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.presetChip}
-                onPress={() => {
-                  setEmail('admin@demo.local');
-                  setPassword('Demo123!');
-                  handleLogin('admin@demo.local', 'Demo123!');
-                }}
-              >
-                <Text style={styles.presetChipText}>👑 Admin</Text>
-              </TouchableOpacity>
-            </View>
           </View>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: colors.bg,
+  },
   container: {
     flex: 1,
-    backgroundColor: '#0F172A',
   },
   scrollContent: {
     flexGrow: 1,
-    padding: 24,
     justifyContent: 'center',
+    paddingHorizontal: layout.screenPadding,
+    paddingVertical: spacing.xxxl,
   },
+
+  // ── Brand ──
   header: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: spacing.xxxl,
   },
   logoBadge: {
     width: 64,
     height: 64,
-    borderRadius: 16,
-    backgroundColor: '#F97316',
-    justifyContent: 'center',
+    borderRadius: radius.xl,
+    backgroundColor: colors.brand,
     alignItems: 'center',
-    marginBottom: 12,
-    shadowColor: '#F97316',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 6,
+    justifyContent: 'center',
+    marginBottom: spacing.lg,
+    ...elevation.e2,
   },
   logoBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 24,
-    fontWeight: '900',
+    ...typography.h1,
+    color: colors.white,
     letterSpacing: 1,
   },
   brandTitle: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: '#F8FAFC',
-    letterSpacing: 2,
+    ...typography.display,
+    color: colors.text,
+    letterSpacing: 1.5,
   },
   brandSubtitle: {
-    fontSize: 14,
-    color: '#94A3B8',
-    marginTop: 4,
-    fontWeight: '500',
+    ...typography.body,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+    textAlign: 'center',
   },
+
+  // ── Form card ──
   card: {
-    backgroundColor: '#1E293B',
-    borderRadius: 20,
-    padding: 24,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xxl,
     borderWidth: 1,
-    borderColor: '#334155',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 15,
-    elevation: 8,
+    borderColor: colors.border,
+    padding: spacing.xxl,
+    ...elevation.e2,
   },
   cardTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#F8FAFC',
+    ...typography.h2,
+    color: colors.text,
   },
   cardDesc: {
-    fontSize: 13,
-    color: '#94A3B8',
-    marginTop: 4,
-    marginBottom: 20,
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
   },
-  errorBox: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-    borderWidth: 1,
-    borderColor: '#EF4444',
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 16,
-  },
-  errorText: {
-    color: '#FCA5A5',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  inputGroup: {
-    marginBottom: 16,
-  },
-  inputLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#CBD5E1',
-    marginBottom: 8,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  input: {
-    backgroundColor: '#0F172A',
-    borderWidth: 1,
-    borderColor: '#334155',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    color: '#F8FAFC',
-    fontSize: 15,
+  fields: {
+    gap: spacing.lg,
+    marginTop: spacing.xl,
   },
   submitButton: {
-    backgroundColor: '#F97316',
-    borderRadius: 12,
-    paddingVertical: 15,
+    marginTop: spacing.xxl,
+  },
+
+  // ── Error ──
+  errorBox: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
-    shadowColor: '#F97316',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.dangerSubtle,
+    borderWidth: 1,
+    borderColor: colors.danger,
   },
-  submitButtonDisabled: {
-    opacity: 0.6,
+  errorText: {
+    ...typography.caption,
+    color: colors.dangerText,
+    flex: 1,
   },
-  submitButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
+
+  // ── Dev presets ──
   presetContainer: {
-    marginTop: 24,
-    paddingTop: 16,
+    marginTop: spacing.xxl,
+    paddingTop: spacing.lg,
     borderTopWidth: 1,
-    borderTopColor: '#334155',
+    borderTopColor: colors.border,
   },
   presetHeading: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#64748B',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 10,
+    ...typography.overline,
+    color: colors.textMuted,
+    marginBottom: spacing.md,
     textAlign: 'center',
   },
   presetRow: {
     flexDirection: 'row',
-    gap: 8,
     justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
   },
   presetChip: {
-    backgroundColor: '#334155',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
+    minHeight: 36,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  presetChipPressed: {
+    backgroundColor: colors.border,
   },
   presetChipText: {
-    color: '#E2E8F0',
-    fontSize: 12,
-    fontWeight: '600',
+    ...typography.caption,
+    fontWeight: '700',
+    color: colors.textSecondary,
   },
 });

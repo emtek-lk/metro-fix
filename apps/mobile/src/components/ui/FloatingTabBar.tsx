@@ -1,5 +1,11 @@
 import React from 'react';
-import { View, TouchableOpacity, StyleSheet, Text } from 'react-native';
+import { View, Pressable, StyleSheet, Text } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { colors } from '../../theme/colors';
+import { typography } from '../../theme/typography';
+import { spacing, radius, layout } from '../../theme/layout';
+import { elevation } from '../../theme/elevation';
+import { Icon, type FeatherIconName } from './Icon';
 
 export interface TabItem {
   id: string;
@@ -14,10 +20,10 @@ export interface FloatingTabBarProps {
 }
 
 const DEFAULT_TABS: TabItem[] = [
-  { id: 'jobs', label: 'Roster', icon: '🏠' },
-  { id: 'history', label: 'History', icon: '📋' },
-  { id: 'alerts', label: 'Alerts', icon: '🔔' },
-  { id: 'profile', label: 'Profile', icon: '👤' },
+  { id: 'jobs', label: 'Roster', icon: 'home' },
+  { id: 'history', label: 'History', icon: 'clipboard' },
+  { id: 'alerts', label: 'Alerts', icon: 'bell' },
+  { id: 'profile', label: 'Profile', icon: 'user' },
 ];
 
 export const FloatingTabBar: React.FC<FloatingTabBarProps> = ({
@@ -25,22 +31,45 @@ export const FloatingTabBar: React.FC<FloatingTabBarProps> = ({
   onTabPress,
   tabs = DEFAULT_TABS,
 }) => {
+  const insets = useSafeAreaInsets();
+
   return (
-    <View style={styles.floatingContainer}>
+    <View
+      style={[
+        styles.floatingContainer,
+        // Sit above the home indicator rather than under it.
+        { bottom: layout.tabBarInset + insets.bottom },
+      ]}
+      pointerEvents="box-none"
+    >
       <View style={styles.tabPill}>
         {tabs.map((tab) => {
           const isActive = activeTab === tab.id;
           return (
-            <TouchableOpacity
+            <Pressable
               key={tab.id}
-              style={[styles.tabButton, isActive && styles.activeTabButton]}
+              style={({ pressed }) => [
+                styles.tabButton,
+                isActive && styles.activeTabButton,
+                pressed && !isActive && styles.pressedTabButton,
+              ]}
               onPress={() => onTabPress(tab.id)}
-              activeOpacity={0.85}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isActive }}
+              accessibilityLabel={tab.label}
             >
-              <Text style={[styles.tabIcon, isActive && styles.activeTabIcon]}>
-                {tab.icon}
+              <Icon
+                name={tab.icon as FeatherIconName}
+                size={19}
+                color={isActive ? colors.textInverse : colors.textSecondary}
+              />
+              <Text
+                style={[styles.tabLabel, isActive && styles.activeTabLabel]}
+                numberOfLines={1}
+              >
+                {tab.label}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           );
         })}
       </View>
@@ -51,46 +80,50 @@ export const FloatingTabBar: React.FC<FloatingTabBarProps> = ({
 const styles = StyleSheet.create({
   floatingContainer: {
     position: 'absolute',
-    bottom: 24,
-    left: 20,
-    right: 20,
+    left: spacing.xl,
+    right: spacing.xl,
     alignItems: 'center',
     zIndex: 99,
   },
   tabPill: {
     flexDirection: 'row',
-    backgroundColor: '#1E293B',
-    borderRadius: 999, // Extreme pill shape
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    backgroundColor: colors.surface,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
     alignItems: 'center',
-    justifyContent: 'space-around',
+    justifyContent: 'space-between',
     width: '100%',
-    maxWidth: 360,
+    maxWidth: 380,
+    minHeight: layout.tabBarHeight,
     borderWidth: 1,
-    borderColor: '#334155',
-    elevation: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
+    borderColor: colors.border,
+    ...elevation.e3,
   },
   tabButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    flex: 1,
+    minHeight: layout.minTap + 4,
+    borderRadius: radius.pill,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 3,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+  },
+  pressedTabButton: {
+    backgroundColor: colors.surfaceRaised,
   },
   activeTabButton: {
-    backgroundColor: '#FFFFFF', // Clean white active bubble matching reference
-    transform: [{ scale: 1.05 }],
+    backgroundColor: colors.white,
   },
-  tabIcon: {
-    fontSize: 20,
-    opacity: 0.6,
+  tabLabel: {
+    ...typography.caption,
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: '700',
+    color: colors.textSecondary,
   },
-  activeTabIcon: {
-    opacity: 1,
+  activeTabLabel: {
+    color: colors.textInverse,
   },
 });

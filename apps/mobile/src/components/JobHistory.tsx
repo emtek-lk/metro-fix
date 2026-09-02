@@ -1,10 +1,23 @@
 import React from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator } from 'react-native';
-import { Card } from './ui/Card';
-import { useWorkerJobs } from '../hooks/useJobs';
+import { View, Text, StyleSheet, FlatList } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { JobStatus, ServiceRequest } from '@metro-fix/core-types';
 
+import { Card } from './ui/Card';
+import { Icon } from './ui/Icon';
+import { ScreenHeader } from './ui/ScreenHeader';
+import { StatusPill } from './ui/StatusPill';
+import { MetaChip } from './ui/MetaChip';
+import { EmptyState } from './ui/EmptyState';
+import { SkeletonCard } from './ui/SkeletonCard';
+import { colors } from '../theme/colors';
+import { typography } from '../theme/typography';
+import { spacing, radius, layout, tabBarClearance } from '../theme/layout';
+import { PILLAR_ICON } from '../theme/status';
+import { useWorkerJobs } from '../hooks/useJobs';
+
 export const JobHistoryScreen: React.FC = () => {
+  const insets = useSafeAreaInsets();
   const { data: jobs, isLoading } = useWorkerJobs();
 
   const historyJobs = Array.isArray(jobs)
@@ -15,53 +28,60 @@ export const JobHistoryScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>📜 Job History Log</Text>
-        <Text style={styles.subtitle}>Completed & Active Service Dispatch Records</Text>
-      </View>
+      <ScreenHeader
+        eyebrow="Service dispatch records"
+        title="Job History"
+        subtitle="Completed and active service tickets"
+        style={styles.header}
+      />
 
       {isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color="#F97316" />
+        <View style={styles.skeletonWrap}>
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
         </View>
       ) : historyJobs.length === 0 ? (
-        <View style={styles.center}>
-          <Text style={styles.emptyIcon}>📂</Text>
-          <Text style={styles.emptyText}>No historical records found</Text>
-          <Text style={styles.emptySubtext}>Completed tickets will accumulate here</Text>
-        </View>
+        <EmptyState
+          icon="folder"
+          title="No historical records found"
+          description="Completed tickets will accumulate here."
+        />
       ) : (
         <FlatList
           data={historyJobs}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: tabBarClearance(insets) },
+          ]}
+          showsVerticalScrollIndicator={false}
           renderItem={({ item }: { item: ServiceRequest }) => (
-            <Card variant="elevated" borderRadius={20} padding={16} style={styles.card}>
+            <Card variant="elevated" borderRadius={radius.xl} padding={spacing.xl}>
               <View style={styles.cardHeader}>
                 <Text style={styles.ticketId}>#{item.id.slice(-6).toUpperCase()}</Text>
-                <View
-                  style={[
-                    styles.statusBadge,
-                    {
-                      backgroundColor:
-                        item.status === JobStatus.COMPLETED ? '#10B981' : '#F97316',
-                    },
-                  ]}
-                >
-                  <Text style={styles.statusText}>{item.status}</Text>
-                </View>
+                <StatusPill status={item.status} size="small" />
               </View>
 
-              <Text style={styles.jobTitle}>{item.title}</Text>
+              <Text style={styles.jobTitle} numberOfLines={2}>
+                {item.title}
+              </Text>
               <Text style={styles.jobDesc} numberOfLines={2}>
                 {item.description}
               </Text>
 
               <View style={styles.cardFooter}>
-                <Text style={styles.pillarTag}>⚡ {item.servicePillar}</Text>
-                <Text style={styles.dateTag}>
-                  {new Date(item.createdAt).toLocaleDateString()}
-                </Text>
+                <MetaChip
+                  icon={PILLAR_ICON[item.servicePillar] ?? 'tool'}
+                  label={item.servicePillar}
+                  tint={colors.brand}
+                />
+                <View style={styles.dateRow}>
+                  <Icon name="calendar" size={12} color={colors.textMuted} />
+                  <Text style={styles.dateTag}>
+                    {new Date(item.createdAt).toLocaleDateString()}
+                  </Text>
+                </View>
               </View>
             </Card>
           )}
@@ -74,96 +94,59 @@ export const JobHistoryScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0F172A',
-    paddingHorizontal: 20,
-    paddingTop: 20,
+    backgroundColor: colors.bg,
   },
   header: {
-    marginBottom: 20,
+    paddingHorizontal: layout.screenPadding,
+    paddingTop: spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.surface,
   },
-  title: {
-    color: '#F8FAFC',
-    fontSize: 22,
-    fontWeight: '900',
-  },
-  subtitle: {
-    color: '#94A3B8',
-    fontSize: 13,
-    marginTop: 4,
-  },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingBottom: 80,
-  },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: 12,
-  },
-  emptyText: {
-    color: '#F8FAFC',
-    fontSize: 17,
-    fontWeight: '800',
-  },
-  emptySubtext: {
-    color: '#64748B',
-    fontSize: 13,
-    marginTop: 4,
+  skeletonWrap: {
+    padding: layout.screenPadding,
+    gap: spacing.lg,
   },
   listContent: {
-    paddingBottom: 110,
-  },
-  card: {
-    marginBottom: 14,
+    padding: layout.screenPadding,
+    gap: spacing.lg,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    gap: spacing.md,
+    marginBottom: spacing.md,
   },
   ticketId: {
-    color: '#F97316',
-    fontWeight: '800',
-    fontSize: 12,
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  statusText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-    fontSize: 11,
+    ...typography.overline,
+    color: colors.brand,
   },
   jobTitle: {
-    color: '#F8FAFC',
-    fontSize: 16,
-    fontWeight: '800',
-    marginBottom: 4,
+    ...typography.h2,
+    color: colors.text,
+    marginBottom: spacing.xs + 2,
   },
   jobDesc: {
-    color: '#CBD5E1',
-    fontSize: 13,
-    marginBottom: 12,
+    ...typography.body,
+    color: colors.textSecondary,
+    marginBottom: spacing.lg,
   },
   cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: '#334155',
-    paddingTop: 10,
+    borderTopColor: colors.border,
+    paddingTop: spacing.md,
   },
-  pillarTag: {
-    color: '#94A3B8',
-    fontSize: 12,
-    fontWeight: '700',
+  dateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + 2,
   },
   dateTag: {
-    color: '#64748B',
-    fontSize: 12,
+    ...typography.caption,
+    color: colors.textMuted,
   },
 });

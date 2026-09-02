@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StatusBar, StyleSheet, View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { StatusBar, StyleSheet, View, Text, Pressable } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { JobStatus, ServiceRequest, ServicePillar, FacilityType } from '@metro-fix/core-types';
@@ -16,6 +16,11 @@ import { NotificationsScreen } from './src/components/Notifications';
 import { ProfileScreen } from './src/components/Profile';
 import { MobileLoginScreen } from './src/components/MobileLoginScreen';
 import { FloatingTabBar } from './src/components/ui/FloatingTabBar';
+import { Icon } from './src/components/ui/Icon';
+import { LoadingState } from './src/components/ui/LoadingState';
+import { colors } from './src/theme/colors';
+import { typography } from './src/theme/typography';
+import { spacing, radius, layout } from './src/theme/layout';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -41,6 +46,11 @@ const SAMPLE_INCOMING_JOB: ServiceRequest = {
   createdAt: new Date().toISOString(),
 };
 
+const ROLE_MODES = [
+  { id: 'worker' as const, label: 'Worker Roster', icon: 'tool' as const },
+  { id: 'customer' as const, label: 'Customer View', icon: 'user' as const },
+];
+
 function MainApp() {
   const { user: currentUser, isLoading: isAuthLoading, isAuthenticated, logout } = useAuth();
   const [appRoleMode, setAppRoleMode] = useState<'customer' | 'worker'>('worker');
@@ -57,10 +67,9 @@ function MainApp() {
   // Loading State
   if (isAuthLoading) {
     return (
-      <View style={styles.loadingScreen}>
-        <ActivityIndicator size="large" color="#F97316" />
-        <Text style={styles.loadingText}>Initializing Metro-Fix Workstation...</Text>
-      </View>
+      <SafeAreaView style={styles.safeArea}>
+        <LoadingState message="Preparing your workspace…" />
+      </SafeAreaView>
     );
   }
 
@@ -90,218 +99,249 @@ function MainApp() {
   };
 
   return (
-    <SafeAreaProvider>
-      <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.container}>
-          {/* Top User Session Header */}
-          <View style={styles.userHeader}>
-            <View style={styles.userInfo}>
-              <View style={styles.userAvatar}>
-                <Text style={styles.userAvatarText}>{currentUser.fullName?.charAt(0) || 'U'}</Text>
-              </View>
-              <View>
-                <Text style={styles.userName}>{currentUser.fullName}</Text>
-                <Text style={styles.userRoleBadge}>{currentUser.role} PORTAL</Text>
-              </View>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+      <View style={styles.container}>
+        {/* Top User Session Header */}
+        <View style={styles.userHeader}>
+          <View style={styles.userInfo}>
+            <View style={styles.userAvatar}>
+              <Text style={styles.userAvatarText}>
+                {currentUser.fullName?.charAt(0).toUpperCase() || 'U'}
+              </Text>
             </View>
-
-            <TouchableOpacity style={styles.logoutButton} onPress={logout} activeOpacity={0.8}>
-              <Text style={styles.logoutButtonText}>Sign Out</Text>
-            </TouchableOpacity>
+            <View style={styles.userText}>
+              <Text style={styles.userName} numberOfLines={1}>
+                {currentUser.fullName}
+              </Text>
+              <Text style={styles.userRoleBadge} numberOfLines={1}>
+                {currentUser.role} PORTAL
+              </Text>
+            </View>
           </View>
 
-          {/* Top Role Mode Switcher Bar */}
-          <View style={styles.roleBar}>
-            <TouchableOpacity
-              style={[styles.roleTab, appRoleMode === 'worker' && styles.roleTabActive]}
-              onPress={() => setAppRoleMode('worker')}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.roleTabText, appRoleMode === 'worker' && styles.roleTabTextActive]}>
-                👨‍🔧 WORKER ROSTER
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.roleTab, appRoleMode === 'customer' && styles.roleTabActive]}
-              onPress={() => setAppRoleMode('customer')}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.roleTabText, appRoleMode === 'customer' && styles.roleTabTextActive]}>
-                📱 CUSTOMER VIEW
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Render Active View */}
-          {appRoleMode === 'customer' ? (
-            customerActiveJob ? (
-              <CustomerTrackingView
-                job={customerActiveJob}
-                onNewBooking={() => setCustomerActiveJob(null)}
-              />
-            ) : (
-              <CustomerBookingWizard
-                customerId={currentUser.id || MOCK_CUSTOMER_ID}
-                onBookingComplete={handleBookingComplete}
-              />
-            )
-          ) : selectedJobForDetail ? (
-            <JobDetail
-              job={selectedJobForDetail}
-              workerId={currentUser.id}
-              onBack={() => setSelectedJobForDetail(null)}
-              onJobUpdated={(updated) => {
-                setSelectedJobForDetail(updated);
-              }}
-            />
-          ) : activeTab === 'history' ? (
-            <JobHistoryScreen />
-          ) : activeTab === 'alerts' ? (
-            <NotificationsScreen onSimulateAlert={handleSimulateAlert} />
-          ) : activeTab === 'profile' ? (
-            <ProfileScreen />
-          ) : (
-            <WorkerDashboard
-              workerId={currentUser.id}
-              workerName={currentUser.fullName}
-              onSelectJob={(job) => setSelectedJobForDetail(job)}
-              onSimulateDispatchAlert={handleSimulateAlert}
-            />
-          )}
-
-          {/* Global Dispatch Alert Modal */}
-          <NewJobAlertModal
-            visible={alertVisible}
-            job={incomingJob}
-            distanceKm={2.4}
-            workerId={currentUser.id}
-            onAccept={handleAcceptAlert}
-            onReject={handleRejectAlert}
-          />
-
-          {/* Floating Pill Bottom Navigation Bar */}
-          {!selectedJobForDetail && (
-            <FloatingTabBar
-              activeTab={activeTab}
-              onTabPress={(tabId) => {
-                setActiveTab(tabId);
-              }}
-            />
-          )}
+          <Pressable
+            style={({ pressed }) => [styles.logoutButton, pressed && styles.logoutButtonPressed]}
+            onPress={logout}
+            accessibilityRole="button"
+            accessibilityLabel="Sign out"
+          >
+            <Icon name="log-out" size={15} color={colors.dangerText} />
+            <Text style={styles.logoutButtonText}>Sign Out</Text>
+          </Pressable>
         </View>
-      </SafeAreaView>
-    </SafeAreaProvider>
+
+        {/* Top Role Mode Switcher Bar */}
+        <View style={styles.roleBar}>
+          {ROLE_MODES.map((mode) => {
+            const isActive = appRoleMode === mode.id;
+            return (
+              <Pressable
+                key={mode.id}
+                style={({ pressed }) => [
+                  styles.roleTab,
+                  isActive && styles.roleTabActive,
+                  pressed && !isActive && styles.roleTabPressed,
+                ]}
+                onPress={() => setAppRoleMode(mode.id)}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: isActive }}
+                accessibilityLabel={mode.label}
+              >
+                <Icon
+                  name={mode.icon}
+                  size={15}
+                  color={isActive ? colors.white : colors.textSecondary}
+                />
+                <Text style={[styles.roleTabText, isActive && styles.roleTabTextActive]}>
+                  {mode.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* Render Active View */}
+        {appRoleMode === 'customer' ? (
+          customerActiveJob ? (
+            <CustomerTrackingView
+              job={customerActiveJob}
+              onNewBooking={() => setCustomerActiveJob(null)}
+            />
+          ) : (
+            <CustomerBookingWizard
+              customerId={currentUser.id || MOCK_CUSTOMER_ID}
+              onBookingComplete={handleBookingComplete}
+            />
+          )
+        ) : selectedJobForDetail ? (
+          <JobDetail
+            job={selectedJobForDetail}
+            workerId={currentUser.id}
+            onBack={() => setSelectedJobForDetail(null)}
+            onJobUpdated={(updated) => {
+              setSelectedJobForDetail(updated);
+            }}
+          />
+        ) : activeTab === 'history' ? (
+          <JobHistoryScreen />
+        ) : activeTab === 'alerts' ? (
+          <NotificationsScreen onSimulateAlert={handleSimulateAlert} />
+        ) : activeTab === 'profile' ? (
+          <ProfileScreen />
+        ) : (
+          <WorkerDashboard
+            workerId={currentUser.id}
+            workerName={currentUser.fullName}
+            onSelectJob={(job) => setSelectedJobForDetail(job)}
+            onSimulateDispatchAlert={handleSimulateAlert}
+          />
+        )}
+
+        {/* Global Dispatch Alert Modal */}
+        <NewJobAlertModal
+          visible={alertVisible}
+          job={incomingJob}
+          distanceKm={2.4}
+          workerId={currentUser.id}
+          onAccept={handleAcceptAlert}
+          onReject={handleRejectAlert}
+        />
+
+        {/* Floating Pill Bottom Navigation Bar */}
+        {!selectedJobForDetail && (
+          <FloatingTabBar
+            activeTab={activeTab}
+            onTabPress={(tabId) => {
+              setActiveTab(tabId);
+            }}
+          />
+        )}
+      </View>
+    </SafeAreaView>
   );
 }
 
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <MainApp />
-      </AuthProvider>
+      <SafeAreaProvider>
+        <StatusBar barStyle="light-content" backgroundColor={colors.bg} />
+        <AuthProvider>
+          <MainApp />
+        </AuthProvider>
+      </SafeAreaProvider>
     </QueryClientProvider>
   );
 }
 
 const styles = StyleSheet.create({
-  loadingScreen: {
-    flex: 1,
-    backgroundColor: '#0F172A',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    color: '#94A3B8',
-    marginTop: 12,
-    fontSize: 16,
-    fontWeight: '600',
-  },
   safeArea: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: colors.bg,
   },
   container: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: colors.bg,
   },
+
+  // ── Session header ──
   userHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#1E293B',
-    borderBottomWidth: 1,
-    borderBottomColor: '#334155',
+    gap: spacing.md,
+    paddingHorizontal: layout.screenPadding,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.bg,
   },
   userInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: spacing.md,
+    flex: 1,
+    minWidth: 0,
   },
   userAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#F97316',
+    width: 40,
+    height: 40,
+    borderRadius: radius.pill,
+    backgroundColor: colors.brand,
     justifyContent: 'center',
     alignItems: 'center',
   },
   userAvatarText: {
-    color: '#FFFFFF',
+    ...typography.h3,
+    color: colors.white,
     fontWeight: '800',
-    fontSize: 16,
+  },
+  userText: {
+    flex: 1,
+    minWidth: 0,
   },
   userName: {
-    color: '#F8FAFC',
-    fontSize: 14,
-    fontWeight: '700',
+    ...typography.bodyStrong,
+    color: colors.text,
   },
   userRoleBadge: {
-    color: '#F97316',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+    ...typography.overline,
+    color: colors.brand,
+    marginTop: 1,
   },
   logoutButton: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + 2,
+    minHeight: 36,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.dangerSubtle,
     borderWidth: 1,
-    borderColor: '#EF4444',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
+    borderColor: colors.danger,
+  },
+  logoutButtonPressed: {
+    backgroundColor: colors.dangerPressed,
   },
   logoutButtonText: {
-    color: '#FCA5A5',
-    fontSize: 12,
+    ...typography.caption,
     fontWeight: '700',
+    color: colors.dangerText,
   },
+
+  // ── Role switcher (segmented control) ──
   roleBar: {
     flexDirection: 'row',
-    backgroundColor: '#1E293B',
-    padding: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: '#334155',
+    gap: spacing.xs,
+    marginHorizontal: layout.screenPadding,
+    marginBottom: spacing.md,
+    padding: spacing.xs,
+    backgroundColor: colors.surface,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   roleTab: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    minHeight: 38,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  roleTabPressed: {
+    backgroundColor: colors.surfaceRaised,
   },
   roleTabActive: {
-    backgroundColor: '#F97316',
+    backgroundColor: colors.brand,
   },
   roleTabText: {
-    color: '#94A3B8',
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+    ...typography.caption,
+    fontWeight: '700',
+    color: colors.textSecondary,
   },
   roleTabTextActive: {
-    color: '#FFFFFF',
+    color: colors.white,
   },
 });
