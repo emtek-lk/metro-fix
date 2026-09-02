@@ -41,7 +41,7 @@ export const CustomerTrackingView: React.FC<CustomerTrackingViewProps> = ({
 
   useEffect(() => {
     // Listen to real-time WebSocket update events from NestJS backend
-    const unsubscribe = realtimeSocket.on('job.updated', (updatedJob) => {
+    const unsubscribe = realtimeSocket.on('job.updated', (updatedJob: any) => {
       if (updatedJob.id === currentJob.id) {
         console.log('[CustomerTrackingView] Real-time status update received:', updatedJob.status);
         setCurrentJob(updatedJob);
