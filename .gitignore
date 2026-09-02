@@ -1,52 +1,49 @@
-node_modules
 # ==========================================
-# Monorepo Root Global Ignores
+# METRO-FIX Monorepo — Global .gitignore
 # ==========================================
-node_modules/
-.DS_Store
-Thmubs.db
-.vscode/
-.idea/
 
-# Sensitive Environment Secrets (CRITICAL)
+# --- Dependencies ---
+node_modules/
+
+# --- Build Outputs (all packages & apps) ---
+dist/
+build/
+.turbo/
+*.tsbuildinfo
+
+# --- Environment Secrets ---
 .env
 .env.local
 .env.*.local
-*.env
 
-# ==========================================
-# Apps: API (NestJS) Specifics
-# ==========================================
-apps/api/dist/
-apps/api/node_modules/
-apps/api/*.tsbuildinfo
+# --- OS & Editor ---
+.DS_Store
+Thumbs.db
+.vscode/
+!.vscode/extensions.json
+.idea/
 
-# ==========================================
-# Apps: Web (Vite / React) Specifics
-# ==========================================
-apps/web/dist/
-apps/web/node_modules/
-apps/web/.eslintcache
+# --- Logs ---
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# ==========================================
-# Apps: Mobile (React Native) Specifics
-# ==========================================
-apps/mobile/node_modules/
-
-# Android build outputs and caches
+# --- Expo / React Native ---
+.expo/
+.expo-shared/
 apps/mobile/android/.gradle/
 apps/mobile/android/build/
 apps/mobile/android/app/build/
 apps/mobile/android/local.properties
 apps/mobile/android/*.skp
-
-# iOS build outputs and CocoaPods
 apps/mobile/ios/Pods/
 apps/mobile/ios/build/
 apps/mobile/ios/DerivedData/
 apps/mobile/ios/.xcode.env.local
-# Expo dev logs and cache
-apps/mobile/.expo/
-apps/mobile/.expo-shared/
-apps/mobile/.expo/dev/logs/
-.expo/
+
+# --- Web ---
+apps/web/.eslintcache
+
+# --- Testing ---
+coverage/
