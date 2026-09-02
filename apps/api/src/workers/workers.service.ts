@@ -50,7 +50,7 @@ export class WorkersService {
       email: dto.email,
       phoneNumber: dto.phoneNumber || undefined,
       role: Role.WORKER,
-      password: 'Password123!',
+      password: process.env.WORKER_DEFAULT_PASSWORD || 'ChangeMe123!',
     });
     const savedUser = await this.userRepo.save(user);
 
