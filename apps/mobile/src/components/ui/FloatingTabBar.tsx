@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, LayoutChangeEvent, PanResponder, StyleSheet, View } from 'react-native';
+import { Animated, LayoutChangeEvent, PanResponder, Platform, StyleSheet, View } from 'react-native';
 import { Text } from './AppText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../theme/colors';
@@ -232,7 +232,7 @@ export const FloatingTabBar: React.FC<FloatingTabBarProps> = ({
         { bottom: layout.tabBarInset + insets.bottom },
       ]}
     >
-      <GlassSurface borderRadius={radius.pill} style={styles.glass}>
+      <GlassSurface borderRadius={radius.pill} style={styles.glass} shadow={Platform.OS !== 'android'}>
         <View
           ref={trackRef}
           style={styles.track}

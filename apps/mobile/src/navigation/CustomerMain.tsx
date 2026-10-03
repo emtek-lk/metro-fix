@@ -9,6 +9,7 @@ import { MyRequestsScreen } from '../components/MyRequestsScreen';
 import { ProfileScreen } from '../components/Profile';
 import { FloatingTabBar, type TabItem } from '../components/ui/FloatingTabBar';
 import { ScreenShell } from './ScreenShell';
+import { TabPanes } from './TabPanes';
 import type { RootStackParamList } from './types';
 
 const CUSTOMER_TABS: TabItem[] = [
@@ -50,32 +51,29 @@ export function CustomerMain({ navigation }: Props) {
     navigation.navigate('Tracking', { job });
   };
 
-  const renderContent = () => {
-    switch (activeTab) {
-      case 'profile':
-        return <ProfileScreen onOpenGallery={__DEV__ ? () => navigation.navigate('Gallery') : undefined} />;
-      case 'requests':
-        return (
-          <MyRequestsScreen
-            requests={requests}
-            onOpen={(job) => navigation.navigate('Tracking', { job })}
-            onBook={() => setActiveTab('book')}
-          />
-        );
-      default:
-        return (
-          <CustomerBookingWizard
-            key={bookingKey}
-            customerId={user.id}
-            onBookingComplete={handleBookingComplete}
-          />
-        );
-    }
+  const panes: Record<string, () => React.ReactNode> = {
+    book: () => (
+      <CustomerBookingWizard
+        key={bookingKey}
+        customerId={user.id}
+        onBookingComplete={handleBookingComplete}
+      />
+    ),
+    requests: () => (
+      <MyRequestsScreen
+        requests={requests}
+        onOpen={(job) => navigation.navigate('Tracking', { job })}
+        onBook={() => setActiveTab('book')}
+      />
+    ),
+    profile: () => (
+      <ProfileScreen onOpenGallery={__DEV__ ? () => navigation.navigate('Gallery') : undefined} />
+    ),
   };
 
   return (
     <ScreenShell>
-      {renderContent()}
+      <TabPanes activeTab={activeTab} panes={panes} />
       <FloatingTabBar activeTab={activeTab} onTabPress={setActiveTab} tabs={CUSTOMER_TABS} />
     </ScreenShell>
   );

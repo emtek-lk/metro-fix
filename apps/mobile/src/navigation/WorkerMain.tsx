@@ -13,6 +13,7 @@ import { FloatingTabBar, type TabItem } from '../components/ui/FloatingTabBar';
 import { apiService } from '../services/api';
 import { useNotifications } from '../hooks/useNotifications';
 import { ScreenShell } from './ScreenShell';
+import { TabPanes } from './TabPanes';
 import type { RootStackParamList } from './types';
 
 const WORKER_TABS: TabItem[] = [
@@ -71,37 +72,33 @@ export function WorkerMain({ navigation }: Props) {
     }
   };
 
-  const renderContent = () => {
-    switch (activeTab) {
-      case 'history':
-        return <JobHistoryScreen />;
-      case 'alerts':
-        return (
-          <NotificationsScreen
-            notifications={notifications.items}
-            unreadCount={notifications.unreadCount}
-            onMarkRead={notifications.markRead}
-            onMarkAllRead={notifications.markAllRead}
-            onSimulateAlert={handleSimulateAlert}
-          />
-        );
-      case 'profile':
-        return <ProfileScreen onOpenGallery={__DEV__ ? () => navigation.navigate('Gallery') : undefined} />;
-      default:
-        return (
-          <WorkerDashboard
-            workerId={user.id}
-            workerName={user.fullName}
-            onSelectJob={openJob}
-            onOpenAlerts={() => setActiveTab('alerts')}
-          />
-        );
-    }
+  const panes: Record<string, () => React.ReactNode> = {
+    jobs: () => (
+      <WorkerDashboard
+        workerId={user.id}
+        workerName={user.fullName}
+        onSelectJob={openJob}
+        onOpenAlerts={() => setActiveTab('alerts')}
+      />
+    ),
+    history: () => <JobHistoryScreen />,
+    alerts: () => (
+      <NotificationsScreen
+        notifications={notifications.items}
+        unreadCount={notifications.unreadCount}
+        onMarkRead={notifications.markRead}
+        onMarkAllRead={notifications.markAllRead}
+        onSimulateAlert={handleSimulateAlert}
+      />
+    ),
+    profile: () => (
+      <ProfileScreen onOpenGallery={__DEV__ ? () => navigation.navigate('Gallery') : undefined} />
+    ),
   };
 
   return (
     <ScreenShell>
-      {renderContent()}
+      <TabPanes activeTab={activeTab} panes={panes} />
 
       {/* Global dispatch alert */}
       <NewJobAlertModal

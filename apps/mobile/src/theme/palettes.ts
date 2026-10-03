@@ -54,21 +54,12 @@ export const darkPalette = {
   glassAndroid: 'rgba(30, 41, 59, 0.985)',
   /** A heavier wash for glass that carries text over busy content (toasts). */
   glassStrong: 'rgba(30, 41, 59, 0.88)',
-  /** The sliding tab "bubble": native glass tint on iOS 26+, plain fill / sheen / rim elsewhere. */
-  bubbleTint: 'rgba(249, 115, 22, 0.16)',
-  bubbleFill: 'rgba(255, 255, 255, 0.07)',
-  /** Body shading: light falls from the top, the lower edge sits in shade. */
-  bubbleLight: 'rgba(255, 255, 255, 0.20)',
-  bubbleShade: 'rgba(2, 6, 23, 0.34)',
-  /** Warm light bounced up along the bottom edge. */
-  bubbleGlow: 'rgba(251, 146, 60, 0.34)',
-  /** The bright highlight near the top. */
-  bubbleSpecular: 'rgba(255, 255, 255, 0.60)',
-  /** Rim light: strongest on top, warm on the bottom. */
-  bubbleRimTop: 'rgba(255, 255, 255, 0.80)',
-  bubbleRimSide: 'rgba(255, 255, 255, 0.26)',
-  bubbleRimBottom: 'rgba(251, 146, 60, 0.60)',
-  bubbleShadow: '#000000',
+  /** Active-tab lens: neutral glass, so it takes its colour from whatever is behind it. */
+  bubbleFill: 'rgba(255, 255, 255, 0.10)',
+  bubbleRim: 'rgba(255, 255, 255, 0.28)',
+  bubbleHighlight: 'rgba(255, 255, 255, 0.28)',
+  /** Android indicator: a solid tonal capsule, as in Material 3 navigation bars. */
+  bubbleTonal: 'rgba(249, 115, 22, 0.24)',
   /** Round controls laid over photography: identical in both themes, since the photo is. */
   photoControl: 'rgba(255, 255, 255, 0.92)',
   photoControlIcon: '#0F172A',
@@ -121,16 +112,11 @@ export const lightPalette: ThemeColors = {
   glassSolid: '#FFFFFF',
   glassAndroid: 'rgba(255, 255, 255, 0.985)',
   glassStrong: 'rgba(255, 255, 255, 0.90)',
-  bubbleTint: 'rgba(234, 88, 12, 0.24)',
-  bubbleFill: 'rgba(255, 255, 255, 0.40)',
-  bubbleLight: 'rgba(255, 255, 255, 0.90)',
-  bubbleShade: 'rgba(234, 88, 12, 0.20)',
-  bubbleGlow: 'rgba(234, 88, 12, 0.24)',
-  bubbleSpecular: 'rgba(255, 255, 255, 1)',
-  bubbleRimTop: 'rgba(255, 255, 255, 1)',
-  bubbleRimSide: 'rgba(255, 255, 255, 0.70)',
-  bubbleRimBottom: 'rgba(234, 88, 12, 0.50)',
-  bubbleShadow: '#9A3412',
+  // On a light bar a white lens is invisible, so light mode uses a faint dark body and a darker edge.
+  bubbleFill: 'rgba(15, 23, 42, 0.09)',
+  bubbleRim: 'rgba(15, 23, 42, 0.14)',
+  bubbleHighlight: 'rgba(255, 255, 255, 0.9)',
+  bubbleTonal: 'rgba(194, 65, 12, 0.16)',
   photoControl: 'rgba(255, 255, 255, 0.92)',
   photoControlIcon: '#0F172A',
   ambientWarm: 'rgba(249, 115, 22, 0.14)',
