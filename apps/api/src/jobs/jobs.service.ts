@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -12,6 +13,22 @@ import { CreateJobDto } from './dto/create-job.dto';
 import { SubmitQuoteDto } from './dto/submit-quote.dto';
 import { SubmitProofDto } from './dto/submit-proof.dto';
 import { JobsGateway } from './jobs.gateway';
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Allowed job lifecycle transitions (AGENTS.md section 4). Anything not listed is rejected.
+ * PENDING_ACCEPTANCE -> REQUESTED is the worker reject / ignore auto-revert.
+ */
+const ALLOWED_TRANSITIONS: Record<JobStatus, JobStatus[]> = {
+  [JobStatus.REQUESTED]: [JobStatus.PENDING_ACCEPTANCE, JobStatus.ASSIGNED],
+  [JobStatus.PENDING_ACCEPTANCE]: [JobStatus.ASSIGNED, JobStatus.REQUESTED],
+  [JobStatus.ASSIGNED]: [JobStatus.ON_ROUTE],
+  [JobStatus.ON_ROUTE]: [JobStatus.INSPECTION],
+  [JobStatus.INSPECTION]: [JobStatus.IN_PROGRESS],
+  [JobStatus.IN_PROGRESS]: [JobStatus.COMPLETED],
+  [JobStatus.COMPLETED]: [],
+};
 
 @Injectable()
 export class JobsService {
@@ -36,6 +53,10 @@ export class JobsService {
   }
 
   async findOne(id: string): Promise<ServiceRequestEntity> {
+    // The id column is a uniqueidentifier; a non-UUID would make SQL Server throw (HTTP 500).
+    if (!UUID_PATTERN.test(id)) {
+      throw new NotFoundException(`Service request with ID "${id}" not found`);
+    }
     const job = await this.jobRepo.findOne({
       where: { id },
       relations: {
@@ -94,6 +115,42 @@ export class JobsService {
     return fullJob;
   }
 
+  private assertTransition(from: JobStatus, to: JobStatus): void {
+    if (!ALLOWED_TRANSITIONS[from]?.includes(to)) {
+      throw new ConflictException(`Invalid status transition: ${from} -> ${to}`);
+    }
+  }
+
+  /** Resolves a worker by worker id or user id; throws 404 if none exists. */
+  private async resolveWorker(workerIdOrUserId: string): Promise<WorkerEntity> {
+    const worker = await this.workerRepo.findOne({
+      where: [{ id: workerIdOrUserId }, { userId: workerIdOrUserId }],
+    });
+    if (!worker) {
+      throw new NotFoundException(`Worker with ID "${workerIdOrUserId}" not found`);
+    }
+    return worker;
+  }
+
+  /**
+   * Writes status / workerId with a direct UPDATE. Saving the loaded entity would let the
+   * eagerly loaded `worker` relation override a changed or cleared `workerId` column.
+   */
+  private async applyStatus(
+    id: string,
+    status: JobStatus,
+    workerId: string | null | undefined,
+  ): Promise<ServiceRequestEntity> {
+    const patch: { status: JobStatus; workerId?: string | null } = { status };
+    if (workerId !== undefined) {
+      patch.workerId = workerId;
+    }
+    await this.jobRepo.update({ id }, patch);
+    const updatedFull = await this.findOne(id);
+    this.jobsGateway.emitJobUpdated(updatedFull);
+    return updatedFull;
+  }
+
   /**
    * Pipeline State Transition Business Logic:
    * 1. REQUESTED -> PENDING_ACCEPTANCE: Customer Care pings worker. Requires valid workerId.
@@ -105,45 +162,29 @@ export class JobsService {
     id: string,
     dto: UpdateJobStatusDto,
   ): Promise<ServiceRequestEntity> {
-    let job: ServiceRequestEntity;
-    try {
-      job = await this.findOne(id);
-    } catch (err) {
-      // Fallback for simulated demo jobs (e.g. job_dispatch_909) not stored in DB
-      return {
-        id,
-        title: 'Commercial Service Request',
-        description: 'Simulated dispatch request',
-        servicePillar: 'HARD' as any,
-        facilityType: 'COMMERCIAL' as any,
-        status: dto.status,
-        customerId: 'cust_demo',
-        workerId: dto.workerId || null,
-        latitude: 37.7749,
-        longitude: -122.4194,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      } as any;
+    const job = await this.findOne(id);
+
+    // Re-sending the current status is a harmless no-op (e.g. double tap).
+    if (job.status === dto.status) {
+      return job;
     }
 
-    // Resolve worker by ID or userId
-    if (dto.workerId) {
-      const worker = await this.workerRepo.findOne({
-        where: [{ id: dto.workerId }, { userId: dto.workerId }],
-      });
-      job.workerId = worker ? worker.id : dto.workerId;
-    } else if (dto.status === JobStatus.REQUESTED) {
-      job.workerId = null;
+    this.assertTransition(job.status, dto.status);
+
+    let workerId: string | null | undefined;
+    if (dto.status === JobStatus.REQUESTED) {
+      workerId = null;
+    } else if (dto.workerId) {
+      workerId = (await this.resolveWorker(dto.workerId)).id;
+    } else if (dto.status === JobStatus.PENDING_ACCEPTANCE) {
+      throw new BadRequestException('A workerId is required to ping a worker.');
     }
 
-    job.status = dto.status;
-    const savedJob = await this.jobRepo.save(job);
-    const updatedFull = await this.findOne(savedJob.id);
+    if (dto.status !== JobStatus.REQUESTED && workerId === undefined && !job.workerId) {
+      throw new BadRequestException(`A worker must be assigned before moving to ${dto.status}.`);
+    }
 
-    // Emit real-time WebSocket event
-    this.jobsGateway.emitJobUpdated(updatedFull);
-
-    return updatedFull;
+    return this.applyStatus(id, dto.status, workerId);
   }
 
   /**
@@ -151,21 +192,9 @@ export class JobsService {
    */
   async assignWorker(id: string, workerId: string): Promise<ServiceRequestEntity> {
     const job = await this.findOne(id);
-
-    const workerExists = await this.workerRepo.exists({ where: { id: workerId } });
-    if (!workerExists) {
-      throw new NotFoundException(`Worker with ID "${workerId}" not found`);
-    }
-
-    job.workerId = workerId;
-    job.status = JobStatus.ASSIGNED;
-
-    const savedJob = await this.jobRepo.save(job);
-    const updatedFull = await this.findOne(savedJob.id);
-
-    this.jobsGateway.emitJobUpdated(updatedFull);
-
-    return updatedFull;
+    const worker = await this.resolveWorker(workerId);
+    this.assertTransition(job.status, JobStatus.ASSIGNED);
+    return this.applyStatus(id, JobStatus.ASSIGNED, worker.id);
   }
 
   /**
@@ -175,39 +204,20 @@ export class JobsService {
     id: string,
     dto: SubmitQuoteDto,
   ): Promise<ServiceRequestEntity> {
-    let job: ServiceRequestEntity;
-    try {
-      job = await this.findOne(id);
-    } catch {
-      return {
-        id,
-        title: 'Commercial Service Request',
-        description: 'Simulated dispatch request',
-        servicePillar: 'HARD' as any,
-        facilityType: 'COMMERCIAL' as any,
-        status: JobStatus.IN_PROGRESS,
+    const job = await this.findOne(id);
+    this.assertTransition(job.status, JobStatus.IN_PROGRESS);
+
+    await this.jobRepo.update(
+      { id },
+      {
         quoteAmount: dto.estimatedCost,
         estimatedHours: dto.estimatedHours,
         quoteNotes: dto.notes,
-        customerId: 'cust_demo',
-        workerId: 'wrk_demo',
-        latitude: 37.7749,
-        longitude: -122.4194,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      } as any;
-    }
-
-    job.quoteAmount = dto.estimatedCost;
-    job.estimatedHours = dto.estimatedHours;
-    job.quoteNotes = dto.notes;
-    job.status = JobStatus.IN_PROGRESS;
-
-    const savedJob = await this.jobRepo.save(job);
-    const updatedFull = await this.findOne(savedJob.id);
-
+        status: JobStatus.IN_PROGRESS,
+      },
+    );
+    const updatedFull = await this.findOne(id);
     this.jobsGateway.emitJobUpdated(updatedFull);
-
     return updatedFull;
   }
 
@@ -218,37 +228,19 @@ export class JobsService {
     id: string,
     dto: SubmitProofDto,
   ): Promise<ServiceRequestEntity> {
-    let job: ServiceRequestEntity;
-    try {
-      job = await this.findOne(id);
-    } catch {
-      return {
-        id,
-        title: 'Commercial Service Request',
-        description: 'Simulated dispatch request',
-        servicePillar: 'HARD' as any,
-        facilityType: 'COMMERCIAL' as any,
-        status: JobStatus.COMPLETED,
+    const job = await this.findOne(id);
+    this.assertTransition(job.status, JobStatus.COMPLETED);
+
+    await this.jobRepo.update(
+      { id },
+      {
         signature: dto.signature,
         photos: dto.photos,
-        customerId: 'cust_demo',
-        workerId: 'wrk_demo',
-        latitude: 37.7749,
-        longitude: -122.4194,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      } as any;
-    }
-
-    job.signature = dto.signature;
-    job.photos = dto.photos;
-    job.status = JobStatus.COMPLETED;
-
-    const savedJob = await this.jobRepo.save(job);
-    const updatedFull = await this.findOne(savedJob.id);
-
+        status: JobStatus.COMPLETED,
+      },
+    );
+    const updatedFull = await this.findOne(id);
     this.jobsGateway.emitJobUpdated(updatedFull);
-
     return updatedFull;
   }
 }

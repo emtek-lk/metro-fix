@@ -18,6 +18,7 @@ import { MobileLoginScreen } from './src/components/MobileLoginScreen';
 import { FloatingTabBar } from './src/components/ui/FloatingTabBar';
 import { Icon } from './src/components/ui/Icon';
 import { LoadingState } from './src/components/ui/LoadingState';
+import { apiService } from './src/services/api';
 import { colors } from './src/theme/colors';
 import { typography } from './src/theme/typography';
 import { spacing, radius, layout } from './src/theme/layout';
@@ -33,17 +34,13 @@ const queryClient = new QueryClient({
 
 const MOCK_CUSTOMER_ID = 'cust_metro_101';
 
-const SAMPLE_INCOMING_JOB: ServiceRequest = {
-  id: 'job_dispatch_909',
+// Template for the "Simulate incoming job" action, which creates a real job via the API.
+const SAMPLE_JOB_INPUT = {
   title: 'Commercial HVAC Roof Chiller Fault',
   description: 'Primary compressor circuit pressure drop detected. Requires diagnostic inspection and quote.',
   servicePillar: ServicePillar.HARD,
   facilityType: FacilityType.COMMERCIAL,
-  status: JobStatus.PENDING_ACCEPTANCE,
-  customerId: MOCK_CUSTOMER_ID,
-  workerId: 'wrk_demo_88',
   location: { latitude: 37.7749, longitude: -122.4194 },
-  createdAt: new Date().toISOString(),
 };
 
 const ROLE_MODES = [
@@ -83,9 +80,23 @@ function MainApp() {
     setCustomerActiveJob(newJob);
   };
 
-  const handleSimulateAlert = () => {
-    setIncomingJob(SAMPLE_INCOMING_JOB);
-    setAlertVisible(true);
+  const handleSimulateAlert = async () => {
+    try {
+      // Create a real REQUESTED job, then ping this worker so accept / reject hit real data.
+      const created = await apiService.createJob({
+        ...SAMPLE_JOB_INPUT,
+        customerId: currentUser.id || MOCK_CUSTOMER_ID,
+      });
+      const pinged = await apiService.updateJobStatus(
+        created.id,
+        JobStatus.PENDING_ACCEPTANCE,
+        currentUser.id,
+      );
+      setIncomingJob(pinged);
+      setAlertVisible(true);
+    } catch (error) {
+      console.error('Failed to simulate incoming job:', error);
+    }
   };
 
   const handleAcceptAlert = (acceptedJob: ServiceRequest) => {
