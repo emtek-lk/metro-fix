@@ -1,6 +1,7 @@
 import { useState, type CSSProperties, type FormEvent } from 'react';
 import { Role, registrationSchema, type RegistrationInput } from '@metro-fix/core-types';
 import { useMediaQuery } from '@metro-fix/ui';
+import { useAppSettings } from '../../lib/settings';
 
 export interface RegisterProps {
   /** Resolves to an error message to show, or null when the account was created. */
@@ -21,6 +22,7 @@ const initialState: RegistrationInput = {
 export function Register({ onSubmit }: RegisterProps) {
   const [form, setForm] = useState<RegistrationInput>(initialState);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const app = useAppSettings();
   const [address, setAddress] = useState('');
   const [busy, setBusy] = useState(false);
   const isCompact = useMediaQuery('(max-width: 820px)');
@@ -39,7 +41,9 @@ export function Register({ onSubmit }: RegisterProps) {
       }
     }
     if (phoneDigits < 7 || phoneDigits > 15) found.phoneNumber = 'Enter a valid phone number.';
-    if (!/[A-Za-z]/.test(form.password) || !/\d/.test(form.password)) {
+    if (form.password.length < app.passwordMinLength) {
+      found.password = `Use at least ${app.passwordMinLength} characters.`;
+    } else if (!/[A-Za-z]/.test(form.password) || !/\d/.test(form.password)) {
       found.password = found.password ?? 'Include both letters and numbers.';
     }
     if (!result.success || Object.keys(found).length > 0) {
@@ -134,7 +138,7 @@ export function Register({ onSubmit }: RegisterProps) {
             value={form.password}
             onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
             style={styles.input}
-            placeholder="Minimum 8 characters"
+            placeholder={`Minimum ${app.passwordMinLength} characters`}
           />
           {errors.password && <span style={styles.errorText}>{errors.password}</span>}
         </div>

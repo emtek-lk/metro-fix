@@ -11,12 +11,14 @@ import { Role } from '@metro-fix/core-types';
 import { ServiceRequestEntity } from '../entities';
 
 const STAFF_ROOM = 'staff';
+import { corsOriginOption } from '../common/cors';
+
 const customerRoom = (userId: string) => `customer:${userId}`;
 const workerRoom = (userId: string) => `worker:${userId}`;
 
 @WebSocketGateway({
   cors: {
-    origin: true,
+    origin: corsOriginOption(),
     credentials: true,
   },
 })

@@ -11,6 +11,7 @@ import {
   type CheckoutInput,
   type CustomerSubscription,
 } from '@metro-fix/core-types';
+import { useMediaQuery } from '@metro-fix/ui';
 import { API_BASE_URL } from '../../lib/api';
 
 export interface PlanSummary {
@@ -41,6 +42,7 @@ const BRAND_LABEL = { VISA: 'VISA', MASTERCARD: 'Mastercard', AMEX: 'AMEX', UNKN
  * demo gateway approves any valid card number. 4242 4242 4242 4242 works; 4000 0000 0000 0002 is declined.
  */
 export function CheckoutModal({ plan, billingCycle, intent, token, onClose, onSuccess, onDeclined }: CheckoutModalProps) {
+  const isPhone = useMediaQuery('(max-width: 640px)');
   const [number, setNumber] = useState('');
   const [name, setName] = useState('');
   const [expiry, setExpiry] = useState('');
@@ -98,8 +100,8 @@ export function CheckoutModal({ plan, billingCycle, intent, token, onClose, onSu
   });
 
   return (
-    <div style={styles.overlay} role="dialog" aria-modal="true" aria-label={`${intent} ${plan.tierName}`}>
-      <form style={styles.card} onSubmit={submit} noValidate>
+    <div style={{ ...styles.overlay, ...(isPhone ? styles.overlayPhone : undefined) }} role="dialog" aria-modal="true" aria-label={`${intent} ${plan.tierName}`}>
+      <form style={{ ...styles.card, ...(isPhone ? styles.cardPhone : undefined) }} onSubmit={submit} noValidate>
         <div style={styles.header}>
           <div>
             <div style={styles.kicker}>Secure checkout · demo</div>
@@ -195,6 +197,8 @@ export function CheckoutModal({ plan, billingCycle, intent, token, onClose, onSu
 
 const styles: Record<string, CSSProperties> = {
   overlay: { position: 'fixed', inset: 0, background: 'rgba(4, 10, 11, 0.7)', display: 'grid', placeItems: 'center', padding: 24, zIndex: 100000 },
+  overlayPhone: { alignItems: 'flex-end', padding: 0 },
+  cardPhone: { width: '100%', maxHeight: '96dvh', borderRadius: '20px 20px 0 0', paddingBottom: 'calc(22px + env(safe-area-inset-bottom))' },
   card: { width: 'min(460px, 100%)', borderRadius: 22, background: 'var(--surface)', borderWidth: '1px', borderStyle: 'solid', borderColor: 'var(--border-subtle)', padding: 22, boxSizing: 'border-box', maxHeight: '92vh', overflowY: 'auto', boxShadow: '0 30px 72px rgba(0, 0, 0, 0.4)' },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, marginBottom: 14 },
   kicker: { color: '#f38808', textTransform: 'uppercase', letterSpacing: '0.14em', fontSize: '0.74rem', fontWeight: 700 },
@@ -205,7 +209,7 @@ const styles: Record<string, CSSProperties> = {
   previewNumber: { fontSize: '1.25rem', letterSpacing: '0.12em', margin: '18px 0 14px', fontVariantNumeric: 'tabular-nums' },
   previewRow: { display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', textTransform: 'uppercase', opacity: 0.9 },
   label: { display: 'block', margin: '12px 0 6px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)' },
-  input: { width: '100%', boxSizing: 'border-box', padding: '10px 12px', borderRadius: 10, borderWidth: '1px', borderStyle: 'solid', borderColor: 'var(--border-subtle)', background: 'var(--surface-strong)', color: 'var(--text-primary)', fontSize: '0.95rem', fontFamily: 'inherit' },
+  input: { width: '100%', boxSizing: 'border-box', padding: '12px 12px', borderRadius: 10, borderWidth: '1px', borderStyle: 'solid', borderColor: 'var(--border-subtle)', background: 'var(--surface-strong)', color: 'var(--text-primary)', fontSize: '1rem', fontFamily: 'inherit' },
   fieldError: { color: '#ff8a80', fontSize: '0.78rem', marginTop: 4 },
   row: { display: 'flex', gap: 12 },
   col: { flex: 1, minWidth: 0 },

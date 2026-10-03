@@ -22,6 +22,7 @@ METRO-FIX is a Managed Dispatch Facility Management platform (an "Uber-for-servi
 ## 3. UI/UX & CSS Design System
 Agents modifying `apps/web` must strictly adhere to the following layout and styling constraints:
 - **Layout:** Fixed App Shell. Outer wrapper is `100vh`/`overflow: hidden`. Sidebar and Top Ribbon are fixed. Only the middle canvas scrolls (`overflow-y: auto` with scrollbars visually hidden using `scrollbar-width: none`).
+- **Two websites:** the same build serves the **staff** site (`admin.<site>`: this fixed app shell with sidebar) and the **customer** site (any other real hostname). The customer site uses `CustomerShell`: mobile first, a bottom tab bar on phones and top navigation from 860 px, content in a centred column, pop-ups as full-height sheets on phones. The audience comes from the hostname (`SURFACE` in `@metro-fix/ui`); never hard-code a domain. Staff screens are lazy-loaded (see CONVENTIONS).
 - **Alignment:** Sidebar uses a strict "Vertical Snap-Track". All menu rows have a `36x36px` icon box and share identical left-margins.
 - **Brand Colors (CSS Variables):**
   - Dark Background (Sidebar/Dark Mode base): `#2b435f`

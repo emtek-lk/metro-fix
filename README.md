@@ -21,16 +21,23 @@ Turborepo monorepo: `apps/api` (NestJS + SQL Server), `apps/web` (React + Vite: 
 
 ## Quick run
 
+Needs Node 22, **npm 9** (newer npm refuses to run; see SETUP.md) and Docker. Full instructions, including iOS, Android and troubleshooting: **[SETUP.md](SETUP.md)**.
+
 ```bash
 npm install
-cd apps/api && npm run start:dev      # http://localhost:3000 (SQL Server on :1433, apps/api/.env)
-cd apps/web && npm run dev            # http://localhost:5173
-cd apps/mobile && EXPO_NO_DEVTOOLS=1 npx expo start --web   # http://localhost:8081
+cp apps/api/.env.example apps/api/.env          # then set JWT_SECRET
+npm run build --workspace packages/core-types   # shared types, needed by the API
+docker compose up -d                            # SQL Server + API (:3000) + web dev server (:5173)
+cd apps/mobile && npm run dev                   # Metro for the mobile apps (press i / a / w)
 ```
 
-Demo logins (password `Demo123!`): `admin@demo.local`, `dispatch@demo.local`, `worker1@demo.local`, `marcus@residences.lk` (customer).
+| Open | For |
+|---|---|
+| http://metrofix.localhost:5173 | **Customer website** (sign in as `marcus@residences.lk`) |
+| http://admin.metrofix.localhost:5173 | **Staff website** (`admin@demo.local` or `dispatch@demo.local`) |
+| iOS simulator / Android emulator / Expo web | **Mobile apps** (`worker1@demo.local` technician, or a customer) |
 
-Docker Compose (`docker compose up`) starts SQL Server, the API and the web app; the database is **SQL Server**, not Postgres.
+Every demo account uses the password `Demo123!` (full list in API.md). The database is **SQL Server**, not Postgres.
 
 ## Keeping docs current
 

@@ -691,6 +691,82 @@ export function passwordPolicyProblem(password: string, minLength: number): stri
   return null;
 }
 
+// ==========================================
+// Hosting: which website a hostname is, and where its API is
+// ==========================================
+
+/** Which audience a website address serves. `any` is local development (plain localhost or an IP). */
+export type Surface = 'admin' | 'customer' | 'any';
+
+export interface HostingConfig {
+  /** The first label that marks the staff site, e.g. "admin" in admin.example.lk. Default "admin". */
+  adminLabel?: string;
+  /** Forces the audience regardless of the address (set at build time for unusual hosting). */
+  surface?: Surface;
+  /** Full API address; when set it wins over everything else. */
+  apiBase?: string;
+}
+
+const DEFAULT_ADMIN_LABEL = 'admin';
+const API_LABEL = 'api';
+const LOCAL_API_PORT = 3000;
+
+const isIpAddress = (hostname: string): boolean => /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname) || hostname.includes(':');
+
+/** True for plain `localhost`, an IP address or a single-word host such as a docker service name. */
+function isPlainHost(hostname: string): boolean {
+  return hostname === 'localhost' || isIpAddress(hostname) || !hostname.includes('.');
+}
+
+/**
+ * The audience for an address, from its first label: `admin.<anything>` is the staff site, any other
+ * real hostname (`metrofix.example.lk`, `metrofix.localhost`) is the customer site, and plain
+ * localhost / IPs serve both so development keeps working. Nothing here names a real domain.
+ */
+export function detectSurface(hostname: string, config: HostingConfig = {}): Surface {
+  if (config.surface) return config.surface;
+  const host = hostname.toLowerCase();
+  if (isPlainHost(host)) return 'any';
+  const adminLabel = (config.adminLabel || DEFAULT_ADMIN_LABEL).toLowerCase();
+  return host.split('.')[0] === adminLabel ? 'admin' : 'customer';
+}
+
+/** The same site's address for the other audience (adds or drops the admin label), keeping the port. */
+export function counterpartHost(host: string, target: 'admin' | 'customer', config: HostingConfig = {}): string | null {
+  const adminLabel = (config.adminLabel || DEFAULT_ADMIN_LABEL).toLowerCase();
+  const [name, port] = host.split(':');
+  if (isPlainHost(name.toLowerCase())) return null;
+  const labels = name.split('.');
+  const isAdmin = labels[0].toLowerCase() === adminLabel;
+  if (target === 'admin') return `${isAdmin ? name : `${adminLabel}.${name}`}${port ? `:${port}` : ''}`;
+  return isAdmin ? `${labels.slice(1).join('.')}${port ? `:${port}` : ''}` : host;
+}
+
+/**
+ * Where the API lives for a page address. An explicit `apiBase` wins. On localhost and IPs it is
+ * port 3000 of the same machine. Elsewhere it is `api.` in place of the admin label (or in front of
+ * the customer hostname): metrofix.example.lk and admin.metrofix.example.lk both use api.metrofix.example.lk.
+ */
+export function resolveApiBase(
+  location: { protocol: string; hostname: string; port?: string },
+  config: HostingConfig = {},
+): string {
+  if (config.apiBase) return config.apiBase.replace(/\/+$/, '');
+  const host = location.hostname.toLowerCase();
+  if (isPlainHost(host) || host.endsWith('.localhost')) return `${location.protocol}//${host === 'localhost' || isIpAddress(host) ? host : 'localhost'}:${LOCAL_API_PORT}`;
+  const adminLabel = (config.adminLabel || DEFAULT_ADMIN_LABEL).toLowerCase();
+  const labels = host.split('.');
+  const base = labels[0] === adminLabel ? labels.slice(1) : labels;
+  return `${location.protocol}//${[API_LABEL, ...base].join('.')}`;
+}
+
+/** Whether a role belongs on a website: staff on the admin site, customers on the customer site. */
+export function surfaceAllowsRole(surface: Surface, role: string): boolean {
+  if (surface === 'any') return true;
+  const isStaff = role === Role.ADMIN || role === Role.CUSTOMER_CARE;
+  return surface === 'admin' ? isStaff : role === Role.CUSTOMER;
+}
+
 // Job Quote DTO (worker estimate submission)
 export const submitJobQuoteSchema = z.object({
   estimatedCost: z.number().nonnegative('Cost must be 0 or greater'),
@@ -725,8 +801,9 @@ export const registrationSchema = z
     email: z.string().trim().email('Enter a valid email address.'),
     phoneNumber: z.string().trim().min(7, 'Enter a valid phone number.').optional().or(z.literal('')),
     role: z.nativeEnum(Role).default(Role.CUSTOMER),
-    password: z.string().min(8, 'Password must be at least 8 characters long.'),
-    confirmPassword: z.string().min(8, 'Confirm the password.'),
+    // The real minimum is set under Settings > Security; the form and the API both check it.
+    password: z.string().min(6, 'Password must be at least 6 characters long.'),
+    confirmPassword: z.string().min(6, 'Confirm the password.'),
     companyName: z.string().trim().min(2, 'Company name is required.').optional().or(z.literal('')),
     acceptTerms: z.boolean().refine((value) => value, {
       message: 'Accept the terms to continue.',

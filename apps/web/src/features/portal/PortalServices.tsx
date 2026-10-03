@@ -1,6 +1,6 @@
 import { MapPicker, type PickedLocation } from '../../components/MapPicker';
 import { RefreshButton } from '../../components/RefreshButton';
-import { SkeletonCards } from '@metro-fix/ui';
+import { SkeletonCards, useMediaQuery } from '@metro-fix/ui';
 import { useAppSettings } from '../../lib/settings';
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { FacilityType, ServicePillar } from '@metro-fix/core-types';
@@ -37,6 +37,7 @@ export function PortalServices({ onRequested, onNeedSubscription }: PortalServic
   const [subscribed, setSubscribed] = useState<boolean | null>(null);
   const [gateOpen, setGateOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [pillarFilter, setPillarFilter] = useState<ServicePillar | 'ALL'>('ALL');
   const [services, setServices] = useState<CatalogService[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -81,9 +82,10 @@ export function PortalServices({ onRequested, onNeedSubscription }: PortalServic
         (s.serviceGroup ? SERVICE_GROUP_LABELS[s.serviceGroup] : '').toLowerCase().includes(q),
     );
     return [ServicePillar.HARD, ServicePillar.SOFT, ServicePillar.STRATEGIC]
+      .filter((pillar) => pillarFilter === 'ALL' || pillar === pillarFilter)
       .map((pillar) => ({ pillar, items: visible.filter((s) => s.pillarCategory === pillar) }))
       .filter((entry) => entry.items.length > 0);
-  }, [services, query]);
+  }, [services, query, pillarFilter]);
 
   return (
     <section style={styles.page} aria-label="Browse services">
@@ -107,6 +109,20 @@ export function PortalServices({ onRequested, onNeedSubscription }: PortalServic
           aria-label="Search services"
         />
         <RefreshButton onClick={() => setReloadKey((k) => k + 1)} loading={loading} subject="services" />
+      </div>
+
+      <div style={styles.chipRow} role="group" aria-label="Filter by type of service">
+        {([['ALL', 'All'], [ServicePillar.HARD, 'Hard FM'], [ServicePillar.SOFT, 'Soft FM'], [ServicePillar.STRATEGIC, 'Strategic FM']] as const).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={pillarFilter === value}
+            onClick={() => setPillarFilter(value)}
+            style={{ ...styles.filterChip, ...(pillarFilter === value ? styles.filterChipActive : undefined) }}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {loading && services.length === 0 && <SkeletonCards count={4} height={110} />}
@@ -188,6 +204,7 @@ interface RequestModalProps {
 
 function RequestModal({ service, onClose, onCreated, onNeedSubscription }: RequestModalProps) {
   const [needsPlan, setNeedsPlan] = useState(false);
+  const isPhone = useMediaQuery('(max-width: 640px)');
   const modalRef = useModalAccessibility(true, onClose);
   const [details, setDetails] = useState('');
   const [address, setAddress] = useState('');
@@ -236,79 +253,90 @@ function RequestModal({ service, onClose, onCreated, onNeedSubscription }: Reque
   };
 
   return (
-    <div style={styles.overlay} onClick={onClose}>
+    <div style={{ ...styles.overlay, ...(isPhone ? styles.overlayPhone : undefined) }} onClick={onClose}>
       <div
         ref={modalRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="portal-request-title"
         tabIndex={-1}
-        style={styles.modal}
+        style={{ ...styles.modal, ...(isPhone ? styles.modalPhone : undefined) }}
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 id="portal-request-title" style={styles.modalTitle}>Request: {service.serviceName}</h2>
-        <p style={styles.modalSub}>{service.description}</p>
-        {error && <p style={styles.error}>{error}</p>}
-        {needsPlan && (
-          <button type="button" style={styles.submitBtn} onClick={onNeedSubscription}>
-            View plans
-          </button>
-        )}
-
-        <label style={styles.label} htmlFor="req-details">What needs attention? *</label>
-        <textarea id="req-details" rows={3} value={details} onChange={(e) => setDetails(e.target.value)} style={styles.input} />
-
-        <label style={styles.label} htmlFor="req-address">Site address *</label>
-        <input id="req-address" value={address} onChange={(e) => setAddress(e.target.value)} style={styles.input} />
-
-        <div style={styles.row}>
-          <div style={styles.field}>
-            <label style={styles.label} htmlFor="req-facility">Facility type</label>
-            <select id="req-facility" value={facilityType} onChange={(e) => setFacilityType(e.target.value as FacilityType)} style={styles.input}>
-              <option value={FacilityType.RESIDENTIAL}>Residential</option>
-              <option value={FacilityType.COMMERCIAL}>Commercial</option>
-              <option value={FacilityType.INDUSTRIAL}>Industrial</option>
-            </select>
+        <header style={styles.modalHead}>
+          <div style={{ minWidth: 0 }}>
+            <h2 id="portal-request-title" style={styles.modalTitle}>Request: {service.serviceName}</h2>
+            <p style={styles.modalSub}>{service.description}</p>
           </div>
-          <div style={styles.field}>
-            <label style={styles.label} htmlFor="req-urgency">Urgency</label>
-            <select id="req-urgency" value={urgency} onChange={(e) => setUrgency(e.target.value as Urgency)} style={styles.input}>
-              <option value="LOW">Routine</option>
-              <option value="MEDIUM">Standard</option>
-              <option value="HIGH">Urgent</option>
-              <option value="CRITICAL">Emergency</option>
-            </select>
+          <button type="button" aria-label="Close" style={styles.closeBtn} onClick={onClose}>✕</button>
+        </header>
+
+        <div style={styles.modalBody}>
+          {error && <p style={styles.error} role="alert">{error}</p>}
+          {needsPlan && (
+            <button type="button" style={styles.submitBtn} onClick={onNeedSubscription}>
+              View plans
+            </button>
+          )}
+
+          <label style={styles.label} htmlFor="req-details">What needs attention? *</label>
+          <textarea id="req-details" rows={3} value={details} onChange={(e) => setDetails(e.target.value)} style={styles.input} />
+
+          <label style={styles.label} htmlFor="req-address">Site address *</label>
+          <input id="req-address" value={address} onChange={(e) => setAddress(e.target.value)} style={styles.input} autoComplete="street-address" />
+
+          <div style={{ ...styles.row, ...(isPhone ? styles.rowPhone : undefined) }}>
+            <div style={styles.field}>
+              <label style={styles.label} htmlFor="req-facility">Facility type</label>
+              <select id="req-facility" value={facilityType} onChange={(e) => setFacilityType(e.target.value as FacilityType)} style={styles.input}>
+                <option value={FacilityType.RESIDENTIAL}>Residential</option>
+                <option value={FacilityType.COMMERCIAL}>Commercial</option>
+                <option value={FacilityType.INDUSTRIAL}>Industrial</option>
+              </select>
+            </div>
+            <div style={styles.field}>
+              <label style={styles.label} htmlFor="req-urgency">Urgency</label>
+              <select id="req-urgency" value={urgency} onChange={(e) => setUrgency(e.target.value as Urgency)} style={styles.input}>
+                <option value="LOW">Routine</option>
+                <option value="MEDIUM">Standard</option>
+                <option value="HIGH">Urgent</option>
+                <option value="CRITICAL">Emergency</option>
+              </select>
+            </div>
           </div>
+
+          <label style={styles.label}>Pin the site on the map *</label>
+          <MapPicker
+            value={coords}
+            height={isPhone ? 220 : 260}
+            onChange={(picked, label) => {
+              setCoords(picked);
+              // A searched place fills the address if the customer has not typed one.
+              if (label && label !== 'My location') setAddress((current) => current || label);
+            }}
+          />
         </div>
 
-        <label style={styles.label}>Pin the site on the map *</label>
-        <MapPicker
-          value={coords}
-          height={240}
-          onChange={(picked, label) => {
-            setCoords(picked);
-            // A searched place fills the address if the customer has not typed one.
-            if (label && label !== 'My location') setAddress((current) => current || label);
-          }}
-        />
-
-        <div style={styles.actions}>
+        <footer style={styles.actions}>
           <button type="button" style={styles.cancelBtn} onClick={onClose}>Cancel</button>
           <button type="button" style={styles.submitBtn} onClick={submit} disabled={busy}>
             {busy ? 'Sending…' : 'Submit request'}
           </button>
-        </div>
+        </footer>
       </div>
     </div>
   );
 }
 
 const styles: Record<string, CSSProperties> = {
-  page: { display: 'flex', flexDirection: 'column', gap: 20, padding: '4px 4px 32px' },
-  searchRow: { display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' },
-  search: { padding: '10px 14px', borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--surface)', color: 'var(--text-primary)', width: 'min(420px, 100%)' },
+  page: { display: 'flex', flexDirection: 'column', gap: 16 },
+  searchRow: { display: 'flex', gap: 10, alignItems: 'center' },
+  search: { flex: '1 1 160px', minWidth: 0, padding: '12px 14px', borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--surface)', color: 'var(--text-primary)', fontSize: '1rem' },
+  chipRow: { display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2, margin: '0 -16px', padding: '0 16px 2px', scrollbarWidth: 'none' },
+  filterChip: { flexShrink: 0, minHeight: 40, padding: '0 16px', borderRadius: 999, border: '1px solid var(--border-subtle)', background: 'var(--surface)', color: 'var(--text-secondary)', fontWeight: 600, fontSize: '0.88rem', cursor: 'pointer' },
+  filterChipActive: { background: '#f38808', borderColor: '#f38808', color: '#fff' },
   planBanner: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '12px 16px', borderRadius: 14, border: '1px solid rgba(243, 136, 8, 0.6)', background: 'rgba(243, 136, 8, 0.1)', color: 'var(--text-primary)', fontSize: '0.9rem' },
-  planBannerBtn: { border: '1px solid #d37105', background: 'linear-gradient(135deg, #f38808, #d37105)', color: '#fff', padding: '8px 16px', borderRadius: 10, fontWeight: 700, cursor: 'pointer' },
+  planBannerBtn: { border: '1px solid #d37105', background: 'linear-gradient(135deg, #f38808, #d37105)', color: '#fff', padding: '10px 16px', borderRadius: 10, fontWeight: 700, cursor: 'pointer', minHeight: 40 },
   gateOverlay: { position: 'fixed', inset: 0, background: 'rgba(4, 10, 11, 0.62)', display: 'grid', placeItems: 'center', padding: 24, zIndex: 99999 },
   gateCard: { width: 'min(420px, 100%)', borderRadius: 20, background: 'var(--surface)', border: '1px solid var(--border-subtle)', padding: 22, boxShadow: '0 30px 72px rgba(0,0,0,0.35)' },
   gateTitle: { margin: '0 0 8px', color: 'var(--text-primary)' },
@@ -322,7 +350,7 @@ const styles: Record<string, CSSProperties> = {
   pillarHeader: { display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' },
   pillarTitle: { margin: 0, fontSize: '1.1rem', color: 'var(--text-primary)' },
   pillarBlurb: { color: 'var(--text-secondary)', fontSize: '0.85rem' },
-  grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 },
+  grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))', gap: 12 },
   card: { display: 'flex', gap: 12, textAlign: 'left', padding: 14, borderRadius: 16, background: 'var(--surface)', color: 'var(--text-primary)', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-elevated)', cursor: 'pointer' },
   cardIcon: { fontSize: '1.6rem', lineHeight: 1 },
   cardBody: { display: 'flex', flexDirection: 'column', gap: 6 },
@@ -331,16 +359,22 @@ const styles: Record<string, CSSProperties> = {
   chips: { display: 'flex', gap: 6, flexWrap: 'wrap' },
   chip: { fontSize: '0.74rem', fontWeight: 700, padding: '3px 8px', borderRadius: 999, background: 'rgba(243,136,8,0.14)', color: '#d37105' },
   chipMuted: { fontSize: '0.74rem', padding: '3px 8px', borderRadius: 999, background: 'var(--surface-strong)', color: 'var(--text-secondary)' },
-  overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: 16 },
-  modal: { background: '#2b435f', color: '#fff', borderRadius: 20, padding: 24, width: '100%', maxWidth: 520, display: 'flex', flexDirection: 'column', gap: 8, maxHeight: '90vh', overflowY: 'auto' },
-  modalTitle: { margin: 0, fontSize: '1.2rem' },
-  modalSub: { margin: '0 0 6px', color: 'rgba(255,255,255,0.75)', fontSize: '0.85rem' },
-  label: { fontSize: '0.84rem', fontWeight: 600 },
-  input: { padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.25)', color: '#fff', fontFamily: 'inherit', fontSize: '0.9rem', boxSizing: 'border-box', width: '100%' },
+  overlay: { position: 'fixed', inset: 0, background: 'rgba(4, 10, 11, 0.62)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: 16 },
+  overlayPhone: { alignItems: 'flex-end', padding: 0 },
+  modal: { background: 'var(--surface)', color: 'var(--text-primary)', border: '1px solid var(--border-subtle)', borderRadius: 20, width: '100%', maxWidth: 580, display: 'flex', flexDirection: 'column', maxHeight: '92dvh', overflow: 'hidden', boxShadow: '0 30px 72px rgba(0,0,0,0.35)' },
+  modalPhone: { maxWidth: '100%', maxHeight: '96dvh', borderRadius: '20px 20px 0 0', borderBottom: 'none' },
+  modalHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, padding: '18px 18px 12px', borderBottom: '1px solid var(--border-subtle)' },
+  modalBody: { flex: 1, minHeight: 0, overflowY: 'auto', padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 8 },
+  modalTitle: { margin: 0, fontSize: '1.15rem' },
+  modalSub: { margin: '4px 0 0', color: 'var(--text-secondary)', fontSize: '0.85rem', lineHeight: 1.45 },
+  closeBtn: { flexShrink: 0, width: 40, height: 40, borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--surface-strong)', color: 'var(--text-secondary)', fontSize: '1rem', cursor: 'pointer' },
+  label: { fontSize: '0.84rem', fontWeight: 600, marginTop: 6 },
+  input: { flexShrink: 0, minHeight: 46, padding: '12px 12px', borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--surface-strong)', color: 'var(--text-primary)', fontFamily: 'inherit', fontSize: '1rem', boxSizing: 'border-box', width: '100%' },
   row: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 },
+  rowPhone: { gridTemplateColumns: '1fr' },
   field: { display: 'flex', flexDirection: 'column', gap: 6 },
   linkBtn: { alignSelf: 'flex-start', background: 'none', border: 'none', color: '#f38808', fontWeight: 700, cursor: 'pointer', padding: 0 },
-  actions: { display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 },
-  cancelBtn: { background: 'transparent', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', padding: '10px 16px', borderRadius: 10, cursor: 'pointer', fontWeight: 700 },
-  submitBtn: { background: '#f38808', border: 'none', color: '#fff', padding: '10px 20px', borderRadius: 10, cursor: 'pointer', fontWeight: 700 },
+  actions: { display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '12px 18px calc(12px + env(safe-area-inset-bottom))', borderTop: '1px solid var(--border-subtle)', background: 'var(--surface)' },
+  cancelBtn: { background: 'transparent', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', padding: '12px 16px', borderRadius: 10, cursor: 'pointer', fontWeight: 700, minHeight: 44 },
+  submitBtn: { background: '#f38808', border: 'none', color: '#fff', padding: '12px 22px', borderRadius: 10, cursor: 'pointer', fontWeight: 700, minHeight: 44 },
 };

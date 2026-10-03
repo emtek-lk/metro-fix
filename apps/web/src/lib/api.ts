@@ -1,14 +1,6 @@
 /**
- * Centralized API base URL resolver for the Metro-Fix frontend.
- *
- * Reads from Vite's `import.meta.env.VITE_API_URL` at build time.
- * Falls back to `http://localhost:3000` during local development when
- * no env file is loaded (e.g. running outside of Vite).
- *
- * Usage:
- *   import { API_BASE_URL } from '@/lib/api';
- *   fetch(`${API_BASE_URL}/jobs`);
+ * The API address for this website, worked out from the page's own hostname (see
+ * packages/ui/src/hosting.ts): http://localhost:3000 on localhost and *.localhost, api.<site> on a
+ * real domain, or VITE_API_URL when set.
  */
-export const API_BASE_URL: string =
-  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) ||
-  'http://localhost:3000';
+export { API_BASE_URL } from '@metro-fix/ui';

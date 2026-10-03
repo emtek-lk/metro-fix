@@ -44,7 +44,7 @@ services:
       context: .
       dockerfile: Dockerfile
     working_dir: /workspace
-    command: sh -lc "npm install && npm run start:dev --workspace apps/api"
+    command: sh -lc "npm install && npm run build --workspace packages/core-types && npm run start:dev --workspace apps/api"
     environment:
       DB_HOST: db
       DB_PORT: '1433'

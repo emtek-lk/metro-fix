@@ -1,8 +1,7 @@
+import { API_BASE_URL } from './hosting';
 import { useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 
-const API_BASE =
-  (typeof import.meta !== 'undefined' && (import.meta as { env?: Record<string, string> }).env?.VITE_API_URL) ||
-  'http://localhost:3000';
+const API_BASE = API_BASE_URL;
 
 const authHeaders = (): Record<string, string> => {
   const token =

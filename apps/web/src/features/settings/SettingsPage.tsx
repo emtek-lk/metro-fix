@@ -68,7 +68,9 @@ export function SettingsPage({ user, onProfileUpdated, onLogout }: SettingsPageP
   };
 
   return (
-    <div style={{ ...styles.page, ...(isCompact ? styles.pageCompact : undefined) }}>
+    <div style={{ ...styles.page, ...(isCompact || sections.length === 1 ? styles.pageCompact : undefined) }}>
+      {/* A single section (everyone but admins) needs no menu. */}
+      {sections.length > 1 && (
       <nav aria-label="Settings sections" style={{ ...styles.nav, ...(isCompact ? styles.navCompact : undefined) }}>
         {sections.map((section) => (
           <button
@@ -83,6 +85,7 @@ export function SettingsPage({ user, onProfileUpdated, onLogout }: SettingsPageP
           </button>
         ))}
       </nav>
+      )}
       <div style={styles.content}>{body()}</div>
     </div>
   );

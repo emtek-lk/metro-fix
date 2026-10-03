@@ -1,22 +1,30 @@
-import { useState, useEffect, type CSSProperties } from 'react';
-import { DashboardLayout, AdminWorkspace } from '@metro-fix/ui';
-import { Role, type User } from '@metro-fix/core-types';
+import { useState, useEffect, lazy, Suspense, type CSSProperties, type ReactNode } from 'react';
+import { DashboardLayout, SURFACE, SkeletonCards, useMediaQuery } from '@metro-fix/ui';
+import { Role, surfaceAllowsRole, type User } from '@metro-fix/core-types';
 import AuthShell from './features/auth/AuthShell';
-import { CustomerCareView } from './features/dashboard/CustomerCareView';
-import { ActiveRosterView } from './features/dashboard/ActiveRosterView';
-import { AddWorkerModal } from './features/workers/AddWorkerModal';
-import { AddServiceModal } from './features/services/AddServiceModal';
-import { AddSubscriptionModal } from './features/subscriptions/AddSubscriptionModal';
 import { ProfileModal } from './features/profile/ProfileModal';
+import { CustomerShell } from './features/portal/CustomerShell';
+import { LoadErrorBoundary } from './features/errors/LoadErrorBoundary';
+import { WrongSite } from './features/errors/WrongSite';
+
 import { PortalServices } from './features/portal/PortalServices';
 import { PortalRequests } from './features/portal/PortalRequests';
 import { PortalSubscription } from './features/portal/PortalSubscription';
-import { SettingsPage } from './features/settings/SettingsPage';
 import { NotFound } from './features/errors/NotFound';
 import { Unauthorized } from './features/errors/Unauthorized';
 import { evaluateRouteGuard, getHomePathForRole, isKnownRoute } from './routing/routeGuard';
 import { API_BASE_URL } from './lib/api';
 import { ThemeToggle } from './theme/ThemeToggle';
+
+// Staff screens are loaded the first time they are opened, so the customer website never downloads
+// the dispatch board, the admin tables and charts, or the add / edit pop-ups.
+const AdminWorkspace = lazy(() => import('@metro-fix/ui/admin').then((m) => ({ default: m.AdminWorkspace })));
+const CustomerCareView = lazy(() => import('./features/dashboard/CustomerCareView').then((m) => ({ default: m.CustomerCareView })));
+const ActiveRosterView = lazy(() => import('./features/dashboard/ActiveRosterView').then((m) => ({ default: m.ActiveRosterView })));
+const AddWorkerModal = lazy(() => import('./features/workers/AddWorkerModal').then((m) => ({ default: m.AddWorkerModal })));
+const AddServiceModal = lazy(() => import('./features/services/AddServiceModal').then((m) => ({ default: m.AddServiceModal })));
+const AddSubscriptionModal = lazy(() => import('./features/subscriptions/AddSubscriptionModal').then((m) => ({ default: m.AddSubscriptionModal })));
+const SettingsPage = lazy(() => import('./features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 
 // ─── Route Metadata ──────────────────────────────────────────────────
 
@@ -82,6 +90,38 @@ const toastStyle: Record<string, CSSProperties> = {
     backgroundColor: '#c62828',
     border: '1px solid #ef5350',
   },
+  // On phones the customer site has a tab bar along the bottom; the toast spans the width above it.
+  aboveTabs: {
+    left: '16px',
+    right: '16px',
+    bottom: 'calc(76px + env(safe-area-inset-bottom))',
+    justifyContent: 'center',
+  },
+};
+
+const updateBannerStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 12,
+  flexWrap: 'wrap',
+  padding: '10px 16px',
+  marginBottom: 12,
+  borderRadius: 12,
+  border: '1px solid rgba(243, 136, 8, 0.6)',
+  background: 'rgba(243, 136, 8, 0.12)',
+  color: 'var(--text-primary)',
+  fontSize: '0.9rem',
+};
+
+const updateButtonStyle: CSSProperties = {
+  border: '1px solid #d37105',
+  background: 'linear-gradient(135deg, #f38808, #d37105)',
+  color: '#fff',
+  padding: '6px 14px',
+  borderRadius: 10,
+  fontWeight: 700,
+  cursor: 'pointer',
 };
 
 // ─── Initial State ───────────────────────────────────────────────────
@@ -124,6 +164,16 @@ export default function App() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [portalRefresh, setPortalRefresh] = useState(0);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [updateReady, setUpdateReady] = useState(false);
+  // Phones get a tab bar along the bottom, so toasts sit above it there.
+  const isNarrow = useMediaQuery('(max-width: 859px)');
+
+  // Vite tells us when a screen's code file is gone (a new release went out while this tab was open).
+  useEffect(() => {
+    const onPreloadError = () => setUpdateReady(true);
+    window.addEventListener('vite:preloadError', onPreloadError);
+    return () => window.removeEventListener('vite:preloadError', onPreloadError);
+  }, []);
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
@@ -229,19 +279,39 @@ export default function App() {
     return <AuthShell onAuthenticated={handleAuthenticated} />;
   }
 
-  // Gate 2: Unknown route → 404
-  if (!isKnownRoute(currentPath)) {
-    return (
+  // Gate 1b: each website serves one audience (staff or customers); the other is sent to its own site.
+  if (!surfaceAllowsRole(SURFACE, user.role)) {
+    return <WrongSite role={user.role} onSignOut={handleLogout} />;
+  }
+
+  const isCustomer = user.role === Role.CUSTOMER;
+
+  /** The frame around a screen: the customer website's own shell, or the staff dashboard layout. */
+  const renderFrame = (activeRoute: string, content: ReactNode, headerActions?: ReactNode) =>
+    isCustomer ? (
+      <CustomerShell user={user} activePath={currentPath} onNavigate={navigateTo} onLogout={handleLogout}>
+        {content}
+      </CustomerShell>
+    ) : (
       <DashboardLayout
-        activeRoute="Not Found"
+        activeRoute={activeRoute}
         userProfile={user}
+        headerActions={headerActions}
         onRouteChange={(label) => navigateTo(labelToPath[label] || '/dispatch')}
         settingsSlot={<ThemeToggle compact />}
         onLogout={handleLogout}
         onViewProfile={() => setIsProfileOpen(true)}
       >
-        <NotFound onNavigateHome={navigateToHome} />
+        {content}
+      </DashboardLayout>
+    );
 
+  // Gate 2: Unknown route → 404
+  if (!isKnownRoute(currentPath)) {
+    return renderFrame(
+      'Not Found',
+      <>
+        <NotFound onNavigateHome={navigateToHome} />
         <ProfileModal
           isOpen={isProfileOpen}
           user={user}
@@ -251,7 +321,7 @@ export default function App() {
             showToast('Profile details updated successfully!', 'success');
           }}
         />
-      </DashboardLayout>
+      </>,
     );
   }
 
@@ -264,22 +334,15 @@ export default function App() {
   }
 
   if (guardResult.status === 'forbidden') {
-    return (
-      <DashboardLayout
-        activeRoute="Access Restricted"
-        userProfile={user}
-        onRouteChange={(label) => navigateTo(labelToPath[label] || '/dispatch')}
-        settingsSlot={<ThemeToggle compact />}
-        onLogout={handleLogout}
-        onViewProfile={() => setIsProfileOpen(true)}
-      >
+    return renderFrame(
+      'Access Restricted',
+      <>
         <Unauthorized
           userRole={user.role}
           requiredRoles={guardResult.requiredRoles}
           onNavigateHome={navigateToHome}
           onLogout={handleLogout}
         />
-
         <ProfileModal
           isOpen={isProfileOpen}
           user={user}
@@ -289,7 +352,7 @@ export default function App() {
             showToast('Profile details updated successfully!', 'success');
           }}
         />
-      </DashboardLayout>
+      </>,
     );
   }
 
@@ -390,44 +453,67 @@ export default function App() {
     }
   };
 
-  return (
-    <DashboardLayout
-      activeRoute={activeConfig.label}
-      userProfile={user}
-      headerActions={renderHeaderActions()}
-      onRouteChange={handleRouteChange}
-      settingsSlot={<ThemeToggle compact />}
-      onLogout={handleLogout}
-      onViewProfile={() => setIsProfileOpen(true)}
-    >
-      {renderCurrentView()}
+  const modalFallback = null;
+  const screen = (
+    <>
+      {updateReady && (
+        <div role="status" style={updateBannerStyle}>
+          <span>A new version of {isCustomer ? 'the site' : 'METRO-FIX'} is available.</span>
+          <button type="button" style={updateButtonStyle} onClick={() => window.location.reload()}>
+            Reload to update
+          </button>
+        </div>
+      )}
 
-      <AddWorkerModal
-        isOpen={isAddWorkerOpen}
-        onClose={() => setIsAddWorkerOpen(false)}
-        onWorkerAdded={() => {
-          setRefreshKey((prev) => prev + 1);
-          showToast('Worker registered successfully in MS SQL database!', 'success');
-        }}
-      />
+      <LoadErrorBoundary resetKey={currentPath}>
+        <Suspense fallback={<SkeletonCards count={4} height={96} />}>{renderCurrentView()}</Suspense>
+      </LoadErrorBoundary>
 
-      <AddServiceModal
-        isOpen={isAddServiceOpen}
-        onClose={() => setIsAddServiceOpen(false)}
-        onServiceAdded={() => {
-          setRefreshKey((prev) => prev + 1);
-          showToast('New service added to catalog successfully!', 'success');
-        }}
-      />
+      {/* Staff pop-ups are only fetched (and mounted) when opened. */}
+      {isAddWorkerOpen && (
+        <LoadErrorBoundary resetKey="add-worker">
+          <Suspense fallback={modalFallback}>
+            <AddWorkerModal
+              isOpen={isAddWorkerOpen}
+              onClose={() => setIsAddWorkerOpen(false)}
+              onWorkerAdded={() => {
+                setRefreshKey((prev) => prev + 1);
+                showToast('Worker registered successfully in MS SQL database!', 'success');
+              }}
+            />
+          </Suspense>
+        </LoadErrorBoundary>
+      )}
 
-      <AddSubscriptionModal
-        isOpen={isAddSubscriptionOpen}
-        onClose={() => setIsAddSubscriptionOpen(false)}
-        onSubscriptionAdded={() => {
-          setRefreshKey((prev) => prev + 1);
-          showToast('New subscription plan tier created successfully!', 'success');
-        }}
-      />
+      {isAddServiceOpen && (
+        <LoadErrorBoundary resetKey="add-service">
+          <Suspense fallback={modalFallback}>
+            <AddServiceModal
+              isOpen={isAddServiceOpen}
+              onClose={() => setIsAddServiceOpen(false)}
+              onServiceAdded={() => {
+                setRefreshKey((prev) => prev + 1);
+                showToast('New service added to catalog successfully!', 'success');
+              }}
+            />
+          </Suspense>
+        </LoadErrorBoundary>
+      )}
+
+      {isAddSubscriptionOpen && (
+        <LoadErrorBoundary resetKey="add-subscription">
+          <Suspense fallback={modalFallback}>
+            <AddSubscriptionModal
+              isOpen={isAddSubscriptionOpen}
+              onClose={() => setIsAddSubscriptionOpen(false)}
+              onSubscriptionAdded={() => {
+                setRefreshKey((prev) => prev + 1);
+                showToast('New subscription plan tier created successfully!', 'success');
+              }}
+            />
+          </Suspense>
+        </LoadErrorBoundary>
+      )}
 
       <ProfileModal
         isOpen={isProfileOpen}
@@ -440,11 +526,20 @@ export default function App() {
       />
 
       {toast && (
-        <div style={{ ...toastStyle.container, ...toastStyle[toast.type] }}>
+        <div
+          role="status"
+          style={{
+            ...toastStyle.container,
+            ...toastStyle[toast.type],
+            ...(isCustomer && isNarrow ? toastStyle.aboveTabs : undefined),
+          }}
+        >
           <span>{toast.type === 'success' ? '✓' : '⚠️'}</span>
           <span>{toast.message}</span>
         </div>
       )}
-    </DashboardLayout>
+    </>
   );
+
+  return renderFrame(activeConfig.label, screen, renderHeaderActions());
 }

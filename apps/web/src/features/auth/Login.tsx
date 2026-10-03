@@ -79,7 +79,7 @@ export function Login({ onSuccess }: LoginProps) {
             ...styles.input,
             ...(errors.email ? styles.inputError : undefined),
           }}
-          placeholder="admin@metro-fix.com"
+          placeholder="you@example.com"
         />
         {errors.email && <span style={styles.errorText}>{errors.email.message}</span>}
       </div>

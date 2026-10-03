@@ -302,6 +302,8 @@ Sends push notification to all available workers (FCM).
 | `GET` | `/admin/export/:entity` | ADMIN | CSV of `customers`, `workers` or `jobs` (cells that look like spreadsheet formulas are neutralised); audited |
 | `POST` | `/auth/change-password` | JWT | `{currentPassword, newPassword}`; the new one must pass the policy |
 
+Browser access (CORS): in production only the origins in `CORS_ORIGINS` (comma separated, `*` = one hostname label) may call the API or open the live-update socket; development also allows localhost and `*.localhost`. Requests with no `Origin` header (native apps, curl) are always allowed.
+
 Settings sections: `company`, `dispatch` (offerTimeoutHours, maxActiveJobs, ratingWeight, proximityWeight, defaultRadiusKm), `billing` (invoicePrefix, defaultTaxRatePct, defaultLabourRateLkr, paymentTermsDays), `requests` (requirePlanToRequest, allowCustomerCancellation), `security` (passwordMinLength, maxFailedLogins, lockoutMinutes). Sign-in: wrong passwords are counted, the account locks for `lockoutMinutes` at `maxFailedLogins` (0 disables), a locked account is refused even with the right password, and a deactivated account cannot sign in or keep an existing session. `OFFER_TIMEOUT_SECONDS` and `MAX_ACTIVE_JOBS` environment variables, if set, override the matching settings.
 
 ### 8a. Admin edits

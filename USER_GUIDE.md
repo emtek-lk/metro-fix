@@ -33,7 +33,8 @@ The web dashboard uses a role-based access control (RBAC) entry shell accessible
 | :--- | :--- | :--- | :--- |
 | **Customer Care Dispatcher** | `dispatch@demo.local` | `Demo123!` | Dispatch Board (`/dispatch`) |
 | **System Administrator** | `admin@demo.local` | `Demo123!` | Customers (`/customers`) |
-| **Customer** | `marcus@residences.lk` | `Demo123!` | Customer portal (`/portal/services`) |
+| **Customer** | `marcus@residences.lk` | `Demo123!` | Customer website (`/portal/services`), on the customer address |
+| **Technician** | `worker1@demo.local` | `Demo123!` | Mobile app only |
 
 ### Navigation Structure
 * All navigation is unified within the fixed left Sidebar.
@@ -98,33 +99,11 @@ Administrators manage system entities, customer profiles, service catalogs, and 
 
 ---
 
-## 5. Local Development & Operational Commands
+## 5. Running the system
 
-### Database Setup & Seeding (MSSQL)
-Navigate to `apps/api` and execute:
+Everything needed to run the API, the customer website, the staff website and the mobile apps (iOS, Android and the browser preview) is in **[SETUP.md](SETUP.md)**: prerequisites, first-time setup, Docker, the local addresses for the two websites, the mobile apps, demo accounts, environment variables, tests and troubleshooting.
 
-```bash
-# 1. Initialize Database (Creates metrofix_db in MSSQL if absent)
-npm run db:init
-
-# 2. Seed Mock Data (Drops schema, recreates tables, seeds 2 Admins, 3 Customers, 2 Workers, 5 Jobs)
-npm run seed
-
-# 3. Start Backend API Server (NestJS at http://localhost:3000)
-npm run start:dev
-```
-
-### Web Application Development
-Navigate to root directory:
-
-```bash
-# Start Vite Development Server (React UI at http://localhost:5173)
-npm run dev
-
-# Build for Production Verification
-npm run build --workspace=apps/web
-```
-
+In short: `docker compose up -d`, then open `http://metrofix.localhost:5173` (customers) or `http://admin.metrofix.localhost:5173` (staff) and sign in with a demo account (password `Demo123!`). The API creates the tables and the demo data itself when it starts; there is nothing to seed by hand.
 
 ## 5a. Settings (sidebar, bottom)
 
@@ -139,6 +118,10 @@ npm run build --workspace=apps/web
 * **Data & system**: download customers, workers, jobs and invoices as CSV; see database status, uptime and record counts.
 
 Changes take effect immediately. Each save is recorded in the audit log.
+
+## 5b. Two websites
+
+Customers use the **customer website** (for example `metrofix.<your-domain>`); staff use the **staff website** (`admin.metrofix.<your-domain>`). Signing in on the wrong one shows a page with a link to the right one. On a phone the customer website has a tab bar along the bottom (Services, Requests, Plan, Account); on a computer it has links along the top. Technicians use the mobile app, not the website.
 
 ## 6. Customers: subscription and requests
 

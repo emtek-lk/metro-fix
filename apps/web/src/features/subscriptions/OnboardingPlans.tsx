@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { BrandLogo } from '@metro-fix/ui';
+import { BrandLogo, useMediaQuery } from '@metro-fix/ui';
 import type { CustomerSubscription } from '@metro-fix/core-types';
 import { PlanPicker } from './PlanPicker';
 
@@ -12,9 +12,10 @@ interface OnboardingPlansProps {
 
 /** Step two of sign-up: the account already exists (as a lead); pick a plan now or skip. */
 export function OnboardingPlans({ firstName, token, onDone }: OnboardingPlansProps) {
+  const isPhone = useMediaQuery('(max-width: 640px)');
   return (
-    <div style={styles.screen}>
-      <div style={styles.card}>
+    <div style={{ ...styles.screen, ...(isPhone ? { padding: '12px 10px' } : undefined) }}>
+      <div style={{ ...styles.card, ...(isPhone ? { padding: 16, borderRadius: 18 } : undefined) }}>
         <header style={styles.header}>
           <img src={BrandLogo} alt="METRO-FIX" style={styles.logo} />
           <button type="button" style={styles.skip} onClick={() => onDone(null)}>
@@ -42,7 +43,7 @@ export function OnboardingPlans({ firstName, token, onDone }: OnboardingPlansPro
 }
 
 const styles: Record<string, CSSProperties> = {
-  screen: { minHeight: '100vh', overflowY: 'auto', background: 'var(--surface-strong)', display: 'flex', justifyContent: 'center', padding: '32px 16px', boxSizing: 'border-box' },
+  screen: { height: '100dvh', overflowY: 'auto', WebkitOverflowScrolling: 'touch', background: 'var(--surface-strong)', display: 'flex', justifyContent: 'center', padding: '32px 16px', boxSizing: 'border-box' },
   card: { width: 'min(1040px, 100%)', background: 'var(--surface)', border: '1px solid var(--border-subtle)', borderRadius: 24, padding: 28, boxSizing: 'border-box', height: 'fit-content' },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 },
   logo: { height: 44, width: 'auto' },

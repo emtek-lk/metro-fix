@@ -10,7 +10,7 @@
 | Area | Status | Notes |
 |---|---|---|
 | Shared types (`packages/core-types`) | Done | New 7+1 lifecycle, 4 tiers, `ServiceGroup`. |
-| API (`apps/api`) | Working | Role-gated; offers, job cards, subscriptions with demo card payments, live financials, photo uploads. 157 jest tests pass. |
+| API (`apps/api`) | Working | Role-gated; offers, job cards, subscriptions with demo card payments, live financials, photo uploads. 169 jest tests pass. |
 | Web dispatch dashboard (`apps/web`) | Working | Kanban uses new states; Approve & Close; live updates via socket.io; plans and catalog pages updated. |
 | Web customer portal (`/portal/*`) | Working (MVP) | Browse by pillar/group, request, track live. Verified in headless browser. |
 | Mobile apps (`apps/mobile`) | Working | Worker and customer apps run on iOS and Android; 158 jest tests pass. Checked in browser and simulators; photo upload and card checkout still want a real-device pass. |
@@ -76,9 +76,13 @@
 
 ## 8. How to run (short)
 
-API `cd apps/api && npm run start:dev` (:3000, needs SQL Server and `apps/api/.env`) · Web `cd apps/web && npm run dev` (:5173) · Mobile `cd apps/mobile && EXPO_NO_DEVTOOLS=1 EXPO_PUBLIC_API_URL=http://localhost:3000 npx expo start --web` (:8081). Full guide: `SETUP.md`.
+`docker compose up -d` (SQL Server, API :3000, web :5173) · customer website `http://metrofix.localhost:5173`, staff website `http://admin.metrofix.localhost:5173` · mobile: `cd apps/mobile && npm run dev` (Metro :8081) then iOS simulator, Android emulator or Expo web. Full guide, including iOS/Android steps and troubleshooting: `SETUP.md`.
 
 ## 9. Changelog (newest first)
+
+- **2026-10-04**: Fixed the register and choose-a-plan screens not scrolling on phones (they were taller than the non-scrolling page root and clipped); both now scroll inside themselves.
+
+- **2026-10-04**: Customer website and staff website on separate addresses. The web app works out its audience from the hostname (`admin.<site>` is staff, any other real hostname is customers, plain localhost serves both), shows a "this is the other site" page with a link when the wrong kind of account signs in, hides Register on the staff site, and finds its API from the same hostname (`api.<site>`; localhost uses :3000). Nothing names a real domain; locally use `metrofix.localhost:5173` and `admin.metrofix.localhost:5173`. The API's CORS (and the live-update socket) now allow only `CORS_ORIGINS` in production (localhost and `*.localhost` also in development; native apps unaffected). New mobile-first customer website: top nav on desktop, tab bar on phones, services with type filters and a full-screen request sheet on phones, clearer request progress, plan and checkout as sheets, responsive sign-in and register. Staff screens (dispatch board, roster, admin tables and charts, Settings, add / edit pop-ups) now load on demand, with a "new version available, reload" handler for stale tabs. The admin tables moved to `@metro-fix/ui/admin`. Demo sign-in hints show in development only. Registration and sign-in no longer assume an 8-character minimum in the forms (the Settings value applies).
 
 - **2026-10-04**: Fixed selected options keeping a stuck border colour after you click another (inline `border` shorthand mixed with `borderColor`; see CONVENTIONS). Settings. The sidebar Settings button now opens a Settings page. Everyone gets *My account* (details, change password, theme, sign out). Admins also get Company, Dispatch (offer window, max active jobs, ranking weights, default radius), Billing & tax (invoice prefix, default tax, labour rate, payment terms), Requests & plans (require plan, allow cancellation), Security (password length, lockout), Team & access (add staff, roles, deactivate, reset password, unlock), Audit log and Data & system (CSV exports, health). Stored in `app_settings`, applied live by the API, audited. Sign-in now locks after repeated failures and refuses deactivated accounts; login no longer enforces a password length. Settings not built because they need an outside service: email / SMS / push delivery, a payment-gateway switch, SSO / 2FA.
 

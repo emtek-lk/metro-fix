@@ -1,6 +1,5 @@
 import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import type { User } from '@metro-fix/core-types';
-import { AdminWorkspace } from './AdminWorkspace';
 import { Sidebar, sidebarSections, portalSections } from './Sidebar';
 import { useMediaQuery } from './useMediaQuery';
 

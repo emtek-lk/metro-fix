@@ -211,8 +211,8 @@ cd apps/api && npm run start:dev
 # Start Web Dashboard (from repo root or apps/web)
 cd apps/web && npm run dev
 
-# Start Mobile App (Linux workaround)
-cd apps/mobile && EXPO_NO_DEVTOOLS=1 npx expo start --web
+# Start Metro for the mobile apps, then iOS / Android / web (see SETUP.md section 5)
+cd apps/mobile && npm run dev     # on Linux add EXPO_NO_DEVTOOLS=1 if Expo's DevTools crash the sandbox
 
 # Type-check mobile
 cd apps/mobile && npx tsc --noEmit
@@ -240,3 +240,17 @@ npm run dev   # Uses turbo to start all apps
 In React inline styles, a base style with `border: '1px solid transparent'` plus a variant that sets `borderColor` (selected / active / error) leaves the border stuck in the variant's colour, or in the text colour, after the variant is removed: React clears `borderColor` on the way out, and the shorthand's colour is gone with it. Every option that was ever selected then keeps a dark or coloured border until the page reloads.
 
 Write borders as `borderWidth`, `borderStyle` and `borderColor` whenever any variant overrides the colour, so the base colour is always restored. (Fixed this way in Settings, plans, checkout, the worker picker, the dispatch cards and the add / edit forms.)
+
+
+## Websites, audiences and lazy loading
+
+- The audience (staff or customers) comes from the hostname, never from a hard-coded domain: use `SURFACE`, `siteUrl()` and `API_BASE_URL` from `@metro-fix/ui`
+  (`packages/ui/src/hosting.ts`, rules in `core-types`: `detectSurface`, `counterpartHost`, `resolveApiBase`). Do not write `localhost:3000` or a domain in a screen.
+- Staff-only screens must be loaded with `React.lazy`. Do not import `AdminWorkspace` from the `@metro-fix/ui` barrel (it would pull the admin tables and charts into
+  the customer download); import it from `@metro-fix/ui/admin`.
+- Customer screens are mobile first: phone layout by default, `useMediaQuery('(min-width: 860px)')` for the desktop frame, 44 px minimum touch targets, 16 px inputs
+  (smaller text makes iOS zoom the page), pop-ups as full-height sheets on phones, and the page scrolling inside `CustomerShell`, not the document.
+
+## Full-screen pages must scroll inside themselves
+
+`html`, `body` and `#root` are a fixed-height box that never scrolls. A full-screen page (sign-in, register, the choose-a-plan step) therefore needs its own `height: 100dvh` and `overflow: auto`; `min-height: 100vh` alone just makes it taller than the box and the extra part is clipped, with no way to scroll.

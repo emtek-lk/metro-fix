@@ -93,15 +93,17 @@ export function PortalRequests({ refreshKey }: { refreshKey: number }) {
 
   return (
     <section style={styles.page} aria-label="My requests">
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+      <div style={styles.topRow}>
+        <h1 style={styles.pageTitle}>My requests{jobs.length > 0 ? <span style={styles.count}>{jobs.length}</span> : null}</h1>
         <RefreshButton onClick={() => setReloadKey((k) => k + 1)} loading={loading} subject="requests" />
       </div>
       {loading && jobs.length === 0 && <SkeletonCards count={3} height={120} />}
       {error && <p style={styles.error}>{error}</p>}
       {!loading && !error && jobs.length === 0 && (
-        <p style={styles.muted}>No requests yet. Pick a service under “Browse Services” to get started.</p>
+        <p style={styles.muted}>No requests yet. Pick a service under “Services” to get started.</p>
       )}
 
+      <div style={styles.list}>
       {jobs.map((job) => {
         const stageIndex = STAGES.indexOf(job.status);
         return (
@@ -112,15 +114,21 @@ export function PortalRequests({ refreshKey }: { refreshKey: number }) {
             </header>
             <p style={styles.desc}>{job.description}</p>
             {job.status !== JobStatus.CANCELLED && (
-              <ol style={styles.track} aria-label="Progress">
-                {STAGES.map((stage, index) => (
-                  <li
-                    key={stage}
-                    title={STAGE_LABEL[stage]}
-                    style={{ ...styles.dot, ...(index <= stageIndex ? styles.dotDone : undefined) }}
-                  />
-                ))}
-              </ol>
+              <>
+                <ol style={styles.track} aria-label={`Progress: ${STAGE_LABEL[job.status] ?? job.status}, step ${stageIndex + 1} of ${STAGES.length}`}>
+                  {STAGES.map((stage, index) => (
+                    <li
+                      key={stage}
+                      title={STAGE_LABEL[stage]}
+                      style={{ ...styles.dot, ...(index <= stageIndex ? styles.dotDone : undefined) }}
+                    />
+                  ))}
+                </ol>
+                <div style={styles.stepLine}>
+                  Step {stageIndex + 1} of {STAGES.length}
+                  {STAGES[stageIndex + 1] ? ` · next: ${STAGE_LABEL[STAGES[stageIndex + 1]]}` : ''}
+                </div>
+              </>
             )}
             <footer style={styles.meta}>
               <span>Raised {new Date(job.createdAt).toLocaleString()}</span>
@@ -141,22 +149,28 @@ export function PortalRequests({ refreshKey }: { refreshKey: number }) {
           </article>
         );
       })}
+      </div>
     </section>
   );
 }
 
 const styles: Record<string, CSSProperties> = {
-  page: { display: 'flex', flexDirection: 'column', gap: 12, padding: '4px 4px 32px' },
+  page: { display: 'flex', flexDirection: 'column', gap: 14 },
+  topRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
+  pageTitle: { margin: 0, fontSize: '1.3rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 10 },
+  count: { fontSize: '0.8rem', fontWeight: 800, padding: '2px 10px', borderRadius: 999, background: 'var(--surface-strong)', color: 'var(--text-secondary)' },
+  list: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 420px), 1fr))', gap: 14, alignItems: 'start' },
   muted: { color: 'var(--text-muted)' },
   error: { color: '#c62828', fontWeight: 600 },
-  card: { padding: 16, borderRadius: 16, background: 'var(--surface)', color: 'var(--text-primary)', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-elevated)', display: 'flex', flexDirection: 'column', gap: 8 },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' },
-  title: { margin: 0, fontSize: '1rem' },
-  status: { fontSize: '0.78rem', fontWeight: 800, padding: '4px 10px', borderRadius: 999, background: '#f38808', color: '#fff' },
-  cancelButton: { marginLeft: 'auto', border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', padding: '4px 12px', borderRadius: 999, fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer' },
-  desc: { margin: 0, color: 'var(--text-secondary)', fontSize: '0.86rem', whiteSpace: 'pre-line' },
-  track: { display: 'flex', gap: 6, listStyle: 'none', margin: 0, padding: 0 },
+  card: { padding: 16, borderRadius: 16, background: 'var(--surface)', color: 'var(--text-primary)', borderWidth: 1, borderStyle: 'solid', borderColor: 'var(--border-subtle)', boxShadow: 'var(--shadow-elevated)', display: 'flex', flexDirection: 'column', gap: 10 },
+  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 },
+  title: { margin: 0, fontSize: '1rem', lineHeight: 1.3, minWidth: 0 },
+  status: { flexShrink: 0, fontSize: '0.74rem', fontWeight: 800, padding: '4px 10px', borderRadius: 999, background: '#f38808', color: '#fff' },
+  cancelButton: { marginLeft: 'auto', minHeight: 40, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', padding: '0 16px', borderRadius: 999, fontWeight: 600, fontSize: '0.84rem', cursor: 'pointer' },
+  desc: { margin: 0, color: 'var(--text-secondary)', fontSize: '0.88rem', lineHeight: 1.45, whiteSpace: 'pre-line', overflowWrap: 'anywhere' },
+  track: { display: 'flex', gap: 4, listStyle: 'none', margin: 0, padding: 0 },
   dot: { flex: 1, height: 6, borderRadius: 3, background: 'var(--border-subtle)' },
   dotDone: { background: '#f38808' },
-  meta: { display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: '0.78rem', color: 'var(--text-muted)' },
+  stepLine: { fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: -4 },
+  meta: { display: 'flex', gap: '6px 16px', flexWrap: 'wrap', alignItems: 'center', fontSize: '0.78rem', color: 'var(--text-muted)' },
 };

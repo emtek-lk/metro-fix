@@ -586,3 +586,12 @@ table tbody tr:hover {
 .metro-settings-nav { outline: none; }
 .metro-settings-nav:hover { color: var(--text-primary) !important; }
 .metro-settings-nav:focus-visible { outline: 2px solid #f38808; outline-offset: 2px; }
+
+/* Customer website frame: link and tab states that inline styles cannot express. */
+.cshell-link:hover { color: var(--text-primary) !important; background: var(--surface-strong); }
+.cshell-link[aria-current='page']:hover { color: #f38808 !important; background: rgba(243, 136, 8, 0.12); }
+.cshell-tab:active { background: var(--surface-strong); }
+.cshell-signout:hover { color: #f38808 !important; }
+@media (prefers-reduced-motion: no-preference) {
+  .cshell-link, .cshell-tab { transition: color 120ms ease, background 120ms ease; }
+}

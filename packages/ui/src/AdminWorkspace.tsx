@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { RefreshButton } from './RefreshButton';
 import { Skeleton } from './Skeleton';
+import { API_BASE_URL } from './hosting';
 import { EditCustomerModal, EditWorkerModal, type EditableCustomer, type EditableWorker } from './EditRecordModals';
 import {
   type ColumnDef,
@@ -411,7 +412,7 @@ function AddCustomerModal({
     };
 
     try {
-      const apiBase = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || 'http://localhost:3000';
+      const apiBase = API_BASE_URL;
       const response = await fetch(`${apiBase}/customers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -633,7 +634,7 @@ export function AdminWorkspace({
     setFetchError(null);
 
     const token = typeof window !== 'undefined' ? (localStorage.getItem('metrofix_token') || localStorage.getItem('metrofix_jwt')) : null;
-    const apiBase = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || 'http://localhost:3000';
+    const apiBase = API_BASE_URL;
     let endpoint = `${apiBase}/customers`;
     if (activeView === 'workers') endpoint = `${apiBase}/workers`;
     if (activeView === 'service-catalog') endpoint = `${apiBase}/services`;

@@ -8,6 +8,10 @@ const require = createRequire(import.meta.url);
 export default defineConfig({
   plugins: [react()],
   server: {
+    // Listen on every interface and accept any Host header, so metrofix.localhost, admin.metrofix.localhost
+    // (and a real domain behind a proxy) all reach the dev server.
+    host: true,
+    allowedHosts: true,
     watch: {
       usePolling: true,
       interval: 250,

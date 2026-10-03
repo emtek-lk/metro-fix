@@ -1,6 +1,6 @@
 import { useState, type CSSProperties } from 'react';
 import { Role, type RegistrationInput, type User } from '@metro-fix/core-types';
-import { BrandLogo, useMediaQuery } from '@metro-fix/ui';
+import { BrandLogo, SURFACE, useMediaQuery } from '@metro-fix/ui';
 import ThemeToggle from '../../theme/ThemeToggle';
 import { Login } from './Login';
 import { Register } from './Register';
@@ -19,6 +19,8 @@ export function AuthShell({ onAuthenticated }: AuthShellProps) {
   const app = useAppSettings();
   const [onboarding, setOnboarding] = useState<{ user: User; token: string } | null>(null);
   const isCompact = useMediaQuery('(max-width: 960px)');
+  // On a phone the brand panel shrinks to a single line so the form is on screen straight away.
+  const isPhone = useMediaQuery('(max-width: 640px)');
 
   const handleLoginSuccess = (data: { accessToken: string; user: User }) => {
     const { accessToken, user } = data;
@@ -85,30 +87,32 @@ export function AuthShell({ onAuthenticated }: AuthShellProps) {
   return (
     <div style={{ ...styles.screen, ...(isCompact ? styles.screenCompact : undefined) }}>
       <section style={{ ...styles.shell, ...(isCompact ? styles.shellCompact : undefined) }}>
-        <aside style={{ ...styles.leftPanel, ...(isCompact ? styles.leftPanelCompact : undefined) }}>
+        <aside style={{ ...styles.leftPanel, ...(isCompact ? styles.leftPanelCompact : undefined), ...(isPhone ? styles.leftPanelPhone : undefined) }}>
           <div style={styles.leftPattern} />
           <div style={styles.leftPatternGlowA} />
           <div style={styles.leftPatternGlowB} />
 
-          <div style={styles.leftBrandCluster}>
-            <div style={styles.brandMarkShell}>
-              <img src={BrandLogo} alt="Metro-Fix" style={styles.brandMark} />
+          <div style={{ ...styles.leftBrandCluster, ...(isPhone ? styles.brandClusterPhone : undefined) }}>
+            <div style={{ ...styles.brandMarkShell, ...(isPhone ? styles.brandMarkShellPhone : undefined) }}>
+              <img src={BrandLogo} alt="Metro-Fix" style={{ ...styles.brandMark, ...(isPhone ? { width: 38, height: 38 } : undefined) }} />
             </div>
 
             <div style={styles.brandBlock}>
-              <div style={styles.kicker}>Facility Management Platform</div>
-              <h1 style={styles.title}>METRO-FIX</h1>
-              <p style={styles.copy}>Managed Dispatch Facility Control Center</p>
+              {!isPhone && <div style={styles.kicker}>Facility Management Platform</div>}
+              <h1 style={{ ...styles.title, ...(isPhone ? { fontSize: '1.5rem', margin: 0, textAlign: 'left' } : undefined) }}>METRO-FIX</h1>
+              {!isPhone && <p style={styles.copy}>Managed Dispatch Facility Control Center</p>}
             </div>
           </div>
 
-          <div style={{ ...styles.leftFooterCopy, ...(isCompact ? styles.leftFooterCopyCompact : undefined) }}>
-            Managed dispatch, facility intake, and workforce coordination in one control surface.
-          </div>
+          {!isPhone && (
+            <div style={{ ...styles.leftFooterCopy, ...(isCompact ? styles.leftFooterCopyCompact : undefined) }}>
+              Managed dispatch, facility intake, and workforce coordination in one control surface.
+            </div>
+          )}
         </aside>
 
         <section style={{ ...styles.rightPanel, ...(isCompact ? styles.rightPanelCompact : undefined) }}>
-          <header style={styles.rightHeader}>
+          <header style={{ ...styles.rightHeader, ...(isPhone ? { flexWrap: 'nowrap' } : undefined) }}>
             <div style={styles.tabRow} role="tablist" aria-label="Authentication mode">
               <button
                 type="button"
@@ -119,28 +123,33 @@ export function AuthShell({ onAuthenticated }: AuthShellProps) {
               >
                 Sign In
               </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={mode === 'register'}
-                onClick={() => setMode('register')}
-                style={{ ...styles.tabButton, ...(mode === 'register' ? styles.tabButtonActive : undefined) }}
-              >
-                Register Profile
-              </button>
+              {/* Only customers register; the staff website has sign-in alone. */}
+              {SURFACE !== 'admin' && (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={mode === 'register'}
+                  onClick={() => setMode('register')}
+                  style={{ ...styles.tabButton, ...(mode === 'register' ? styles.tabButtonActive : undefined) }}
+                >
+                  {isPhone ? 'Register' : 'Register Profile'}
+                </button>
+              )}
             </div>
 
             <div style={styles.utilityCluster}>
               <ThemeToggle />
-              <button type="button" aria-label="Help and support" title="Help and support" style={styles.helpButton}>
-                Help
-              </button>
+              {!isPhone && (
+                <button type="button" aria-label="Help and support" title="Help and support" style={styles.helpButton}>
+                  Help
+                </button>
+              )}
             </div>
           </header>
 
           <div style={{ ...styles.panelBody, ...(isCompact ? styles.panelBodyCompact : undefined) }}>
             <div style={{ ...styles.formSurface, ...(isCompact ? styles.formSurfaceCompact : undefined) }}>
-              {mode === 'login' ? (
+              {mode === 'login' || SURFACE === 'admin' ? (
                 <Login onSuccess={handleLoginSuccess} />
               ) : (
                 <Register onSubmit={handleRegistrationSuccess} />
@@ -152,21 +161,33 @@ export function AuthShell({ onAuthenticated }: AuthShellProps) {
                 Trouble with your account?
               </a>
 
+              {/* Demo logins are for local development only: never shown on a deployed site. */}
+              {import.meta.env.DEV && (
               <div style={styles.demoCard}>
                 <div style={styles.demoTitle}>
                   Demo Credentials <span style={styles.demoHint}>(Password: Demo123!)</span>
                 </div>
                 <div style={styles.demoRows}>
-                  <div style={styles.demoRow}>
-                    <span style={styles.demoLabel}>Admin:</span>
-                    <code style={styles.demoCode}>admin@demo.local</code>
-                  </div>
-                  <div style={styles.demoRow}>
-                    <span style={styles.demoLabel}>Dispatcher:</span>
-                    <code style={styles.demoCode}>dispatch@demo.local</code>
-                  </div>
+                  {SURFACE === 'customer' ? (
+                    <div style={styles.demoRow}>
+                      <span style={styles.demoLabel}>Customer:</span>
+                      <code style={styles.demoCode}>marcus@residences.lk</code>
+                    </div>
+                  ) : (
+                    <>
+                      <div style={styles.demoRow}>
+                        <span style={styles.demoLabel}>Admin:</span>
+                        <code style={styles.demoCode}>admin@demo.local</code>
+                      </div>
+                      <div style={styles.demoRow}>
+                        <span style={styles.demoLabel}>Dispatcher:</span>
+                        <code style={styles.demoCode}>dispatch@demo.local</code>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
+              )}
             </footer>
           </div>
         </section>
@@ -188,11 +209,14 @@ const styles: Record<string, CSSProperties> = {
     background: 'var(--app-background)',
     overflow: 'hidden',
   },
+  // The page root is a fixed-height, non-scrolling box, so a taller layout must scroll inside itself.
   screenCompact: {
-    height: 'auto',
-    minHeight: '100vh',
+    height: '100dvh',
+    minHeight: 0,
     maxHeight: 'none',
     overflow: 'auto',
+    WebkitOverflowScrolling: 'touch',
+    alignItems: 'flex-start',
   },
   shell: {
     width: 'min(1280px, 100%)',
@@ -230,6 +254,24 @@ const styles: Record<string, CSSProperties> = {
     flex: '0 0 auto',
     minHeight: '220px',
     padding: 'clamp(18px, 4vw, 28px)',
+  },
+  leftPanelPhone: {
+    minHeight: 0,
+    padding: '14px 18px',
+    borderRadius: '22px',
+  },
+  brandClusterPhone: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    gap: '12px',
+    margin: 0,
+    maxWidth: 'none',
+  },
+  brandMarkShellPhone: {
+    width: '52px',
+    height: '52px',
+    borderRadius: '14px',
+    flexShrink: 0,
   },
   leftPattern: {
     position: 'absolute',
