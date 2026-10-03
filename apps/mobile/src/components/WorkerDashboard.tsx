@@ -2,7 +2,8 @@ import React, { useMemo, useState } from 'react';
 import { Animated, View, StyleSheet, Pressable, RefreshControl } from 'react-native';
 import { Text } from './ui/AppText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ServiceRequest } from '@metro-fix/core-types';
+import { JobStatus, ServiceRequest } from '@metro-fix/core-types';
+import { customerNameOf, coordinatesOf } from '../lib/jobs';
 
 import { Card } from './ui/Card';
 import { Button } from './ui/Button';
@@ -83,7 +84,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({
             {item.description}
           </Text>
 
-          {/* Progress through the 7 job stages */}
+          {/* Progress through the job stages */}
           <View style={styles.stepper}>
             <StageStepper status={item.status} compact />
           </View>
@@ -107,21 +108,20 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({
               <View style={styles.footerLine}>
                 <Icon name="user" size={13} color={colors.textSecondary} />
                 <Text style={styles.customerName} numberOfLines={1}>
-                  {(item as any).customerName || `Customer #${shortRef(item.customerId, 4) || 'Ref'}`}
+                  {customerNameOf(item)}
                 </Text>
               </View>
               <View style={styles.footerLine}>
                 <Icon name="map-pin" size={13} color={colors.textMuted} />
                 <Text style={styles.locationText} numberOfLines={1}>
-                  {(item as any).address ||
-                    (item.location
-                      ? `${item.location.latitude.toFixed(4)}, ${item.location.longitude.toFixed(4)}`
-                      : 'Site Address Available')}
+                  {coordinatesOf(item) ?? 'Site address to be confirmed'}
                 </Text>
               </View>
             </View>
             <View style={styles.viewAction}>
-              <Text style={styles.viewActionText}>VIEW</Text>
+              <Text style={styles.viewActionText}>
+                {item.status === JobStatus.PENDING_ACCEPTANCE ? 'RESPOND' : 'VIEW'}
+              </Text>
               <Icon name="chevron-right" size={15} color={colors.brand} />
             </View>
           </View>

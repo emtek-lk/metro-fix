@@ -1,31 +1,24 @@
 import { useEffect, useState, type CSSProperties } from 'react';
-import { JobStatus, type ServiceRequest } from '@metro-fix/core-types';
+import { JobStatus, JOB_STAGES, canTransition, type ServiceRequest } from '@metro-fix/core-types';
 import { API_BASE_URL } from '../../lib/api';
 import { WebSocketService } from '../../lib/websocket';
 
-const STAGES: JobStatus[] = [
-  JobStatus.REQUESTED,
-  JobStatus.ASSIGNED,
-  JobStatus.ON_ROUTE,
-  JobStatus.INSPECTION,
-  JobStatus.IN_PROGRESS,
-  JobStatus.COMPLETED,
-  JobStatus.CLOSED,
-];
+// The stages and their order come from the shared lifecycle; only the customer-facing wording is here.
+const STAGES = JOB_STAGES;
 
 const STAGE_LABEL: Record<string, string> = {
   REQUESTED: 'Received',
+  PENDING_ACCEPTANCE: 'Finding a technician',
   ASSIGNED: 'Technician assigned',
   ON_ROUTE: 'On the way',
   INSPECTION: 'Inspecting',
   IN_PROGRESS: 'Work in progress',
   COMPLETED: 'Work complete',
   CLOSED: 'Closed',
+  CANCELLED: 'Cancelled',
 };
 
 type Job = ServiceRequest & {
-  urgency?: string;
-  worker?: { user?: { fullName?: string } } | null;
   quoteAmount?: number | string | null;
 };
 
@@ -33,6 +26,31 @@ export function PortalRequests({ refreshKey }: { refreshKey: number }) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState<string | null>(null);
+
+  const cancelRequest = async (job: Job) => {
+    if (!window.confirm('Cancel this request?')) return;
+    setCancelling(job.id);
+    setError(null);
+    const token = localStorage.getItem('metrofix_token');
+    try {
+      const res = await fetch(`${API_BASE_URL}/jobs/${job.id}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.message || `HTTP ${res.status}`);
+      }
+      const updated = (await res.json()) as Job;
+      setJobs((prev) => prev.map((j) => (j.id === updated.id ? updated : j)));
+    } catch (err: any) {
+      setError(err?.message || 'Could not cancel the request.');
+    } finally {
+      setCancelling(null);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -85,19 +103,32 @@ export function PortalRequests({ refreshKey }: { refreshKey: number }) {
               <span style={styles.status}>{STAGE_LABEL[job.status] ?? job.status}</span>
             </header>
             <p style={styles.desc}>{job.description}</p>
-            <ol style={styles.track} aria-label="Progress">
-              {STAGES.map((stage, index) => (
-                <li
-                  key={stage}
-                  title={STAGE_LABEL[stage]}
-                  style={{ ...styles.dot, ...(index <= stageIndex ? styles.dotDone : undefined) }}
-                />
-              ))}
-            </ol>
+            {job.status !== JobStatus.CANCELLED && (
+              <ol style={styles.track} aria-label="Progress">
+                {STAGES.map((stage, index) => (
+                  <li
+                    key={stage}
+                    title={STAGE_LABEL[stage]}
+                    style={{ ...styles.dot, ...(index <= stageIndex ? styles.dotDone : undefined) }}
+                  />
+                ))}
+              </ol>
+            )}
             <footer style={styles.meta}>
               <span>Raised {new Date(job.createdAt).toLocaleString()}</span>
               {job.worker?.user?.fullName && <span>Technician: {job.worker.user.fullName}</span>}
               {job.quoteAmount != null && <span>Quote: LKR {Number(job.quoteAmount).toLocaleString('en-LK')}</span>}
+              {job.cancelReason && <span>Reason: {job.cancelReason}</span>}
+              {canTransition(job.status, JobStatus.CANCELLED) && (
+                <button
+                  type="button"
+                  style={styles.cancelButton}
+                  disabled={cancelling === job.id}
+                  onClick={() => void cancelRequest(job)}
+                >
+                  {cancelling === job.id ? 'Cancelling…' : 'Cancel request'}
+                </button>
+              )}
             </footer>
           </article>
         );
@@ -114,6 +145,7 @@ const styles: Record<string, CSSProperties> = {
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' },
   title: { margin: 0, fontSize: '1rem' },
   status: { fontSize: '0.78rem', fontWeight: 800, padding: '4px 10px', borderRadius: 999, background: '#f38808', color: '#fff' },
+  cancelButton: { marginLeft: 'auto', border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', padding: '4px 12px', borderRadius: 999, fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer' },
   desc: { margin: 0, color: 'var(--text-secondary)', fontSize: '0.86rem', whiteSpace: 'pre-line' },
   track: { display: 'flex', gap: 6, listStyle: 'none', margin: 0, padding: 0 },
   dot: { flex: 1, height: 6, borderRadius: 3, background: 'var(--border-subtle)' },

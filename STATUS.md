@@ -18,7 +18,7 @@
 
 ## 2. Done (spec alignment, 2026-10-03)
 
-- Lifecycle changed to `REQUESTED, ASSIGNED, ON_ROUTE, INSPECTION, IN_PROGRESS, COMPLETED, CLOSED`; `PENDING_ACCEPTANCE` removed. Worker reject at ASSIGNED/INSPECTION returns the job to REQUESTED (`POST /jobs/:id/reject`); dispatcher close (`POST /jobs/:id/close`).
+- Lifecycle is `REQUESTED, PENDING_ACCEPTANCE, ASSIGNED, ON_ROUTE, INSPECTION, IN_PROGRESS, COMPLETED, CLOSED` plus `CANCELLED` (defined once in `core-types`). Dispatch offers a job (`POST /jobs/:id/offer`); the worker accepts or declines (`/accept`, `/decline`); an unanswered offer lapses after 9 hours; customers/dispatch can `POST /jobs/:id/cancel`. Jobs reach a worker only after dispatch offers them. The dispatch board has a Refresh button and refetches when its socket reconnects; the mobile apps and board hold no hardcoded jobs. Worker reject at ASSIGNED/INSPECTION returns the job to REQUESTED (`POST /jobs/:id/reject`); dispatcher close (`POST /jobs/:id/close`).
 - Plans: Access / Essential / Plus / Business in LKR with allowances ([seed-data.ts](apps/api/src/common/seed-data.ts)).
 - Catalog: 16 services, pillar > group > service, icons and descriptions.
 - Customer portal on web; customers get `GET /jobs/mine` and only see their own jobs (REST and socket).

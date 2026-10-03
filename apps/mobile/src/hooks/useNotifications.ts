@@ -1,45 +1,14 @@
-import { useCallback, useMemo, useState } from 'react';
-import { AppNotification, countUnread } from '../lib/notifications';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { storage } from '../lib/storage';
+import { useAuth } from '../context/AuthContext';
+import { countUnread, notificationsFromJobs, type AppNotification } from '../lib/notifications';
+import { useWorkerJobs } from './useJobs';
+
+const readKey = (userId: string) => `metrofix_read_alerts_${userId}`;
 
 /**
- * Sample feed so the Alerts screen can be reviewed in development. Release builds start empty and
- * show the real empty state instead of invented notifications.
- */
-const buildSampleFeed = (): AppNotification[] => {
-  const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
-  return [
-    {
-      id: 'sample-dispatch',
-      kind: 'dispatch',
-      title: 'Priority dispatch',
-      body: 'A new commercial HVAC ticket is available 2.4 km away.',
-      createdAt: ago(10),
-      unread: true,
-    },
-    {
-      id: 'sample-quote',
-      kind: 'quote',
-      title: 'Quote approved by customer',
-      body: 'Elevator shaft safety inspection quote accepted. You can start work.',
-      createdAt: ago(130),
-      unread: true,
-    },
-    {
-      id: 'sample-location',
-      kind: 'location',
-      title: 'Location sharing active',
-      body: 'Background location is on for your assigned route.',
-      createdAt: ago(60 * 26),
-      unread: false,
-    },
-  ];
-};
-
-/**
- * The worker's notification feed.
- *
- * TODO(backend): replace the seed with the real feed (push notifications / an API endpoint). The
- * rest of the app only depends on this hook's return shape.
+ * The worker's alerts, derived from their real job queue (see `notificationsFromJobs`). Which
+ * alerts have been opened is remembered per account on the device.
  */
 export function useNotifications(): {
   items: AppNotification[];
@@ -47,18 +16,65 @@ export function useNotifications(): {
   markRead: (id: string) => void;
   markAllRead: () => void;
 } {
-  const [items, setItems] = useState<AppNotification[]>(() => (__DEV__ ? buildSampleFeed() : []));
+  const { user } = useAuth();
+  const { data: jobs } = useWorkerJobs();
+  const [readIds, setReadIds] = useState<ReadonlySet<string>>(new Set());
+
+  const userId = user?.id;
+  useEffect(() => {
+    if (!userId) return;
+    let active = true;
+    storage
+      .getItemAsync(readKey(userId))
+      .then((saved) => {
+        if (!active || !saved) return;
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) setReadIds(new Set(parsed.filter((id) => typeof id === 'string')));
+        } catch {
+          // A corrupt value just means everything shows as unread again.
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [userId]);
+
+  const persist = useCallback(
+    (next: ReadonlySet<string>) => {
+      if (userId) {
+        // Keep the list bounded: the newest 200 ids are plenty.
+        storage.setItemAsync(readKey(userId), JSON.stringify([...next].slice(-200))).catch(() => undefined);
+      }
+    },
+    [userId],
+  );
+
+  const items = useMemo(() => notificationsFromJobs(jobs ?? [], readIds), [jobs, readIds]);
+  const unreadCount = useMemo(() => countUnread(items), [items]);
 
   const markRead = useCallback(
     (id: string) =>
-      setItems((current) => current.map((item) => (item.id === id ? { ...item, unread: false } : item))),
-    [],
+      setReadIds((current) => {
+        if (current.has(id)) return current;
+        const next = new Set(current).add(id);
+        persist(next);
+        return next;
+      }),
+    [persist],
   );
+
   const markAllRead = useCallback(
-    () => setItems((current) => current.map((item) => ({ ...item, unread: false }))),
-    [],
+    () =>
+      setReadIds((current) => {
+        const next = new Set(current);
+        items.forEach((item) => next.add(item.id));
+        persist(next);
+        return next;
+      }),
+    [items, persist],
   );
-  const unreadCount = useMemo(() => countUnread(items), [items]);
 
   return { items, unreadCount, markRead, markAllRead };
 }

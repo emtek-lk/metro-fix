@@ -38,11 +38,8 @@ export class SeedService implements OnApplicationBootstrap {
     private readonly planRepository: Repository<SubscriptionPlanEntity>,
   ) {}
 
-  /** Moves rows written under the old lifecycle / tier names onto the current ones. */
+  /** Moves rows written under the old tier names onto the current ones. */
   private async migrateLegacyValues() {
-    await this.jobRepository.query(
-      `UPDATE service_requests SET status = 'REQUESTED', workerId = NULL WHERE status = 'PENDING_ACCEPTANCE'`,
-    );
     await this.customerRepository.query(
       `UPDATE customers SET subscriptionTier = CASE subscriptionTier
          WHEN 'BASIC' THEN 'ACCESS' WHEN 'PREMIUM' THEN 'BUSINESS' ELSE subscriptionTier END
@@ -101,11 +98,13 @@ export class SeedService implements OnApplicationBootstrap {
       {
         fullName: 'Carlos Rivera',
         email: 'worker1@demo.local',
+        phoneNumber: '+94 77 100 0001',
         role: Role.WORKER,
       },
       {
         fullName: 'Priya Sharma',
         email: 'worker2@demo.local',
+        phoneNumber: '+94 77 100 0002',
         role: Role.WORKER,
       },
     ];
@@ -123,6 +122,7 @@ export class SeedService implements OnApplicationBootstrap {
         this.logger.log(`Created user: ${data.email}`);
       } else {
         user.password = password;
+        if (!user.phoneNumber && data.phoneNumber) user.phoneNumber = data.phoneNumber;
         await this.userRepository.save(user);
         this.logger.log(`Updated password for: ${data.email}`);
       }
@@ -161,11 +161,16 @@ export class SeedService implements OnApplicationBootstrap {
     }
 
     // Demo customer logins (the customer portal) use the same demo password as staff.
-    const demoCustomerEmails = ['eleanor@skylinetowers.com', 'marcus@residences.lk', 'sophia@industrialpark.com'];
-    for (const email of demoCustomerEmails) {
+    const demoCustomerPhones: Record<string, string> = {
+      'eleanor@skylinetowers.com': '+94 77 200 0001',
+      'marcus@residences.lk': '+94 77 200 0002',
+      'sophia@industrialpark.com': '+94 77 200 0003',
+    };
+    for (const [email, phone] of Object.entries(demoCustomerPhones)) {
       const existing = await this.userRepository.findOne({ where: { email } });
       if (existing) {
         existing.password = password;
+        if (!existing.phoneNumber) existing.phoneNumber = phone;
         await this.userRepository.save(existing);
       }
     }

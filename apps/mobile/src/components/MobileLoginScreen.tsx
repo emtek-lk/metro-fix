@@ -4,6 +4,7 @@ import { Text } from './ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { User } from '@metro-fix/core-types';
 import { useAuth } from '../context/AuthContext';
+import { getErrorMessage } from '../lib/errors';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Icon } from './ui/Icon';
@@ -69,7 +70,7 @@ export function MobileLoginScreen({ onLoginSuccess, onRegister }: MobileLoginScr
       }
     } catch (err: any) {
       setIsLoading(false);
-      setError(err.message || 'Login failed. Please check your network connection.');
+      setError(getErrorMessage(err, 'Login failed. Please check your connection and try again.'));
     }
   };
 

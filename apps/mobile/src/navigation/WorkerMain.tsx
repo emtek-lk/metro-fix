@@ -1,6 +1,7 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { BackHandler } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { useQueryClient } from '@tanstack/react-query';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { JobStatus, ServiceRequest } from '@metro-fix/core-types';
 import { useAuth } from '../context/AuthContext';
@@ -10,9 +11,10 @@ import { JobHistoryScreen } from '../components/JobHistory';
 import { NotificationsScreen } from '../components/Notifications';
 import { ProfileScreen } from '../components/Profile';
 import { FloatingTabBar, type TabItem } from '../components/ui/FloatingTabBar';
-import { apiService } from '../services/api';
-import { apiClient } from '../lib/api';
+import { useToast } from '../components/ui/Toast';
 import { useNotifications } from '../hooks/useNotifications';
+import { useWorkerJobs } from '../hooks/useJobs';
+import { secondsUntil } from '../lib/countdown';
 import { ScreenShell } from './ScreenShell';
 import { TabPanes } from './TabPanes';
 import type { RootStackParamList } from './types';
@@ -26,13 +28,23 @@ const WORKER_TABS: TabItem[] = [
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Main'>;
 
+/** Identifies one offer: the same job offered again later gets a new deadline, so a new key. */
+const offerKey = (job: ServiceRequest) => `${job.id}:${job.offerExpiresAt ?? ''}`;
+
+/** An offer that is still waiting for an answer and has time left. */
+const isLiveOffer = (job: ServiceRequest) =>
+  job.status === JobStatus.PENDING_ACCEPTANCE && secondsUntil(job.offerExpiresAt) > 0;
+
 /** The worker's home: roster, history, alerts and profile behind the glass tab bar. */
 export function WorkerMain({ navigation }: Props) {
   const { user } = useAuth();
+  const toast = useToast();
+  const queryClient = useQueryClient();
   const notifications = useNotifications();
+  const { data: jobs } = useWorkerJobs();
   const [activeTab, setActiveTab] = useState<string>(WORKER_TABS[0].id);
-  const [alertVisible, setAlertVisible] = useState(false);
-  const [incomingJob, setIncomingJob] = useState<ServiceRequest | null>(null);
+  // Offers the worker has answered, let lapse, or put aside, so their sheet is not raised again.
+  const [putAside, setPutAside] = useState<ReadonlySet<string>>(new Set());
 
   // Android back: return to the first tab before leaving the app.
   useFocusEffect(
@@ -48,27 +60,38 @@ export function WorkerMain({ navigation }: Props) {
     }, [activeTab]),
   );
 
+  // The offer to show: the first live one the worker has not already dealt with. Arrives from the
+  // realtime socket (instantly) or from the roster query (e.g. the app was opened mid-offer).
+  const currentOffer = useMemo(
+    () => (jobs ?? []).find((job) => isLiveOffer(job) && !putAside.has(offerKey(job))) ?? null,
+    [jobs, putAside],
+  );
+
+  const putOfferAside = useCallback((job: ServiceRequest) => {
+    setPutAside((current) => new Set(current).add(offerKey(job)));
+  }, []);
+
+  const refreshQueue = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['workerJobs'] });
+  }, [queryClient]);
+
   if (!user) return null;
 
-  const openJob = (job: ServiceRequest) => navigation.navigate('JobDetail', { job });
-
-  // Dev helper: self-assign the oldest open REQUESTED job so the dispatch alert can be exercised.
-  const handleSimulateAlert = async () => {
-    try {
-      const res = await apiClient.get<ServiceRequest[]>('/jobs');
-      const open = [...res.data]
-        .filter((job) => job.status === JobStatus.REQUESTED)
-        .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))[0];
-      if (!open) {
-        console.warn('No REQUESTED jobs available to simulate a dispatch.');
-        return;
+  const openJob = (job: ServiceRequest) => {
+    if (job.status === JobStatus.PENDING_ACCEPTANCE) {
+      // An offer is answered in its sheet; bring it back if it was put aside.
+      if (isLiveOffer(job)) {
+        setPutAside((current) => {
+          const next = new Set(current);
+          next.delete(offerKey(job));
+          return next;
+        });
+      } else {
+        refreshQueue();
       }
-      const assigned = await apiService.updateJobStatus(open.id, JobStatus.ASSIGNED, user.id);
-      setIncomingJob(assigned);
-      setAlertVisible(true);
-    } catch (error) {
-      console.error('Failed to simulate incoming job:', error);
+      return;
     }
+    navigation.navigate('JobDetail', { job });
   };
 
   const panes: Record<string, () => React.ReactNode> = {
@@ -80,14 +103,13 @@ export function WorkerMain({ navigation }: Props) {
         onOpenAlerts={() => setActiveTab('alerts')}
       />
     ),
-    history: () => <JobHistoryScreen />,
+    history: () => <JobHistoryScreen onSelectJob={openJob} />,
     alerts: () => (
       <NotificationsScreen
         notifications={notifications.items}
         unreadCount={notifications.unreadCount}
         onMarkRead={notifications.markRead}
         onMarkAllRead={notifications.markAllRead}
-        onSimulateAlert={handleSimulateAlert}
       />
     ),
     profile: () => (
@@ -99,19 +121,24 @@ export function WorkerMain({ navigation }: Props) {
     <ScreenShell>
       <TabPanes activeTab={activeTab} panes={panes} />
 
-      {/* Global dispatch alert */}
+      {/* A job offered to this worker, with a countdown */}
       <NewJobAlertModal
-        visible={alertVisible}
-        job={incomingJob}
-        distanceKm={2.4}
-        workerId={user.id}
-        onAccept={(job) => {
-          setAlertVisible(false);
-          openJob(job);
+        visible={!!currentOffer}
+        job={currentOffer}
+        onAccepted={(job) => {
+          putOfferAside(job);
+          navigation.navigate('JobDetail', { job });
         }}
-        onReject={() => {
-          setAlertVisible(false);
-          setIncomingJob(null);
+        onDeclined={() => {
+          if (currentOffer) putOfferAside(currentOffer);
+          toast.info('The job went back to dispatch.', 'Offer declined');
+        }}
+        onExpired={() => {
+          if (currentOffer) putOfferAside(currentOffer);
+          refreshQueue();
+        }}
+        onDismiss={() => {
+          if (currentOffer) putOfferAside(currentOffer);
         }}
       />
 

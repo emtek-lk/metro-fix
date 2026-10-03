@@ -12,6 +12,7 @@ import { ServiceRequestEntity } from '../entities';
 
 const STAFF_ROOM = 'staff';
 const customerRoom = (userId: string) => `customer:${userId}`;
+const workerRoom = (userId: string) => `worker:${userId}`;
 
 @WebSocketGateway({
   cors: {
@@ -32,8 +33,9 @@ export class JobsGateway
   }
 
   /**
-   * Clients must present a JWT (socket.io `auth.token`). Staff and workers join the shared
-   * staff room; customers only receive events for their own requests.
+   * Clients must present a JWT (socket.io `auth.token`). Dispatch staff join the shared staff room,
+   * customers only receive events for their own requests, and workers only receive events for jobs
+   * that are offered or assigned to them.
    */
   handleConnection(client: Socket) {
     const token = client.handshake?.auth?.token as string | undefined;
@@ -42,6 +44,8 @@ export class JobsGateway
       const payload = this.jwtService.verify<{ sub: string; role: Role }>(token);
       if (payload.role === Role.CUSTOMER) {
         client.join(customerRoom(payload.sub));
+      } else if (payload.role === Role.WORKER) {
+        client.join(workerRoom(payload.sub));
       } else {
         client.join(STAFF_ROOM);
       }
@@ -55,7 +59,12 @@ export class JobsGateway
     console.log(`[JobsGateway] Client disconnected: ${client.id}`);
   }
 
-  private broadcast(event: string, job: ServiceRequestEntity) {
+  /**
+   * Sends an event to dispatch staff, the owning customer and the worker the job is with.
+   * `alsoNotifyUserIds` reaches workers who just lost the job (declined, expired, withdrawn) so
+   * their screens drop it.
+   */
+  private broadcast(event: string, job: ServiceRequestEntity, alsoNotifyUserIds: string[] = []) {
     if (!this.server || typeof this.server.to !== 'function') {
       return;
     }
@@ -64,16 +73,32 @@ export class JobsGateway
     if (ownerUserId) {
       target = target.to(customerRoom(ownerUserId));
     }
+    const workerUserIds = new Set<string>(alsoNotifyUserIds);
+    if (job.worker?.userId) {
+      workerUserIds.add(job.worker.userId);
+    }
+    workerUserIds.forEach((userId) => {
+      target = target.to(workerRoom(userId));
+    });
     target.emit(event, job);
   }
 
-  /** Broadcasts job.created to the dispatch board, workers, and the owning customer. */
+  /** Broadcasts job.created to the dispatch board and the owning customer. */
   emitJobCreated(job: ServiceRequestEntity) {
     this.broadcast('job.created', job);
   }
 
-  /** Broadcasts job.updated to the dispatch board, workers, and the owning customer. */
-  emitJobUpdated(job: ServiceRequestEntity) {
-    this.broadcast('job.updated', job);
+  /** Broadcasts job.updated to the dispatch board, the owning customer and the worker involved. */
+  emitJobUpdated(job: ServiceRequestEntity, alsoNotifyUserIds: string[] = []) {
+    this.broadcast('job.updated', job, alsoNotifyUserIds);
+  }
+
+  /** Tells one worker a job has just been offered to them, so their app can raise the alert. */
+  emitJobOffered(job: ServiceRequestEntity) {
+    const userId = job.worker?.userId;
+    if (!userId || !this.server || typeof this.server.to !== 'function') {
+      return;
+    }
+    this.server.to(workerRoom(userId)).emit('job.offered', job);
   }
 }

@@ -10,6 +10,7 @@ import { CustomerTrackingView } from '../components/CustomerTrackingView';
 import { UiGalleryScreen } from '../components/UiGalleryScreen';
 import { UnsupportedRoleScreen } from '../components/UnsupportedRoleScreen';
 import { LoadingState } from '../components/ui/LoadingState';
+import { useRealtimeSync } from '../hooks/useRealtimeSync';
 import { colors } from '../theme/colors';
 import { ScreenShell } from './ScreenShell';
 import { WorkerMain } from './WorkerMain';
@@ -38,9 +39,16 @@ function LoginRoute({ navigation }: Props<'Login'>) {
 }
 
 function RegisterRoute({ navigation }: Props<'Register'>) {
+  const { register } = useAuth();
   return (
     <ScreenShell safeArea={false}>
-      <RegisterScreen onBack={() => navigation.goBack()} />
+      <RegisterScreen
+        onBack={() => navigation.goBack()}
+        // Creates the account and signs it in; the navigator then switches to the customer app.
+        onSubmit={async (values) => {
+          await register(values);
+        }}
+      />
     </ScreenShell>
   );
 }
@@ -97,7 +105,10 @@ function UnsupportedRoute() {
  * account's screens or state.
  */
 export function AppNavigator() {
-  const { user, isLoading, isAuthenticated } = useAuth();
+  const { user, token, isLoading, isAuthenticated } = useAuth();
+
+  // While signed in, keep the app live: connect the socket and refresh data as jobs change.
+  useRealtimeSync(isAuthenticated ? token : null);
 
   if (isLoading) {
     return (

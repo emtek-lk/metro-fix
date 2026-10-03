@@ -141,7 +141,10 @@ Returns: Single `ServiceRequestEntity` with relations.
 
 **Roles:** CUSTOMER. Returns only jobs belonging to the logged-in customer. `POST /jobs` by a CUSTOMER always creates the job for their own profile (the `customerId` in the body is ignored).
 
-### 4.5 Assign Worker — `PATCH /jobs/:id/assign`
+### 4.5 Offer to Worker — `POST /jobs/:id/offer` (alias `PATCH /jobs/:id/assign`)
+
+REQUESTED -> PENDING_ACCEPTANCE. The worker then calls `POST /jobs/:id/accept` or `POST /jobs/:id/decline`; an unanswered offer returns to REQUESTED after `OFFER_TIMEOUT_SECONDS` (9 hours). `POST /jobs/:id/cancel` cancels before work starts.
+
 
 **Decorator:** `@Public()`
 

@@ -7,7 +7,6 @@ import {
   WorkerJobQueueResponse,
 } from '@metro-fix/core-types';
 import { apiClient } from '../lib/api';
-import { realtimeSocket } from './websocket';
 
 export interface CreateJobInput {
   title: string;
@@ -17,6 +16,23 @@ export interface CreateJobInput {
   customerId: string;
   location: { latitude: number; longitude: number };
   urgency?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+}
+
+export interface RegisterInput {
+  fullName: string;
+  email: string;
+  phone: string;
+  password: string;
+}
+
+/** A worker's own numbers for the Profile screen (GET /workers/me/stats). */
+export interface WorkerStats {
+  rating: number;
+  completedJobs: number;
+  activeJobs: number;
+  pendingOffers: number;
+  servicePillars: ServicePillar[];
+  isAvailable: boolean;
 }
 
 export interface LoginResponse {
@@ -78,7 +94,6 @@ export class MobileApiService {
   async createJob(input: CreateJobInput): Promise<ServiceRequest> {
     const res = await apiClient.post('/jobs', input);
     const created: ServiceRequest = res.data;
-    realtimeSocket.emitLocalUpdate('job.created', created);
     return created;
   }
 
@@ -96,7 +111,6 @@ export class MobileApiService {
       workerId: workerId !== undefined ? workerId : undefined,
     });
     const updated: ServiceRequest = res.data;
-    realtimeSocket.emitLocalUpdate('job.updated', updated);
     return updated;
   }
 
@@ -125,19 +139,76 @@ export class MobileApiService {
       notes,
     });
     const updated: ServiceRequest = res.data;
-    realtimeSocket.emitLocalUpdate('job.updated', updated);
     return updated;
   }
 
   /**
-   * Worker declines a job (e.g. unserviceable at inspection); it returns to REQUESTED
+   * Worker hands back a job they already accepted (e.g. unserviceable at inspection); it returns
+   * to REQUESTED.
    * POST /jobs/:id/reject
    */
   async rejectJob(jobId: string, reason: string): Promise<ServiceRequest> {
     const res = await apiClient.post(`/jobs/${jobId}/reject`, { reason });
-    const updated: ServiceRequest = res.data;
-    realtimeSocket.emitLocalUpdate('job.updated', updated);
-    return updated;
+    return res.data;
+  }
+
+  /**
+   * Worker accepts the job offered to them (PENDING_ACCEPTANCE -> ASSIGNED).
+   * POST /jobs/:id/accept
+   */
+  async acceptOffer(jobId: string): Promise<ServiceRequest> {
+    const res = await apiClient.post(`/jobs/${jobId}/accept`);
+    return res.data;
+  }
+
+  /**
+   * Worker declines the job offered to them; it goes back to dispatch.
+   * POST /jobs/:id/decline
+   */
+  async declineOffer(jobId: string, reason?: string): Promise<ServiceRequest> {
+    const res = await apiClient.post(`/jobs/${jobId}/decline`, reason ? { reason } : {});
+    return res.data;
+  }
+
+  /**
+   * Customer cancels their own request before work starts.
+   * POST /jobs/:id/cancel
+   */
+  async cancelJob(jobId: string, reason?: string): Promise<ServiceRequest> {
+    const res = await apiClient.post(`/jobs/${jobId}/cancel`, reason ? { reason } : {});
+    return res.data;
+  }
+
+  /**
+   * The signed-in customer's own requests.
+   * GET /jobs/mine
+   */
+  async fetchMyRequests(): Promise<ServiceRequest[]> {
+    const res = await apiClient.get('/jobs/mine');
+    return Array.isArray(res.data) ? res.data : [];
+  }
+
+  /**
+   * The signed-in worker's rating, job counts and service pillars.
+   * GET /workers/me/stats
+   */
+  async fetchMyStats(): Promise<WorkerStats> {
+    const res = await apiClient.get('/workers/me/stats');
+    return res.data;
+  }
+
+  /**
+   * Customer self-registration; returns a signed-in session.
+   * POST /auth/register
+   */
+  async register(input: RegisterInput): Promise<LoginResponse> {
+    const res = await apiClient.post('/auth/register', {
+      fullName: input.fullName,
+      email: input.email,
+      phoneNumber: input.phone,
+      password: input.password,
+    });
+    return res.data;
   }
 
   /**
@@ -154,7 +225,6 @@ export class MobileApiService {
       photos,
     });
     const updated: ServiceRequest = res.data;
-    realtimeSocket.emitLocalUpdate('job.updated', updated);
     return updated;
   }
 }

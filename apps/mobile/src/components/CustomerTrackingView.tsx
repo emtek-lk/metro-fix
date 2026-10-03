@@ -1,20 +1,31 @@
-import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, Animated } from 'react-native';
+import React from 'react';
+import { Alert, Linking, View, StyleSheet, Animated } from 'react-native';
 import { Text } from './ui/AppText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { JobStatus, ServiceRequest } from '@metro-fix/core-types';
-import { realtimeSocket } from '../services/websocket';
+import {
+  JobStatus,
+  ServiceRequest,
+  JOB_STAGES,
+  canTransition,
+  isTerminalStatus,
+} from '@metro-fix/core-types';
 
 import { Button } from './ui/Button';
 import { Icon } from './ui/Icon';
 import { IconButton } from './ui/IconButton';
 import { ScreenHeader } from './ui/ScreenHeader';
+import { useToast } from './ui/Toast';
 import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { spacing, radius, layout, tabBarClearance } from '../theme/layout';
 import { getStatusPresentation } from '../theme/status';
 import { themedStyles } from '../theme/themedStyles';
 import { shortRef } from '../lib/ticket';
+import { haptics } from '../lib/haptics';
+import { getErrorMessage } from '../lib/errors';
+import { trackingMessage } from '../lib/trackingCopy';
+import { workerNameOf } from '../lib/jobs';
+import { useCancelJob, useJobDetail } from '../hooks/useJobs';
 import { GlassHeader, useCollapsingHeader } from './ui/GlassHeader';
 
 interface CustomerTrackingViewProps {
@@ -24,47 +35,74 @@ interface CustomerTrackingViewProps {
   onBack?: () => void;
 }
 
-/**
- * Timeline order for the job lifecycle. Order only — the label, icon and
- * colour for each stage come from the shared status map so the timeline stays
- * consistent with every StatusPill elsewhere in the app.
- */
-const LIFECYCLE_STAGES: JobStatus[] = [
-  JobStatus.REQUESTED,
-  JobStatus.ASSIGNED,
-  JobStatus.ON_ROUTE,
-  JobStatus.INSPECTION,
-  JobStatus.IN_PROGRESS,
-  JobStatus.COMPLETED,
-  JobStatus.CLOSED,
-];
-
 export const CustomerTrackingView: React.FC<CustomerTrackingViewProps> = ({
   job: initialJob,
   onNewBooking,
   onBack,
 }) => {
   const insets = useSafeAreaInsets();
+  const toast = useToast();
   const { scrollY, onScroll } = useCollapsingHeader();
-  const [currentJob, setCurrentJob] = useState<ServiceRequest>(initialJob);
+  // Live: the realtime socket writes every change into this query (see useRealtimeSync), so the
+  // screen follows the job without any polling of its own. The job passed in is the first paint.
+  const { data } = useJobDetail(initialJob.id);
+  const currentJob = data ?? initialJob;
+  const cancel = useCancelJob();
 
-  useEffect(() => {
-    // Listen to real-time WebSocket update events from NestJS backend
-    const unsubscribe = realtimeSocket.on('job.updated', (updatedJob: any) => {
-      if (updatedJob.id === currentJob.id) {
-        console.log('[CustomerTrackingView] Real-time status update received:', updatedJob.status);
-        setCurrentJob(updatedJob);
-      }
-    });
-
-    return () => unsubscribe();
-  }, [currentJob.id]);
-
-  const currentStageIndex = LIFECYCLE_STAGES.findIndex(
-    (s) => s === currentJob.status,
-  );
-
+  const cancelled = currentJob.status === JobStatus.CANCELLED;
+  const currentStageIndex = JOB_STAGES.indexOf(currentJob.status);
   const current = getStatusPresentation(currentJob.status);
+  const technician = workerNameOf(currentJob);
+  const technicianPhone = currentJob.worker?.user?.phoneNumber?.trim() || null;
+  const message = trackingMessage(currentJob.status, technician);
+  const canCancel = canTransition(currentJob.status, JobStatus.CANCELLED);
+  const isLive = !isTerminalStatus(currentJob.status);
+  const hasTechnician =
+    !!currentJob.workerId &&
+    currentJob.status !== JobStatus.REQUESTED &&
+    currentJob.status !== JobStatus.PENDING_ACCEPTANCE &&
+    !cancelled;
+  const technicianCanBeCalled = hasTechnician && !!technicianPhone && !isTerminalStatus(currentJob.status);
+
+  const confirmCancel = () => {
+    Alert.alert(
+      'Cancel this request?',
+      currentJob.status === JobStatus.REQUESTED
+        ? 'Nobody has been sent yet.'
+        : 'Anyone who has been contacted will be told.',
+      [
+        { text: 'Keep request', style: 'cancel' },
+        {
+          text: 'Cancel request',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await cancel.mutateAsync({ jobId: currentJob.id });
+              haptics.success();
+              toast.success('Your request was cancelled.', 'Cancelled');
+            } catch (error) {
+              haptics.error();
+              toast.error(getErrorMessage(error, 'Could not cancel the request.'), 'Cancel failed');
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const callTechnician = () => {
+    if (!technicianPhone) return;
+    Linking.openURL(`tel:${technicianPhone}`).catch(() =>
+      toast.error('Could not open the phone app.', 'Unable to call'),
+    );
+  };
+
+  const quote =
+    currentJob.quoteAmount != null
+      ? `LKR ${Number(currentJob.quoteAmount).toLocaleString('en-LK')}${
+          currentJob.estimatedHours != null ? ` · about ${currentJob.estimatedHours}h` : ''
+        }`
+      : null;
 
   return (
     <View style={styles.container}>
@@ -89,14 +127,16 @@ export const CustomerTrackingView: React.FC<CustomerTrackingViewProps> = ({
 
         {/* Header */}
         <ScreenHeader
-          eyebrow="Live service tracking"
+          eyebrow="Service tracking"
           title={currentJob.title}
           subtitle={`Ticket #${shortRef(currentJob.id)}`}
           right={
-            <View style={styles.liveBadge}>
-              <View style={styles.liveDot} />
-              <Text style={styles.liveBadgeText}>Live</Text>
-            </View>
+            isLive ? (
+              <View style={styles.liveBadge} accessibilityLabel="Updating live">
+                <View style={styles.liveDot} />
+                <Text style={styles.liveBadgeText}>Live</Text>
+              </View>
+            ) : undefined
           }
         />
 
@@ -109,82 +149,114 @@ export const CustomerTrackingView: React.FC<CustomerTrackingViewProps> = ({
             </View>
             <Text style={styles.heroStatusValue}>{current.label}</Text>
           </View>
-          <Text style={styles.heroDesc}>{currentJob.description}</Text>
+          <Text style={styles.heroDesc}>{message.detail}</Text>
+          {cancelled && currentJob.cancelReason ? (
+            <Text style={styles.heroReason}>Reason: {currentJob.cancelReason}</Text>
+          ) : null}
         </View>
 
-        {/* Lifecycle Tracker */}
-        <View style={styles.trackerCard}>
-          <Text style={styles.trackerTitle}>Service lifecycle progress</Text>
+        {/* Lifecycle Tracker (a cancelled request left the normal path, so it has no timeline) */}
+        {!cancelled && (
+          <View style={styles.trackerCard}>
+            <Text style={styles.trackerTitle}>Service progress</Text>
 
-          <View style={styles.stageList}>
-            {LIFECYCLE_STAGES.map((status, index) => {
-              const stage = getStatusPresentation(status);
-              const isComplete = index < currentStageIndex;
-              const isCurrent = index === currentStageIndex;
-              const isDone = isComplete || isCurrent;
-              const isLast = index === LIFECYCLE_STAGES.length - 1;
+            <View style={styles.stageList}>
+              {JOB_STAGES.map((status, index) => {
+                const stage = getStatusPresentation(status);
+                const isComplete = index < currentStageIndex;
+                const isCurrent = index === currentStageIndex;
+                const isDone = isComplete || isCurrent;
+                const isLast = index === JOB_STAGES.length - 1;
 
-              return (
-                <View key={status} style={styles.stageRow}>
-                  <View style={styles.stageIconCol}>
-                    <View
-                      style={[
-                        styles.stageIcon,
-                        isDone && { backgroundColor: stage.color, borderColor: stage.color },
-                      ]}
-                    >
-                      <Icon
-                        name={isComplete ? 'check' : stage.icon}
-                        size={14}
-                        color={isDone ? colors.white : colors.textMuted}
-                      />
-                    </View>
-                    {!isLast && (
+                return (
+                  <View key={status} style={styles.stageRow}>
+                    <View style={styles.stageIconCol}>
                       <View
-                        style={[styles.stageConnector, isComplete && { backgroundColor: stage.color }]}
-                      />
-                    )}
-                  </View>
+                        style={[
+                          styles.stageIcon,
+                          isDone && { backgroundColor: stage.color, borderColor: stage.color },
+                        ]}
+                      >
+                        <Icon
+                          name={isComplete ? 'check' : stage.icon}
+                          size={14}
+                          color={isDone ? colors.white : colors.textMuted}
+                        />
+                      </View>
+                      {!isLast && (
+                        <View
+                          style={[styles.stageConnector, isComplete && { backgroundColor: stage.color }]}
+                        />
+                      )}
+                    </View>
 
-                  <View style={styles.stageContentCol}>
-                    <Text style={[styles.stageLabel, isDone && styles.stageLabelActive]}>
-                      {stage.label}
-                    </Text>
-                    {isCurrent && <Text style={styles.activeTag}>In progress at site</Text>}
+                    <View style={styles.stageContentCol}>
+                      <Text style={[styles.stageLabel, isDone && styles.stageLabelActive]}>
+                        {stage.label}
+                      </Text>
+                      {isCurrent && <Text style={styles.activeTag}>{message.caption}</Text>}
+                    </View>
                   </View>
-                </View>
-              );
-            })}
+                );
+              })}
+            </View>
           </View>
-        </View>
+        )}
 
-        {/* Assigned Technician Card */}
-        {currentJob.workerId ? (
+        {/* Technician: only once one has actually accepted the job */}
+        {hasTechnician ? (
           <View style={styles.workerCard}>
-            <Text style={styles.workerCardTitle}>Assigned service technician</Text>
+            <Text style={styles.workerCardTitle}>Your technician</Text>
             <View style={styles.workerRow}>
               <View style={styles.avatarBox}>
                 <Icon name="user" size={22} color={colors.brand} />
               </View>
               <View style={styles.workerInfo}>
-                <Text style={styles.workerName}>Alex Rivers (Field Tech #88)</Text>
-                <View style={styles.workerMetaRow}>
-                  <Icon name="star" size={12} color={colors.brand} />
-                  <Text style={styles.workerMeta}>4.9 Rating • Hard & Soft FM Certified</Text>
-                </View>
+                <Text style={styles.workerName}>{technician ?? 'Assigned technician'}</Text>
+                {currentJob.worker?.rating != null ? (
+                  <View style={styles.workerMetaRow}>
+                    <Icon name="star" size={12} color={colors.brand} />
+                    <Text style={styles.workerMeta}>{currentJob.worker.rating.toFixed(1)} rating</Text>
+                  </View>
+                ) : null}
               </View>
+              {technicianCanBeCalled ? (
+                <IconButton
+                  onPress={callTechnician}
+                  accessibilityLabel={`Call ${technician ?? 'technician'}`}
+                  icon={<Icon name="phone" size={18} color={colors.brand} />}
+                  backgroundColor={colors.brandSubtle}
+                  size={44}
+                />
+              ) : null}
             </View>
           </View>
-        ) : (
+        ) : !cancelled && !isTerminalStatus(currentJob.status) ? (
           <View style={styles.dispatchingBox}>
             <Icon name="radio" size={17} color={colors.info} />
-            <Text style={styles.dispatchingText}>
-              Customer Care is currently selecting the nearest certified technician for your site location.
-            </Text>
+            <Text style={styles.dispatchingText}>{message.detail}</Text>
           </View>
-        )}
+        ) : null}
 
-        {/* Action Footer */}
+        {quote ? (
+          <View style={styles.workerCard}>
+            <Text style={styles.workerCardTitle}>Quote from your technician</Text>
+            <Text style={styles.workerName}>{quote}</Text>
+            {currentJob.quoteNotes ? <Text style={styles.workerMeta}>{currentJob.quoteNotes}</Text> : null}
+          </View>
+        ) : null}
+
+        {/* Actions */}
+        {canCancel ? (
+          <Button
+            title="Cancel request"
+            onPress={confirmCancel}
+            isLoading={cancel.isPending}
+            variant="danger"
+            size="large"
+            style={styles.cancelBtn}
+          />
+        ) : null}
         <Button
           title="Book Another Service"
           onPress={onNewBooking}
@@ -194,21 +266,21 @@ export const CustomerTrackingView: React.FC<CustomerTrackingViewProps> = ({
           style={styles.newBookingBtn}
         />
       </Animated.ScrollView>
-    <GlassHeader
-      title="Live Tracking"
-      scrollY={scrollY}
-      left={
-        onBack ? (
-          <IconButton
-            onPress={onBack}
-            accessibilityLabel="Back to my requests"
-            icon={<Icon name="chevron-left" size={22} color={colors.text} />}
-            backgroundColor={colors.surface}
-            size={44}
-          />
-        ) : undefined
-      }
-    />
+      <GlassHeader
+        title="Tracking"
+        scrollY={scrollY}
+        left={
+          onBack ? (
+            <IconButton
+              onPress={onBack}
+              accessibilityLabel="Back to my requests"
+              icon={<Icon name="chevron-left" size={22} color={colors.text} />}
+              backgroundColor={colors.surface}
+              size={44}
+            />
+          ) : undefined
+        }
+      />
     </View>
   );
 };
@@ -287,6 +359,15 @@ const styles = themedStyles(() => StyleSheet.create({
     ...typography.body,
     color: colors.textSecondary,
     marginTop: spacing.lg,
+  },
+  heroReason: {
+    ...typography.caption,
+    color: colors.textMuted,
+    marginTop: spacing.sm,
+  },
+  cancelBtn: {
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
   },
 
   // ── Tracker ──

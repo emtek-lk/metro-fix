@@ -1,23 +1,12 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Text } from './AppText';
-import { JobStatus } from '@metro-fix/core-types';
+import { JOB_STAGES, JobStatus } from '@metro-fix/core-types';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { spacing, radius } from '../../theme/layout';
 import { getStatusPresentation } from '../../theme/status';
 import { themedStyles } from '../../theme/themedStyles';
-
-/** Display order of the job stages (the lifecycle itself is defined in core-types). */
-const STAGES: JobStatus[] = [
-  JobStatus.REQUESTED,
-  JobStatus.ASSIGNED,
-  JobStatus.ON_ROUTE,
-  JobStatus.INSPECTION,
-  JobStatus.IN_PROGRESS,
-  JobStatus.COMPLETED,
-  JobStatus.CLOSED,
-];
 
 export interface StageStepperProps {
   status: JobStatus | string;
@@ -25,33 +14,43 @@ export interface StageStepperProps {
   compact?: boolean;
 }
 
-/** Seven segments showing how far a job has progressed, coloured by its current stage. */
+/**
+ * One segment per stage of the job lifecycle (from `@metro-fix/core-types`), coloured by the
+ * current stage. A cancelled job shows every segment empty, since it left the normal path.
+ */
 export const StageStepper: React.FC<StageStepperProps> = ({ status, compact = false }) => {
-  const index = STAGES.indexOf(status as JobStatus);
+  const index = JOB_STAGES.indexOf(status as JobStatus);
+  const cancelled = status === JobStatus.CANCELLED;
   const { color, label } = getStatusPresentation(status);
 
   return (
     <View
       accessible
       accessibilityRole="progressbar"
-      accessibilityLabel={`Stage ${index + 1} of ${STAGES.length}: ${label}`}
-      accessibilityValue={{ min: 1, max: STAGES.length, now: index + 1 }}
+      accessibilityLabel={
+        cancelled ? 'Cancelled' : `Stage ${index + 1} of ${JOB_STAGES.length}: ${label}`
+      }
+      accessibilityValue={cancelled ? undefined : { min: 1, max: JOB_STAGES.length, now: index + 1 }}
     >
       <View style={styles.bars}>
-        {STAGES.map((stage, i) => (
+        {JOB_STAGES.map((stage, i) => (
           <View
             key={stage}
             style={[
               compact ? styles.barCompact : styles.bar,
-              { backgroundColor: i <= index ? color : colors.border },
-              i === index && styles.barCurrent,
+              { backgroundColor: !cancelled && i <= index ? color : colors.border },
+              !cancelled && i === index && styles.barCurrent,
             ]}
           />
         ))}
       </View>
       {compact ? null : (
         <Text style={styles.caption}>
-          {index >= 0 ? `Stage ${index + 1} of ${STAGES.length}` : 'Stage unknown'}
+          {cancelled
+            ? 'Request cancelled'
+            : index >= 0
+              ? `Stage ${index + 1} of ${JOB_STAGES.length}`
+              : 'Stage unknown'}
           <Text style={{ color }}>{`  ·  ${label}`}</Text>
         </Text>
       )}

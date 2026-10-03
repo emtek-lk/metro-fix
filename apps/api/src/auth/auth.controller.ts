@@ -5,6 +5,7 @@ import { LoginDto } from './dto/login.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { Public } from './public.decorator';
+import { registerSchema, RegisterDto } from './dto/register.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -15,6 +16,14 @@ export class AuthController {
   @UsePipes(new ZodValidationPipe(loginSchema as any))
   async login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
+  }
+
+  /** Customer self-registration (public). Always creates a CUSTOMER account. */
+  @Public()
+  @Post('register')
+  @UsePipes(new ZodValidationPipe(registerSchema))
+  async register(@Body() dto: RegisterDto) {
+    return this.authService.register(dto);
   }
 
   @Get('me')

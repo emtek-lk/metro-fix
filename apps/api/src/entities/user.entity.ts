@@ -21,7 +21,9 @@ export class UserEntity {
   @Column({ unique: true })
   email: string;
 
-  @Column()
+  // Never returned by a query unless asked for explicitly (see AuthService.validateUser): jobs embed
+  // their customer and worker users, and those objects are sent to other users and over WebSockets.
+  @Column({ select: false })
   password!: string;
 
   @Column({

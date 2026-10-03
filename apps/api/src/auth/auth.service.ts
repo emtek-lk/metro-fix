@@ -1,10 +1,12 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
-import { UserEntity } from '../entities';
+import { Role, FacilityType, SubscriptionTier } from '@metro-fix/core-types';
+import { UserEntity, CustomerEntity } from '../entities';
 import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
 
 @Injectable()
 export class AuthService {
@@ -15,7 +17,12 @@ export class AuthService {
   ) {}
 
   async validateUser(email: string, pass: string): Promise<UserEntity> {
-    const user = await this.userRepository.findOne({ where: { email } });
+    // `password` is select:false on the entity, so ask for it here (and only here).
+    const user = await this.userRepository
+      .createQueryBuilder('user')
+      .addSelect('user.password')
+      .where('user.email = :email', { email })
+      .getOne();
     if (!user) {
       throw new UnauthorizedException('Invalid email or password.');
     }
@@ -28,6 +35,10 @@ export class AuthService {
 
   async login(loginDto: LoginDto) {
     const user = await this.validateUser(loginDto.email, loginDto.password);
+    return this.sessionFor(user);
+  }
+
+  private sessionFor(user: UserEntity) {
     const payload = { sub: user.id, email: user.email, role: user.role };
     return {
       accessToken: this.jwtService.sign(payload),
@@ -39,6 +50,41 @@ export class AuthService {
         phoneNumber: user.phoneNumber,
       },
     };
+  }
+
+  /**
+   * Customer self-registration. The role is always CUSTOMER (never taken from the request), and the
+   * new account gets a customer profile with the entry tier; facility details are set per request.
+   * Returns a signed-in session so the app can go straight in.
+   */
+  async register(dto: RegisterDto) {
+    const email = dto.email.trim().toLowerCase();
+    const existing = await this.userRepository.findOne({ where: { email } });
+    if (existing) {
+      throw new ConflictException('An account with this email already exists.');
+    }
+
+    const user = await this.userRepository.manager.transaction(async (manager) => {
+      const created = await manager.save(
+        manager.create(UserEntity, {
+          fullName: dto.fullName.trim(),
+          email,
+          phoneNumber: dto.phoneNumber.trim(),
+          password: dto.password,
+          role: Role.CUSTOMER,
+        }),
+      );
+      await manager.save(
+        manager.create(CustomerEntity, {
+          userId: created.id,
+          facilityType: FacilityType.RESIDENTIAL,
+          subscriptionTier: SubscriptionTier.ACCESS,
+        }),
+      );
+      return created;
+    });
+
+    return this.sessionFor(user);
   }
 
   async getProfile(userId: string): Promise<Partial<UserEntity>> {

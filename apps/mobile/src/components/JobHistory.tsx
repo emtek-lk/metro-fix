@@ -1,8 +1,8 @@
 import React from 'react';
-import { Animated, View, StyleSheet } from 'react-native';
+import { Animated, Pressable, View, StyleSheet } from 'react-native';
 import { Text } from './ui/AppText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { JobStatus, ServiceRequest } from '@metro-fix/core-types';
+import { JobStatus, ServiceRequest, isFinishedStatus } from '@metro-fix/core-types';
 
 import { Card } from './ui/Card';
 import { Icon } from './ui/Icon';
@@ -20,18 +20,17 @@ import { themedStyles } from '../theme/themedStyles';
 import { shortRef } from '../lib/ticket';
 import { GlassHeader, useCollapsingHeader } from './ui/GlassHeader';
 
-export const JobHistoryScreen: React.FC = () => {
+export interface JobHistoryScreenProps {
+  onSelectJob?: (job: ServiceRequest) => void;
+}
+
+export const JobHistoryScreen: React.FC<JobHistoryScreenProps> = ({ onSelectJob }) => {
   const insets = useSafeAreaInsets();
   const { data: jobs, isLoading } = useWorkerJobs();
   const { scrollY, onScroll } = useCollapsingHeader();
 
   const historyJobs = Array.isArray(jobs)
-    ? jobs.filter(
-        (j) =>
-          j.status === JobStatus.COMPLETED ||
-          j.status === JobStatus.CLOSED ||
-          j.status === JobStatus.IN_PROGRESS,
-      )
+    ? jobs.filter((j) => isFinishedStatus(j.status) || j.status === JobStatus.IN_PROGRESS)
     : [];
 
   const largeTitle = (
@@ -74,6 +73,12 @@ export const JobHistoryScreen: React.FC = () => {
           ]}
           showsVerticalScrollIndicator={false}
           renderItem={({ item }: { item: ServiceRequest }) => (
+            <Pressable
+              disabled={!onSelectJob}
+              onPress={() => onSelectJob?.(item)}
+              accessibilityRole={onSelectJob ? 'button' : undefined}
+              accessibilityLabel={`Open job ${item.title}`}
+            >
             <Card variant="elevated" borderRadius={radius.xl} padding={spacing.xl}>
               <View style={styles.cardHeader}>
                 <Text style={[styles.ticketId, styles.ticketShrink]} numberOfLines={1}>
@@ -103,6 +108,7 @@ export const JobHistoryScreen: React.FC = () => {
                 </View>
               </View>
             </Card>
+            </Pressable>
           )}
         />
       )}

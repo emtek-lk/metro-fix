@@ -11,6 +11,7 @@ type EventCallback = (data: ServiceRequest) => void;
 export class WebSocketService {
   private socket: Socket | null = null;
   private listeners: Map<JobEvent, Set<EventCallback>> = new Map();
+  private reconnectListeners: Set<() => void> = new Set();
   private baseUrl: string;
 
   constructor(baseUrl: string) {
@@ -25,13 +26,16 @@ export class WebSocketService {
     this.socket = io(this.baseUrl, {
       auth: token ? { token } : undefined,
       transports: ['websocket'],
-      reconnectionAttempts: 5,
-      reconnectionDelay: 3000,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 2000,
+      reconnectionDelayMax: 10000,
     });
 
     this.socket.on('connect', () => console.log('[WebSocket] Connected'));
     this.socket.on('disconnect', () => console.log('[WebSocket] Disconnected'));
     this.socket.on('connect_error', (error) => console.warn('[WebSocket] Connection error:', error.message));
+    // Events sent while the socket was down are lost, so screens refetch when it comes back.
+    this.socket.io.on('reconnect', () => this.reconnectListeners.forEach((cb) => cb()));
     this.socket.on('job.created', (job: ServiceRequest) => this.emit('job.created', job));
     this.socket.on('job.updated', (job: ServiceRequest) => this.emit('job.updated', job));
   }
@@ -40,6 +44,13 @@ export class WebSocketService {
     this.listeners.get(event)?.add(callback);
     return () => {
       this.listeners.get(event)?.delete(callback);
+    };
+  }
+
+  onReconnect(callback: () => void): () => void {
+    this.reconnectListeners.add(callback);
+    return () => {
+      this.reconnectListeners.delete(callback);
     };
   }
 

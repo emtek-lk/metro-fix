@@ -1,28 +1,31 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { DragDropContext, Draggable, Droppable, type DropResult } from '@hello-pangea/dnd';
-import { JobStatus, ServiceType } from '@metro-fix/core-types';
+import {
+  JobStatus,
+  ServiceType,
+  JOB_STATUSES_IN_ORDER,
+  describeOfferTimeout,
+  formatCountdown,
+  canTransition,
+} from '@metro-fix/core-types';
 import { useMediaQuery } from '@metro-fix/ui';
 import { API_BASE_URL } from '../../lib/api';
 import { WebSocketService } from '../../lib/websocket';
 
-const boardOrder = [
-  JobStatus.Requested,
-  JobStatus.Assigned,
-  JobStatus.OnRoute,
-  JobStatus.Inspection,
-  JobStatus.InProgress,
-  JobStatus.Completed,
-  JobStatus.Closed,
-] as const;
+// Column order and the rules for moving between columns come from the shared lifecycle in
+// @metro-fix/core-types, the same definition the API enforces and the mobile apps use.
+const boardOrder = JOB_STATUSES_IN_ORDER;
 
 const statusLabels: Record<JobStatus, string> = {
   [JobStatus.Requested]: 'REQUESTED',
+  [JobStatus.PendingAcceptance]: 'PENDING_ACCEPTANCE',
   [JobStatus.Assigned]: 'ASSIGNED',
   [JobStatus.OnRoute]: 'ON_ROUTE',
   [JobStatus.Inspection]: 'INSPECTION',
   [JobStatus.InProgress]: 'IN_PROGRESS',
   [JobStatus.Completed]: 'COMPLETED',
   [JobStatus.Closed]: 'CLOSED',
+  [JobStatus.Cancelled]: 'CANCELLED',
 };
 
 type UrgencyLevel = 'Low' | 'Medium' | 'High' | 'Critical';
@@ -55,161 +58,86 @@ type DispatchCard = {
   status: JobStatus;
   summary: string;
   createdAt: string;
+  /** While PENDING_ACCEPTANCE: when the offer lapses and returns to the queue. */
+  offerExpiresAt?: string | null;
+  cancelReason?: string | null;
 };
 
-const mockWorkers: WorkerCandidate[] = [
-  {
-    id: 'wrk-01',
-    fullName: 'Amina Yusuf',
-    serviceTypes: [ServiceType.Hard, ServiceType.Strategic],
-    coverageZone: 'North District',
-    rating: 4.9,
-    proximityKm: 1.2,
-    isAvailable: true,
-  },
-  {
-    id: 'wrk-02',
-    fullName: 'Malik Thompson',
-    serviceTypes: [ServiceType.Soft],
-    coverageZone: 'Central Business',
-    rating: 4.7,
-    proximityKm: 2.6,
-    isAvailable: true,
-  },
-  {
-    id: 'wrk-03',
-    fullName: 'Nadia Khan',
-    serviceTypes: [ServiceType.Hard, ServiceType.Soft],
-    coverageZone: 'East Park',
-    rating: 4.8,
-    proximityKm: 3.1,
-    isAvailable: true,
-  },
-  {
-    id: 'wrk-04',
-    fullName: 'Omar Silva',
-    serviceTypes: [ServiceType.Strategic],
-    coverageZone: 'Harbor Loop',
-    rating: 4.5,
-    proximityKm: 4.4,
-    isAvailable: true,
-  },
-];
+const asIso = (value: unknown): string =>
+  typeof value === 'string' ? value : value instanceof Date ? value.toISOString() : new Date().toISOString();
 
-const mockCards: DispatchCard[] = [
-  {
-    id: 'req-1001',
-    title: 'Chiller room maintenance',
-    customerName: 'Skyline Towers',
-    serviceType: ServiceType.Hard,
-    urgency: 'Critical',
-    location: 'Building A · Basement',
-    assignedWorker: null,
-    status: JobStatus.Requested,
-    summary: 'Primary chilled water pump vibration needs immediate triage.',
-    createdAt: '2026-07-22T07:00:00.000Z',
-  },
-  {
-    id: 'req-1003',
-    title: 'Security SOP review',
-    customerName: 'Metro Logistics',
-    serviceType: ServiceType.Strategic,
-    urgency: 'Medium',
-    location: 'Operations Room',
-    assignedWorker: {
-      id: 'wrk-07',
-      fullName: 'Jamal Reed',
-      rating: 4.7,
-      proximityKm: 2.9,
+/** One place that turns an API job into a board card (fetch, job.created and job.updated all use it). */
+function jobToCard(job: any): DispatchCard {
+  return {
+    id: job.id,
+    title: job.title || 'Service Request',
+    customerName: job.customer?.user?.fullName || 'Customer Site',
+    serviceType: (job.servicePillar as ServiceType) || ServiceType.Hard,
+    urgency: toUrgency(job.urgency),
+    location: job.facilityType || 'Site Location',
+    assignedWorker: job.worker
+      ? {
+          id: job.worker.id,
+          fullName: job.worker.user?.fullName || 'Assigned Worker',
+          rating: job.worker.rating || 5.0,
+          proximityKm: 1.5,
+        }
+      : null,
+    status: (job.status as JobStatus) || JobStatus.Requested,
+    summary: job.description || 'Service request description',
+    createdAt: asIso(job.createdAt),
+    offerExpiresAt: job.offerExpiresAt ? asIso(job.offerExpiresAt) : null,
+    cancelReason: job.cancelReason ?? null,
+  };
+}
+
+function emptyColumns(): Record<JobStatus, DispatchCard[]> {
+  return boardOrder.reduce(
+    (collection, status) => {
+      collection[status] = [];
+      return collection;
     },
-    status: JobStatus.Assigned,
-    summary: 'Supervisor accepted the assignment and is being prepared for route start.',
-    createdAt: '2026-07-22T09:15:00.000Z',
-  },
-  {
-    id: 'req-1004',
-    title: 'Electrical outlet audit',
-    customerName: 'Northpoint Residences',
-    serviceType: ServiceType.Hard,
-    urgency: 'Medium',
-    location: 'Unit 14B',
-    assignedWorker: {
-      id: 'wrk-02',
-      fullName: 'Malik Thompson',
-      rating: 4.7,
-      proximityKm: 2.6,
-    },
-    status: JobStatus.OnRoute,
-    summary: 'Technician is traveling to site and background GPS is active.',
-    createdAt: '2026-07-22T10:00:00.000Z',
-  },
-  {
-    id: 'req-1005',
-    title: 'Fire suppression inspection',
-    customerName: 'Greenfield Mall',
-    serviceType: ServiceType.Strategic,
-    urgency: 'High',
-    location: 'Service Corridor',
-    assignedWorker: {
-      id: 'wrk-01',
-      fullName: 'Amina Yusuf',
-      rating: 4.9,
-      proximityKm: 1.2,
-    },
-    status: JobStatus.Inspection,
-    summary: 'Worker has arrived and is validating scope and estimated work time.',
-    createdAt: '2026-07-22T10:35:00.000Z',
-  },
-  {
-    id: 'req-1006',
-    title: 'Retail floor restoration',
-    customerName: 'Crescent Retail',
-    serviceType: ServiceType.Soft,
-    urgency: 'Low',
-    location: 'Hallway C',
-    assignedWorker: {
-      id: 'wrk-03',
-      fullName: 'Nadia Khan',
-      rating: 4.8,
-      proximityKm: 3.1,
-    },
-    status: JobStatus.InProgress,
-    summary: 'Cleanup and repair work is actively under way on site.',
-    createdAt: '2026-07-22T11:20:00.000Z',
-  },
-  {
-    id: 'req-1007',
-    title: 'Generator compliance wrap-up',
-    customerName: 'Harbor Offices',
-    serviceType: ServiceType.Hard,
-    urgency: 'Medium',
-    location: 'Roof Access',
-    assignedWorker: {
-      id: 'wrk-04',
-      fullName: 'Omar Silva',
-      rating: 4.5,
-      proximityKm: 4.4,
-    },
-    status: JobStatus.Completed,
-    summary: 'Job closed, payment cleared, and invoice issued.',
-    createdAt: '2026-07-22T12:05:00.000Z',
-  },
-];
+    {} as Record<JobStatus, DispatchCard[]>,
+  );
+}
+
+/** Error text from a failed API call, preferring the server's own message. */
+async function apiErrorMessage(response: Response, fallback: string): Promise<string> {
+  try {
+    const body = await response.json();
+    const message = Array.isArray(body?.message) ? body.message.join(', ') : body?.message;
+    return message || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/** m:ss left until an offer lapses, ticking every second. Shows "expiring…" once the time is up. */
+function OfferCountdown({ expiresAt, workerName }: { expiresAt: string; workerName?: string }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const remaining = Math.max(0, Math.ceil((new Date(expiresAt).getTime() - now) / 1000));
+  const label =
+    remaining > 0
+      ? formatCountdown(remaining)
+      : 'expiring…';
+  return (
+    <div style={styles.offerChip} role="timer" aria-live="off" aria-label={`Offer expires in ${label}`}>
+      <span style={styles.offerChipLabel}>{workerName ? `Awaiting ${workerName}` : 'Awaiting answer'}</span>
+      <span style={{ ...styles.offerChipTime, ...(remaining <= 15 ? styles.offerChipTimeUrgent : undefined) }}>
+        {label}
+      </span>
+    </div>
+  );
+}
 
 const toUrgency = (value?: string): UrgencyLevel => {
   const normalized = (value ?? 'MEDIUM').toUpperCase();
   return (normalized.charAt(0) + normalized.slice(1).toLowerCase()) as UrgencyLevel;
 };
-
-function createInitialColumns(): Record<JobStatus, DispatchCard[]> {
-  return boardOrder.reduce(
-    (collection, status) => {
-      collection[status] = mockCards.filter((card) => card.status === status);
-      return collection;
-    },
-    {} as Record<JobStatus, DispatchCard[]>
-  );
-}
 
 function calculateWorkerScore(worker: WorkerCandidate) {
   const availabilityBonus = worker.isAvailable ? 12 : -12;
@@ -221,8 +149,8 @@ function getWorkerBadgeLabel(worker: WorkerCandidate) {
 }
 
 export function CustomerCareView() {
-  const [columns, setColumns] = useState<Record<JobStatus, DispatchCard[]>>(createInitialColumns);
-  const [workersList, setWorkersList] = useState<WorkerCandidate[]>(mockWorkers);
+  const [columns, setColumns] = useState<Record<JobStatus, DispatchCard[]>>(emptyColumns);
+  const [workersList, setWorkersList] = useState<WorkerCandidate[]>([]);
   const [isDispatchModalOpen, setDispatchModalOpen] = useState(false);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
@@ -231,6 +159,7 @@ export function CustomerCareView() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -241,10 +170,9 @@ export function CustomerCareView() {
     }, 4000);
   };
 
-  useEffect(() => {
-    let isMounted = true;
-    setIsLoading(true);
+  const loadJobs = useCallback((isMounted: () => boolean) => {
     setFetchError(null);
+    setIsRefreshing(true);
 
     const token = localStorage.getItem('metrofix_token');
     fetch(`${API_BASE_URL}/jobs`, {
@@ -253,61 +181,50 @@ export function CustomerCareView() {
       },
     })
       .then((res) => {
+        if (res.status === 401) {
+          // The saved login is no longer valid (expired, or the API was reset): sign in again.
+          try {
+            localStorage.removeItem('metrofix_token');
+            localStorage.removeItem('metrofix_user');
+          } catch {
+            // Storage safety
+          }
+          window.location.assign('/login');
+          throw new Error('Session expired');
+        }
         if (!res.ok) throw new Error(`HTTP error ${res.status}`);
         return res.json();
       })
       .then((data: any[]) => {
-        if (!isMounted) return;
+        if (!isMounted()) return;
         setIsLoading(false);
-        if (!Array.isArray(data) || data.length === 0) return;
-        const newCols: Record<JobStatus, DispatchCard[]> = {
-          [JobStatus.Requested]: [],
-          [JobStatus.Assigned]: [],
-          [JobStatus.OnRoute]: [],
-          [JobStatus.Inspection]: [],
-          [JobStatus.InProgress]: [],
-          [JobStatus.Completed]: [],
-          [JobStatus.Closed]: [],
-        };
+        setIsRefreshing(false);
+        if (!Array.isArray(data)) return;
+        const newCols = emptyColumns();
         data.forEach((job) => {
-          const card: DispatchCard = {
-            id: job.id,
-            title: job.title || 'Service Request',
-            customerName: job.customer?.user?.fullName || 'Customer Site',
-            serviceType: (job.servicePillar as ServiceType) || ServiceType.Hard,
-            urgency: toUrgency(job.urgency),
-            location: job.facilityType || 'Site Location',
-            assignedWorker: job.worker
-              ? {
-                  id: job.worker.id,
-                  fullName: job.worker.user?.fullName || 'Assigned Worker',
-                  rating: job.worker.rating || 5.0,
-                  proximityKm: 1.5,
-                }
-              : null,
-            status: (job.status as JobStatus) || JobStatus.Requested,
-            summary: job.description || 'Service request description',
-            createdAt: job.createdAt || new Date().toISOString(),
-          };
-          if (newCols[card.status]) {
-            newCols[card.status].push(card);
-          } else {
-            newCols[JobStatus.Requested].push(card);
-          }
+          const card = jobToCard(job);
+          (newCols[card.status] ?? newCols[JobStatus.Requested]).push(card);
         });
         setColumns(newCols);
       })
       .catch((err) => {
-        if (!isMounted) return;
+        if (!isMounted()) return;
         setIsLoading(false);
-        setFetchError('Unable to connect to live NestJS API. Displaying local workspace state.');
-        console.warn('Using seed/mock jobs, NestJS backend connecting or starting:', err);
+        setIsRefreshing(false);
+        setFetchError('Unable to reach the API. Showing the last loaded jobs; press Refresh to retry.');
+        console.warn('Could not load jobs:', err);
       });
 
-    return () => {
-      isMounted = false;
-    };
   }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    setIsLoading(true);
+    loadJobs(() => mounted);
+    return () => {
+      mounted = false;
+    };
+  }, [loadJobs]);
 
   // Setup WebSocket for real-time job updates
   useEffect(() => {
@@ -317,21 +234,12 @@ export function CustomerCareView() {
     // Listen for new jobs
     const unsubscribeCreate = wsService.on('job.created', (newJob) => {
       setColumns((prevColumns) => {
-        const updated = { ...prevColumns };
-        const card: DispatchCard = {
-          id: newJob.id,
-          title: newJob.title || 'Service Request',
-          customerName: (newJob as any).customer?.user?.fullName || 'Customer Site',
-          serviceType: (newJob.servicePillar as ServiceType) || ServiceType.Hard,
-          urgency: toUrgency((newJob as any).urgency),
-          location: newJob.facilityType || 'Site Location',
-          assignedWorker: null,
-          status: (newJob.status as JobStatus) || JobStatus.Requested,
-          summary: newJob.description || 'Service request description',
-          createdAt: typeof newJob.createdAt === "string" ? newJob.createdAt : newJob.createdAt instanceof Date ? newJob.createdAt.toISOString() : new Date().toISOString(),
-        };
-        updated[card.status] = [...(updated[card.status] || []), card];
-        return updated;
+        const card = jobToCard(newJob);
+        if (Object.values(prevColumns).some((cards) => cards.some((existing) => existing.id === card.id))) {
+          return prevColumns;
+        }
+        // Newest first, matching the fetched order, so a fresh request is seen without scrolling.
+        return { ...prevColumns, [card.status]: [card, ...(prevColumns[card.status] || [])] };
       });
       showToast('New service request received!', 'success');
     });
@@ -340,50 +248,26 @@ export function CustomerCareView() {
     const unsubscribeUpdate = wsService.on('job.updated', (updatedJob) => {
       setColumns((prevColumns) => {
         const updated = { ...prevColumns };
-        let cardFound = false;
-
-        // Remove from old status column
-        Object.keys(updated).forEach((status) => {
-          updated[status as JobStatus] = updated[status as JobStatus].filter((card) => {
-            if (card.id === updatedJob.id) {
-              cardFound = true;
-              return false;
-            }
-            return true;
-          });
+        // Remove from wherever the card was, then place it in its new column.
+        (Object.keys(updated) as JobStatus[]).forEach((status) => {
+          updated[status] = updated[status].filter((card) => card.id !== updatedJob.id);
         });
-
-        // Add to new status column
-        const newCard: DispatchCard = {
-          id: updatedJob.id,
-          title: updatedJob.title || 'Service Request',
-          customerName: (updatedJob as any).customer?.user?.fullName || 'Customer Site',
-          serviceType: (updatedJob.servicePillar as ServiceType) || ServiceType.Hard,
-          urgency: toUrgency((updatedJob as any).urgency),
-          location: updatedJob.facilityType || 'Site Location',
-          assignedWorker: (updatedJob as any).worker
-            ? {
-                id: (updatedJob as any).worker.id,
-                fullName: (updatedJob as any).worker.user?.fullName || 'Assigned Worker',
-                rating: (updatedJob as any).worker.rating || 5.0,
-                proximityKm: 1.5,
-              }
-            : null,
-          status: (updatedJob.status as JobStatus) || JobStatus.Requested,
-          summary: updatedJob.description || 'Service request description',
-          createdAt: typeof updatedJob.createdAt === "string" ? updatedJob.createdAt : updatedJob.createdAt instanceof Date ? updatedJob.createdAt.toISOString() : new Date().toISOString(),
-        };
-        updated[newCard.status] = [...(updated[newCard.status] || []), newCard];
+        const newCard = jobToCard(updatedJob);
+        updated[newCard.status] = [newCard, ...(updated[newCard.status] || [])];
         return updated;
       });
     });
 
+    // Refetch after a dropped connection so nothing raised in the meantime is missed.
+    const unsubscribeReconnect = wsService.onReconnect(() => loadJobs(() => true));
+
     return () => {
+      unsubscribeReconnect();
       unsubscribeCreate();
       unsubscribeUpdate();
       wsService.disconnect();
     };
-  }, []);
+  }, [loadJobs]);
 
   const grouped = useMemo(() => boardOrder.map((status) => ({ status, items: columns[status] })), [columns]);
 
@@ -515,6 +399,7 @@ export function CustomerCareView() {
     });
   };
 
+  /** Offers the job to the chosen worker. They have OFFER_TIMEOUT_SECONDS to accept or it returns here. */
   const confirmDispatch = async () => {
     if (!selectedCardId || !selectedWorkerId) {
       return;
@@ -525,8 +410,8 @@ export function CustomerCareView() {
     const token = localStorage.getItem('metrofix_token');
 
     try {
-      const response = await fetch(`${API_BASE_URL}/jobs/${selectedCardId}/assign`, {
-        method: 'PATCH',
+      const response = await fetch(`${API_BASE_URL}/jobs/${selectedCardId}/offer`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -535,48 +420,19 @@ export function CustomerCareView() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to persist worker assignment.');
+        throw new Error(await apiErrorMessage(response, 'Failed to send the offer.'));
       }
 
       const updatedJob = await response.json();
-      const workerName = updatedJob.worker?.user?.fullName || fallbackName;
+      const offered = jobToCard(updatedJob);
+      const workerName = offered.assignedWorker?.fullName || fallbackName;
 
-      moveCard(
-        selectedCardId,
-        JobStatus.Assigned,
-        (card) => ({
-          ...card,
-          status: JobStatus.Assigned,
-          assignedWorker: {
-            id: selectedWorkerId,
-            fullName: workerName,
-            rating: updatedJob.worker?.rating || 5.0,
-            proximityKm: 1.2,
-          },
-        }),
-        0
-      );
-
-      showToast(`Worker "${workerName}" assigned to service request!`, 'success');
+      moveCard(selectedCardId, offered.status, () => offered, 0);
+      showToast(`Offer sent to ${workerName}. They have ${describeOfferTimeout()} to accept.`, 'success');
       closeDispatchModal();
     } catch (err: any) {
-      moveCard(
-        selectedCardId,
-        JobStatus.Assigned,
-        (card) => ({
-          ...card,
-          status: JobStatus.Assigned,
-          assignedWorker: {
-            id: selectedWorkerId,
-            fullName: fallbackName,
-            rating: worker?.rating || 5.0,
-            proximityKm: worker?.proximityKm || 1.5,
-          },
-        }),
-        0
-      );
-      showToast(`Worker "${fallbackName}" assigned (local dispatch update).`, 'success');
-      closeDispatchModal();
+      // Keep the modal open and the card where it is: a failed offer must not look like a success.
+      showToast(err?.message || 'Could not send the offer.', 'error');
     }
   };
 
@@ -599,6 +455,57 @@ export function CustomerCareView() {
     }
   };
 
+  /** Asks the API to move a job; resolves to an error message, or null when it worked. */
+  const requestStatusChange = async (cardId: string, status: JobStatus): Promise<string | null> => {
+    const token = localStorage.getItem('metrofix_token');
+    try {
+      const response = await fetch(`${API_BASE_URL}/jobs/${cardId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ status }),
+      });
+      if (!response.ok) {
+        return await apiErrorMessage(response, `Request failed (HTTP ${response.status}).`);
+      }
+      return null;
+    } catch {
+      return 'Could not reach the server.';
+    }
+  };
+
+  /** Pulls a pending offer back to the queue. */
+  const handleWithdrawOffer = async (cardId: string) => {
+    const error = await requestStatusChange(cardId, JobStatus.Requested);
+    if (error) {
+      showToast(error, 'error');
+      return;
+    }
+    moveCard(cardId, JobStatus.Requested, (card) => ({
+      ...card,
+      status: JobStatus.Requested,
+      assignedWorker: null,
+      offerExpiresAt: null,
+    }), 0);
+    showToast('Offer withdrawn. The job is back in the queue.', 'success');
+  };
+
+  /** Cancels a job that has not started work. */
+  const handleCancelJob = async (cardId: string) => {
+    if (!window.confirm('Cancel this job? The customer and any assigned worker will be notified.')) {
+      return;
+    }
+    const error = await requestStatusChange(cardId, JobStatus.Cancelled);
+    if (error) {
+      showToast(error, 'error');
+      return;
+    }
+    moveCard(cardId, JobStatus.Cancelled, (card) => ({ ...card, status: JobStatus.Cancelled, offerExpiresAt: null }), 0);
+    showToast('Job cancelled.', 'success');
+  };
+
   const handleDragEnd = (result: DropResult) => {
     const { destination, source, draggableId } = result;
 
@@ -613,13 +520,36 @@ export function CustomerCareView() {
     const sourceStatus = source.droppableId as JobStatus;
     const destinationStatus = destination.droppableId as JobStatus;
 
-    if (sourceStatus === JobStatus.Requested && destinationStatus === JobStatus.Assigned) {
+    // Reordering inside one column is just a local change.
+    if (sourceStatus === destinationStatus) {
+      setColumns((current) => {
+        const cards = [...current[sourceStatus]];
+        const [moved] = cards.splice(source.index, 1);
+        cards.splice(destination.index, 0, moved);
+        return { ...current, [sourceStatus]: cards };
+      });
+      return;
+    }
+
+    // The lifecycle decides what is allowed (same table the API enforces); say no right away.
+    if (!canTransition(sourceStatus, destinationStatus)) {
+      showToast(`A job can't move from ${statusLabels[sourceStatus]} to ${statusLabels[destinationStatus]}.`, 'error');
+      return;
+    }
+
+    // Dragging a queued job onto PENDING_ACCEPTANCE means "offer it": pick the worker first.
+    if (sourceStatus === JobStatus.Requested && destinationStatus === JobStatus.PendingAcceptance) {
       openDispatchModal(draggableId);
       return;
     }
 
-    const location = findCardLocation(draggableId);
-    if (!location) {
+    if (destinationStatus === JobStatus.Cancelled) {
+      void handleCancelJob(draggableId);
+      return;
+    }
+
+    if (destinationStatus === JobStatus.Requested && sourceStatus === JobStatus.PendingAcceptance) {
+      void handleWithdrawOffer(draggableId);
       return;
     }
 
@@ -630,17 +560,12 @@ export function CustomerCareView() {
     }
 
     const [movedItem] = sourceCards.splice(sourceIndex, 1);
-    const updatedItem = { ...movedItem, status: destinationStatus };
-
-    if (sourceStatus === destinationStatus) {
-      sourceCards.splice(destination.index, 0, updatedItem);
-      setColumns((current) => ({
-        ...current,
-        [sourceStatus]: sourceCards,
-      }));
-      return;
-    }
-
+    const updatedItem: DispatchCard = {
+      ...movedItem,
+      status: destinationStatus,
+      offerExpiresAt: null,
+      assignedWorker: destinationStatus === JobStatus.Requested ? null : movedItem.assignedWorker,
+    };
     const destinationCards = [...columns[destinationStatus]];
     destinationCards.splice(destination.index, 0, updatedItem);
 
@@ -652,24 +577,14 @@ export function CustomerCareView() {
     }));
     setAriaAnnouncement(`Moved job card ${movedItem.title || movedItem.id} to ${statusLabels[destinationStatus]}`);
 
-    const token = localStorage.getItem('metrofix_token');
-    fetch(`${API_BASE_URL}/jobs/${draggableId}/status`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({ status: destinationStatus }),
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        showToast(`Job status updated to "${statusLabels[destinationStatus]}"`, 'success');
-      })
-      .catch((err) => {
+    void requestStatusChange(draggableId, destinationStatus).then((error) => {
+      if (error) {
         setColumns(previousColumns);
-        showToast(`Failed to persist job status change to backend API. Action reverted.`, 'error');
-        console.warn('Failed to persist job status to backend:', err);
-      });
+        showToast(error, 'error');
+      } else {
+        showToast(`Job status updated to "${statusLabels[destinationStatus]}"`, 'success');
+      }
+    });
   };
 
   return (
@@ -730,6 +645,32 @@ export function CustomerCareView() {
                   )}
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={() => loadJobs(() => true)}
+                disabled={isRefreshing}
+                aria-label="Refresh dispatch board"
+                title="Refresh jobs"
+                style={styles.refreshButton}
+              >
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                  style={isRefreshing ? { animation: 'metro-spin 0.8s linear infinite' } : undefined}
+                >
+                  <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+                  <polyline points="21 3 21 9 15 9" />
+                </svg>
+                <span>{isRefreshing ? 'Refreshing…' : 'Refresh'}</span>
+              </button>
+              {fetchError && <span style={styles.fetchError} role="alert">{fetchError}</span>}
               {isFiltering && (
                 <div className="metro-search-count-pill">
                   {filteredCards === 0
@@ -787,11 +728,22 @@ export function CustomerCareView() {
                                 <span style={styles.cardFooter}>{item.location}</span>
                               </div>
 
-                              {item.assignedWorker && (
-                                <div style={styles.workerChip}>
-                                  <span style={styles.workerChipLabel}>Worker</span>
-                                  <span>{item.assignedWorker.fullName}</span>
-                                </div>
+                              {status === JobStatus.PendingAcceptance && item.offerExpiresAt ? (
+                                <OfferCountdown
+                                  expiresAt={item.offerExpiresAt}
+                                  workerName={item.assignedWorker?.fullName}
+                                />
+                              ) : (
+                                item.assignedWorker && (
+                                  <div style={styles.workerChip}>
+                                    <span style={styles.workerChipLabel}>Worker</span>
+                                    <span>{item.assignedWorker.fullName}</span>
+                                  </div>
+                                )
+                              )}
+
+                              {status === JobStatus.Cancelled && item.cancelReason && (
+                                <p style={styles.cardCopy}>Reason: {item.cancelReason}</p>
                               )}
 
                               <div style={styles.cardActions}>
@@ -804,7 +756,33 @@ export function CustomerCareView() {
                                       openDispatchModal(item.id);
                                     }}
                                   >
-                                    Dispatch Worker
+                                    Offer to Worker
+                                  </button>
+                                )}
+
+                                {status === JobStatus.PendingAcceptance && (
+                                  <button
+                                    type="button"
+                                    style={styles.secondaryActionButton}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      void handleWithdrawOffer(item.id);
+                                    }}
+                                  >
+                                    Withdraw offer
+                                  </button>
+                                )}
+
+                                {canTransition(status, JobStatus.Cancelled) && (
+                                  <button
+                                    type="button"
+                                    style={styles.linkActionButton}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      void handleCancelJob(item.id);
+                                    }}
+                                  >
+                                    Cancel job
                                   </button>
                                 )}
 
@@ -843,7 +821,7 @@ export function CustomerCareView() {
             <div style={styles.modalHeader}>
               <div>
                 <div style={styles.kicker}>Dispatch Workflow</div>
-                <h3 style={styles.modalTitle}>Assign worker for job</h3>
+                <h3 style={styles.modalTitle}>Offer job to a worker</h3>
               </div>
               <button type="button" style={styles.closeButton} onClick={closeDispatchModal}>
                 Close
@@ -886,9 +864,11 @@ export function CustomerCareView() {
 
               <div style={styles.dispatchPreview}>
                 <div style={styles.dispatchLaneTitle}>Dispatch summary</div>
-                <div style={styles.dispatchDropZone}>Assign job to the selected worker.</div>
+                <div style={styles.dispatchDropZone}>
+                  The selected worker has {describeOfferTimeout()} to accept. If they decline or do not answer, the job returns to the queue.
+                </div>
                 <button type="button" style={styles.primaryButton} onClick={confirmDispatch} disabled={!selectedWorkerId}>
-                  Confirm dispatch
+                  Send offer
                 </button>
               </div>
             </div>
@@ -1155,6 +1135,60 @@ const styles: Record<string, CSSProperties> = {
     textTransform: 'uppercase',
     letterSpacing: '0.08em',
     color: '#f38808',
+  },
+  refreshButton: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    height: 36,
+    padding: '0 14px',
+    borderRadius: 999,
+    border: '1px solid rgba(243, 136, 8, 0.55)',
+    background: 'transparent',
+    color: '#f38808',
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: 'pointer',
+  } as CSSProperties,
+  fetchError: {
+    color: '#ff8a80',
+    fontSize: 13,
+  } as CSSProperties,
+  offerChip: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '8px',
+    marginTop: '10px',
+    padding: '8px 10px',
+    borderRadius: '10px',
+    background: 'var(--surface-strong)',
+    color: 'var(--text-primary)',
+    fontSize: '0.82rem',
+    border: '1px dashed #f38808',
+  },
+  offerChipLabel: {
+    fontSize: '0.78rem',
+    fontWeight: 600,
+    color: 'var(--text-secondary)',
+  },
+  offerChipTime: {
+    fontVariantNumeric: 'tabular-nums',
+    fontWeight: 800,
+    color: '#f38808',
+  },
+  offerChipTimeUrgent: {
+    color: '#e5484d',
+  },
+  linkActionButton: {
+    border: 'none',
+    background: 'transparent',
+    color: 'var(--text-muted)',
+    padding: '8px 4px',
+    fontWeight: 600,
+    fontSize: '0.78rem',
+    textDecoration: 'underline',
+    cursor: 'pointer',
   },
   cardActions: {
     display: 'flex',

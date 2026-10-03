@@ -8,8 +8,11 @@ const getBaseUrl = (): string => {
   return Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
 };
 
+/** The API origin. The realtime socket must use the same one, or it connects somewhere else. */
+export const API_BASE_URL = getBaseUrl();
+
 export const apiClient = axios.create({
-  baseURL: getBaseUrl(),
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -33,10 +36,23 @@ apiClient.interceptors.request.use(
   },
 );
 
-// Response Interceptor for handling global API responses
+let onUnauthorized: (() => void) | null = null;
+
+/** Registers what to do when the server says the session is no longer valid (the app signs out). */
+export function setUnauthorizedHandler(handler: (() => void) | null): void {
+  onUnauthorized = handler;
+}
+
+// Response Interceptor: an expired or revoked token anywhere signs the user out, instead of every
+// screen quietly showing empty data. Wrong passwords on the sign-in forms are not session expiry.
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
+    const url: string = error?.config?.url ?? '';
+    const isAuthForm = url.includes('/auth/login') || url.includes('/auth/register');
+    if (error?.response?.status === 401 && !isAuthForm) {
+      onUnauthorized?.();
+    }
     return Promise.reject(error);
   },
 );

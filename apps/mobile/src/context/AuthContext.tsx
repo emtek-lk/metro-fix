@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from '@metro-fix/core-types';
 import { storage, TOKEN_KEY, USER_KEY } from '../lib/storage';
-import { apiClient } from '../lib/api';
+import { apiClient, setUnauthorizedHandler } from '../lib/api';
+import { apiService, type RegisterInput } from '../services/api';
 
 export interface AuthContextType {
   user: User | null;
@@ -9,6 +10,8 @@ export interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (email: string, pass: string) => Promise<User>;
+  /** Creates a customer account and signs it in. */
+  register: (input: RegisterInput) => Promise<User>;
   logout: () => Promise<void>;
   setAuthSession: (user: User, token: string) => Promise<void>;
 }
@@ -67,12 +70,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return authenticatedUser;
   };
 
+  const register = async (input: RegisterInput): Promise<User> => {
+    const { accessToken, user: createdUser } = await apiService.register(input);
+    await setAuthSession(createdUser, accessToken);
+    return createdUser;
+  };
+
   const logout = async () => {
     setUser(null);
     setToken(null);
     await storage.deleteItemAsync(TOKEN_KEY);
     await storage.deleteItemAsync(USER_KEY);
   };
+
+  // An expired or revoked token anywhere in the app signs the user out.
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      logout();
+    });
+    return () => setUnauthorizedHandler(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <AuthContext.Provider
@@ -82,6 +100,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         isLoading,
         isAuthenticated: !!token && !!user,
         login,
+        register,
         logout,
         setAuthSession,
       }}

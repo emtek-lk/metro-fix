@@ -30,6 +30,7 @@ import { haptics } from '../lib/haptics';
 import { useReduceMotion } from '../theme/useReduceMotion';
 import { themedStyles } from '../theme/themedStyles';
 import { shortRef } from '../lib/ticket';
+import { customerNameOf, customerPhoneOf, coordinatesOf } from '../lib/jobs';
 import { apiService } from '../services/api';
 
 const { height: SCREEN_H } = Dimensions.get('window');
@@ -146,9 +147,9 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
 
   const accent = getStatusColor(currentJob.status);
   const pillarIcon = PILLAR_ICON[currentJob.servicePillar] ?? 'tool';
-  const customerPhone = (currentJob as any).customerPhone as string | undefined;
-  const customerLabel =
-    (currentJob as any).customerName || `Customer #${shortRef(currentJob.customerId, 4) || 'Ref'}`;
+  // From the customer attached to the job by the API (name, phone), not guessed.
+  const customerPhone = customerPhoneOf(currentJob);
+  const customerLabel = customerNameOf(currentJob);
 
   const openMaps = () => {
     if (!currentJob.location) return toast.info('This job has no coordinates yet.', 'No location');
@@ -271,7 +272,7 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
             <View style={s.infoLine}>
               <Icon name="map-pin" size={15} color={colors.textMuted} />
               <Text style={s.loc}>
-                {(currentJob as any).address || (currentJob.location ? `${currentJob.location.latitude.toFixed(4)}, ${currentJob.location.longitude.toFixed(4)}` : 'Address available on site')}
+                {coordinatesOf(currentJob) ?? 'Site address to be confirmed'}
               </Text>
             </View>
           </Card>

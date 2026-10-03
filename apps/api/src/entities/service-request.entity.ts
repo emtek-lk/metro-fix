@@ -6,8 +6,14 @@ import {
   JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  AfterLoad,
 } from 'typeorm';
-import { JobStatus, FacilityType, ServicePillar } from '@metro-fix/core-types';
+import {
+  JobStatus,
+  FacilityType,
+  ServicePillar,
+  type JobOfferRecord,
+} from '@metro-fix/core-types';
 import { CustomerEntity } from './customer.entity';
 import { WorkerEntity } from './worker.entity';
 
@@ -93,6 +99,45 @@ export class ServiceRequestEntity {
 
   @Column({ type: 'varchar', length: 'max', nullable: true })
   rejectReason?: string | null;
+
+  /** When the current offer was made, and when it lapses. Only meaningful while PENDING_ACCEPTANCE. */
+  @Column({ type: 'datetime', nullable: true })
+  offeredAt?: Date | null;
+
+  @Column({ type: 'datetime', nullable: true })
+  offerExpiresAt?: Date | null;
+
+  /** Everyone this job was offered to and how they answered (declined, expired, rejected, withdrawn). */
+  @Column({
+    type: 'varchar',
+    length: 'max',
+    nullable: true,
+    transformer: {
+      to: (value?: JobOfferRecord[] | null) => (value ? JSON.stringify(value) : null),
+      from: (value?: string | null) => (value ? (JSON.parse(value) as JobOfferRecord[]) : null),
+    },
+  })
+  offerHistory?: JobOfferRecord[] | null;
+
+  @Column({ type: 'varchar', length: 'max', nullable: true })
+  cancelReason?: string | null;
+
+  @Column({ type: 'datetime', nullable: true })
+  cancelledAt?: Date | null;
+
+  /**
+   * `{ latitude, longitude }` as the shared ServiceRequest type expects. The flat columns are kept
+   * because the web app reads them; this just exposes the same position in the documented shape.
+   */
+  location?: { latitude: number; longitude: number } | null;
+
+  @AfterLoad()
+  private setLocation(): void {
+    this.location =
+      this.latitude != null && this.longitude != null
+        ? { latitude: this.latitude, longitude: this.longitude }
+        : null;
+  }
 
   @CreateDateColumn()
   createdAt: Date;

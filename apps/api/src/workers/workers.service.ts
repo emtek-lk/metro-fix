@@ -2,9 +2,27 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { WorkerEntity, ServiceRequestEntity, UserEntity } from '../entities';
-import { Role, ServicePillar, UpdateWorkerLocationDto } from '@metro-fix/core-types';
+import {
+  Role,
+  ServicePillar,
+  JobStatus,
+  isFinishedStatus,
+  UpdateWorkerLocationDto,
+} from '@metro-fix/core-types';
 
 import { CreateWorkerDto } from './dto/create-worker.dto';
+
+/** A worker's own numbers, for the Profile screen. */
+export interface WorkerStats {
+  rating: number;
+  completedJobs: number;
+  /** Accepted jobs still being worked (ASSIGNED through IN_PROGRESS). */
+  activeJobs: number;
+  /** Jobs currently offered to this worker, awaiting their answer. */
+  pendingOffers: number;
+  servicePillars: ServicePillar[];
+  isAvailable: boolean;
+}
 
 export interface DispatchSearchResult {
   worker: WorkerEntity;
@@ -110,10 +128,17 @@ export class WorkersService {
       throw new NotFoundException(`Service request with ID "${jobId}" not found`);
     }
 
-    const workers = await this.workerRepo.find({
+    const allWorkers = await this.workerRepo.find({
       where: { isAvailable: true },
       relations: { user: true },
     });
+    // Do not suggest anyone who already declined or rejected this job.
+    const turnedDown = new Set(
+      (job.offerHistory ?? [])
+        .filter((entry) => entry.outcome === 'DECLINED' || entry.outcome === 'REJECTED')
+        .map((entry) => entry.workerId),
+    );
+    const workers = allWorkers.filter((worker) => !turnedDown.has(worker.id));
 
     const jobLat = job.latitude ?? 37.7749;
     const jobLon = job.longitude ?? -122.4194;
@@ -142,11 +167,9 @@ export class WorkersService {
     const worker = await this.workerRepo.findOne({ where: { userId } });
     const targetWorkerId = worker ? worker.id : userId;
 
-    let jobs = await this.jobRepo.find({
-      where: [
-        { workerId: targetWorkerId },
-        { workerId: userId },
-      ],
+    // Only this worker's own jobs: accepted work plus any offer waiting for an answer.
+    const jobs = await this.jobRepo.find({
+      where: [{ workerId: targetWorkerId }, { workerId: userId }],
       relations: {
         customer: { user: true },
         worker: { user: true },
@@ -154,19 +177,41 @@ export class WorkersService {
       order: { createdAt: 'DESC' },
     });
 
-    if (jobs.length === 0) {
-      jobs = await this.jobRepo.find({
-        relations: {
-          customer: { user: true },
-          worker: { user: true },
-        },
-        order: { createdAt: 'DESC' },
-      });
-    }
-
     return {
       jobs,
       total: jobs.length,
+    };
+  }
+
+  async findWorkerForUser(userId: string): Promise<WorkerEntity> {
+    const worker = await this.workerRepo.findOne({ where: { userId }, relations: { user: true } });
+    if (!worker) {
+      throw new NotFoundException(`Worker profile for user ID "${userId}" not found`);
+    }
+    return worker;
+  }
+
+  /** Rating, completed and active job counts, pending offers and service pillars. */
+  async getStatsForUser(userId: string): Promise<WorkerStats> {
+    const worker = await this.findWorkerForUser(userId);
+    const jobs = await this.jobRepo.find({ where: { workerId: worker.id }, select: { status: true } });
+
+    let completedJobs = 0;
+    let activeJobs = 0;
+    let pendingOffers = 0;
+    for (const { status } of jobs) {
+      if (status === JobStatus.PENDING_ACCEPTANCE) pendingOffers += 1;
+      else if (status === JobStatus.COMPLETED || status === JobStatus.CLOSED) completedJobs += 1;
+      else if (!isFinishedStatus(status)) activeJobs += 1;
+    }
+
+    return {
+      rating: worker.rating,
+      completedJobs,
+      activeJobs,
+      pendingOffers,
+      servicePillars: worker.servicePillars,
+      isAvailable: worker.isAvailable,
     };
   }
 

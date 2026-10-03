@@ -31,16 +31,17 @@ Agents modifying `apps/web` must strictly adhere to the following layout and sty
 - **Logo:** Located at `@metro-fix/ui/src/assets/logo.png`. Must be imported and rendered dynamically.
 
 ## 4. The Core State Machine (Job Lifecycle)
-All service requests strictly follow these 7 stages plus a dispatcher sign-off. Agents building the Kanban board or backend controllers must use these exact states:
-1. `REQUESTED`: New job raised by the Customer (web customer portal).
-2. `ASSIGNED`: Customer Care assigns a worker using the proximity + rating algorithm.
-3. `ON_ROUTE`: Worker taps "Start Travel" (background GPS tracking starts).
-4. `INSPECTION`: Worker arrives (GPS stops) and submits a quote and time estimate. The worker may instead **reject** the job (unserviceable / out of scope) with a reason; it returns to `REQUESTED` and the worker is cleared.
-5. `IN_PROGRESS`: Work is actively being executed.
-6. `COMPLETED`: Worker captures photo proof and the customer's signature.
-7. `CLOSED`: Customer Care / Admin reviews the proof and hours, approves, and the ticket is archived and billed.
+The lifecycle is defined once in `@metro-fix/core-types` (`JobStatus`, `JOB_STAGES`, `JOB_TRANSITIONS`, `canTransition`, `OFFER_TIMEOUT_SECONDS`). The API enforces it; the web board and mobile app read it. Never hard-code stages elsewhere.
+1. `REQUESTED`: New job raised by the Customer (web portal or mobile app).
+2. `PENDING_ACCEPTANCE`: Customer Care offers the job to one worker (proximity + rating algorithm). The offer expires after 9 hours (`OFFER_TIMEOUT_SECONDS`); if declined, expired or withdrawn it returns to `REQUESTED`. Declined/expired offers are recorded in `offerHistory`, and those workers are not offered the same job again.
+3. `ASSIGNED`: Worker accepts the job.
+4. `ON_ROUTE`: Worker taps "Start Travel" (GPS tracking starts).
+5. `INSPECTION`: Worker arrives (GPS stops) and submits a quote and time estimate. The worker may instead **reject** the job with a reason; it returns to `REQUESTED` and the worker is cleared.
+6. `IN_PROGRESS`: Work is actively being executed.
+7. `COMPLETED`: Worker captures photo proof and the customer's signature.
+8. `CLOSED`: Customer Care / Admin reviews the proof and hours, approves, and the ticket is archived and billed.
 
-A worker may also decline at `ASSIGNED` (back to `REQUESTED`). There is no `PENDING_ACCEPTANCE` state.
+`CANCELLED` is a terminal state reachable from any stage before `IN_PROGRESS` (customer for their own job, or dispatch). A worker who accepted may also hand the job back (`ASSIGNED` -> `REQUESTED`).
 
 ## 5. Security & Workflows
 - **Workers:** Cannot self-register. Profiles are created by Admins. They log in via mobile and are assigned an internal 1-5 quality rating.

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
 import { Text } from './ui/AppText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { JobStatus } from '@metro-fix/core-types';
+import { JobStatus, JOB_STATUSES_IN_ORDER } from '@metro-fix/core-types';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { EmptyState } from './ui/EmptyState';
@@ -27,15 +27,8 @@ import { spacing, radius, layout, tabBarClearance } from '../theme/layout';
 import { themedStyles } from '../theme/themedStyles';
 import { useTheme, type ThemePreference } from '../theme/ThemeProvider';
 
-const STATUSES: JobStatus[] = [
-  JobStatus.REQUESTED,
-  JobStatus.ASSIGNED,
-  JobStatus.ON_ROUTE,
-  JobStatus.INSPECTION,
-  JobStatus.IN_PROGRESS,
-  JobStatus.COMPLETED,
-  JobStatus.CLOSED,
-];
+// Every status, in lifecycle order, straight from the shared definition.
+const STATUSES: readonly JobStatus[] = JOB_STATUSES_IN_ORDER;
 
 const THEME_OPTIONS: { id: ThemePreference; label: string }[] = [
   { id: 'system', label: 'System' },

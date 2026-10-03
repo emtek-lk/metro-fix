@@ -1,10 +1,9 @@
-import { JobStatus, ServiceRequest } from '@metro-fix/core-types';
+import { ServiceRequest, isFinishedStatus } from '@metro-fix/core-types';
 
 export type JobFilter = 'all' | 'active' | 'done';
 
-/** Finished work: completed by the technician, or signed off (closed) by dispatch. */
-const isDone = (job: Pick<ServiceRequest, 'status'>) =>
-  job.status === JobStatus.COMPLETED || job.status === JobStatus.CLOSED;
+/** Finished work: completed by the technician, signed off (closed) by dispatch, or cancelled. */
+const isDone = (job: Pick<ServiceRequest, 'status'>) => isFinishedStatus(job.status);
 
 const stamp = (job: Pick<ServiceRequest, 'createdAt' | 'updatedAt'>): number =>
   new Date((job.updatedAt ?? job.createdAt) as string | Date).getTime() || 0;

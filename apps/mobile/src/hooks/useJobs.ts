@@ -1,33 +1,82 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { apiClient } from '../lib/api';
+import { apiService, type WorkerStats } from '../services/api';
 import { JobStatus, ServiceRequest } from '@metro-fix/core-types';
 
 /**
- * Fetch assigned jobs for the authenticated worker via GET /workers/me/jobs
+ * The signed-in worker's queue via GET /workers/me/jobs: accepted work plus any offer waiting for
+ * an answer. Errors are surfaced (not swallowed into an empty list) so the roster can show its
+ * error state with a retry. The realtime socket keeps it fresh; the interval is only a safety net.
  */
 export function useWorkerJobs() {
   return useQuery<ServiceRequest[], Error>({
     queryKey: ['workerJobs'],
     queryFn: async () => {
-      try {
-        const response = await apiClient.get('/workers/me/jobs');
-        const payload = response.data;
-        const jobs: ServiceRequest[] = Array.isArray(payload) ? payload : (payload?.jobs ?? []);
-        return jobs;
-      } catch (err: any) {
-        if (err.response?.status === 401) {
-          const fallback = await apiClient.get<ServiceRequest[]>('/jobs');
-          return Array.isArray(fallback.data) ? fallback.data : [];
-        }
-        return [];
-      }
+      const response = await apiClient.get('/workers/me/jobs');
+      const payload = response.data;
+      return Array.isArray(payload) ? payload : (payload?.jobs ?? []);
     },
-    refetchInterval: 10000,
+    refetchInterval: 30000,
   });
 }
 
 // Alias for backward compatibility across components
 export const useMyJobs = useWorkerJobs;
+
+/** The signed-in customer's own requests via GET /jobs/mine. */
+export function useMyRequests(enabled = true) {
+  return useQuery<ServiceRequest[], Error>({
+    queryKey: ['myRequests'],
+    queryFn: () => apiService.fetchMyRequests(),
+    enabled,
+    refetchInterval: 30000,
+  });
+}
+
+/** The signed-in worker's rating and job counts via GET /workers/me/stats. */
+export function useWorkerStats(enabled = true) {
+  return useQuery<WorkerStats, Error>({
+    queryKey: ['workerStats'],
+    queryFn: () => apiService.fetchMyStats(),
+    enabled,
+  });
+}
+
+const refreshAfterJobChange = (queryClient: QueryClient, jobId: string) => {
+  queryClient.invalidateQueries({ queryKey: ['jobDetail', jobId] });
+  queryClient.invalidateQueries({ queryKey: ['workerJobs'] });
+  queryClient.invalidateQueries({ queryKey: ['myRequests'] });
+  queryClient.invalidateQueries({ queryKey: ['workerStats'] });
+};
+
+/** Worker accepts the offered job. */
+export function useAcceptOffer() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (jobId: string) => apiService.acceptOffer(jobId),
+    onSettled: (_data, _error, jobId) => refreshAfterJobChange(queryClient, jobId),
+  });
+}
+
+/** Worker declines the offered job. */
+export function useDeclineOffer() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ jobId, reason }: { jobId: string; reason?: string }) =>
+      apiService.declineOffer(jobId, reason),
+    onSettled: (_data, _error, { jobId }) => refreshAfterJobChange(queryClient, jobId),
+  });
+}
+
+/** Customer cancels their request. */
+export function useCancelJob() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ jobId, reason }: { jobId: string; reason?: string }) =>
+      apiService.cancelJob(jobId, reason),
+    onSettled: (_data, _error, { jobId }) => refreshAfterJobChange(queryClient, jobId),
+  });
+}
 
 /**
  * Fetch single job details via GET /jobs/:id
@@ -65,10 +114,7 @@ export function useUpdateJobStatus() {
       });
       return response.data;
     },
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['jobDetail', variables.jobId] });
-      queryClient.invalidateQueries({ queryKey: ['workerJobs'] });
-    },
+    onSuccess: (_data, variables) => refreshAfterJobChange(queryClient, variables.jobId),
   });
 }
 
@@ -97,10 +143,7 @@ export function useSubmitQuote() {
       });
       return response.data;
     },
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['jobDetail', variables.jobId] });
-      queryClient.invalidateQueries({ queryKey: ['workerJobs'] });
-    },
+    onSuccess: (_data, variables) => refreshAfterJobChange(queryClient, variables.jobId),
   });
 }
 
@@ -126,9 +169,6 @@ export function useSubmitProof() {
       });
       return response.data;
     },
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['jobDetail', variables.jobId] });
-      queryClient.invalidateQueries({ queryKey: ['workerJobs'] });
-    },
+    onSuccess: (_data, variables) => refreshAfterJobChange(queryClient, variables.jobId),
   });
 }

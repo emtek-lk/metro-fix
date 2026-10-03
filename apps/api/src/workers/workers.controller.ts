@@ -11,7 +11,7 @@ import {
   DefaultValuePipe,
   UsePipes,
 } from '@nestjs/common';
-import { WorkersService, DispatchSearchResult } from './workers.service';
+import { WorkersService, DispatchSearchResult, WorkerStats } from './workers.service';
 import { CreateWorkerDto } from './dto/create-worker.dto';
 import { WorkerEntity, UserEntity } from '../entities';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -30,6 +30,20 @@ export class WorkersController {
   @Get()
   async findAll(): Promise<WorkerEntity[]> {
     return this.workersService.findAll();
+  }
+
+  /** The signed-in worker's own profile (rating, service pillars, availability). */
+  @Roles(Role.WORKER)
+  @Get('me')
+  async getMe(@Req() req: any): Promise<WorkerEntity> {
+    return this.workersService.findWorkerForUser(req.user?.id);
+  }
+
+  /** Counts for the worker's Profile screen. */
+  @Roles(Role.WORKER)
+  @Get('me/stats')
+  async getMyStats(@Req() req: any): Promise<WorkerStats> {
+    return this.workersService.getStatsForUser(req.user?.id);
   }
 
   @UseGuards(JwtAuthGuard)

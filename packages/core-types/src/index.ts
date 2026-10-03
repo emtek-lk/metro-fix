@@ -6,21 +6,136 @@ import { z } from 'zod';
 
 export enum JobStatus {
   REQUESTED = 'REQUESTED',
+  PENDING_ACCEPTANCE = 'PENDING_ACCEPTANCE',
   ASSIGNED = 'ASSIGNED',
   ON_ROUTE = 'ON_ROUTE',
   INSPECTION = 'INSPECTION',
   IN_PROGRESS = 'IN_PROGRESS',
   COMPLETED = 'COMPLETED',
   CLOSED = 'CLOSED',
+  CANCELLED = 'CANCELLED',
 
   // Backward-compatibility aliases
   Requested = 'REQUESTED',
+  PendingAcceptance = 'PENDING_ACCEPTANCE',
   Assigned = 'ASSIGNED',
   OnRoute = 'ON_ROUTE',
   Inspection = 'INSPECTION',
   InProgress = 'IN_PROGRESS',
   Completed = 'COMPLETED',
   Closed = 'CLOSED',
+  Cancelled = 'CANCELLED',
+}
+
+// ==========================================
+// Job lifecycle (single source of truth)
+// ==========================================
+//
+// The API enforces these rules; the web board and the mobile apps read the same definitions for
+// column order, progress steppers, filters and drag/drop validation, so a change here reaches
+// every app.
+//
+//   REQUESTED -> PENDING_ACCEPTANCE -> ASSIGNED -> ON_ROUTE -> INSPECTION -> IN_PROGRESS
+//                                                                   -> COMPLETED -> CLOSED
+//
+// PENDING_ACCEPTANCE means "offered to one worker, awaiting their answer". An offer that is
+// declined, withdrawn or left unanswered for OFFER_TIMEOUT_SECONDS returns to REQUESTED.
+// A worker who rejects after accepting (ASSIGNED / INSPECTION) also returns the job to REQUESTED.
+// CANCELLED can be reached from any state before work starts (IN_PROGRESS).
+
+/** The normal path of a job, in order. CANCELLED sits outside it. */
+export const JOB_STAGES: readonly JobStatus[] = [
+  JobStatus.REQUESTED,
+  JobStatus.PENDING_ACCEPTANCE,
+  JobStatus.ASSIGNED,
+  JobStatus.ON_ROUTE,
+  JobStatus.INSPECTION,
+  JobStatus.IN_PROGRESS,
+  JobStatus.COMPLETED,
+  JobStatus.CLOSED,
+];
+
+/** Every status in display order: the normal path, then CANCELLED. */
+export const JOB_STATUSES_IN_ORDER: readonly JobStatus[] = [...JOB_STAGES, JobStatus.CANCELLED];
+
+/** Which status a job may move to from each status. An absent target is not allowed. */
+export const JOB_TRANSITIONS: Readonly<Record<JobStatus, readonly JobStatus[]>> = {
+  [JobStatus.REQUESTED]: [JobStatus.PENDING_ACCEPTANCE, JobStatus.CANCELLED],
+  // ASSIGNED = accepted; REQUESTED = declined, expired or withdrawn.
+  [JobStatus.PENDING_ACCEPTANCE]: [JobStatus.ASSIGNED, JobStatus.REQUESTED, JobStatus.CANCELLED],
+  // REQUESTED = the worker rejects the job after accepting it.
+  [JobStatus.ASSIGNED]: [JobStatus.ON_ROUTE, JobStatus.REQUESTED, JobStatus.CANCELLED],
+  [JobStatus.ON_ROUTE]: [JobStatus.INSPECTION, JobStatus.CANCELLED],
+  [JobStatus.INSPECTION]: [JobStatus.IN_PROGRESS, JobStatus.REQUESTED, JobStatus.CANCELLED],
+  [JobStatus.IN_PROGRESS]: [JobStatus.COMPLETED],
+  [JobStatus.COMPLETED]: [JobStatus.CLOSED],
+  [JobStatus.CLOSED]: [],
+  [JobStatus.CANCELLED]: [],
+};
+
+/** How long a worker has to answer an offer before it returns to the dispatch queue. */
+export const OFFER_TIMEOUT_SECONDS = 9 * 60 * 60;
+
+/** Clock text for a number of seconds: m:ss under an hour, h:mm:ss from an hour up. */
+export function formatCountdown(totalSeconds: number): string {
+  const safe = Math.max(0, Math.floor(totalSeconds));
+  const seconds = String(safe % 60).padStart(2, '0');
+  if (safe >= 3600) {
+    return `${Math.floor(safe / 3600)}:${String(Math.floor((safe % 3600) / 60)).padStart(2, '0')}:${seconds}`;
+  }
+  return `${Math.floor(safe / 60)}:${seconds}`;
+}
+
+/** Plain-words length of the offer window, e.g. "9 hours" or "90 seconds". */
+export function describeOfferTimeout(totalSeconds: number = OFFER_TIMEOUT_SECONDS): string {
+  if (totalSeconds % 3600 === 0) {
+    const hours = totalSeconds / 3600;
+    return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+  }
+  if (totalSeconds % 60 === 0) {
+    const minutes = totalSeconds / 60;
+    return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`;
+  }
+  return `${totalSeconds} seconds`;
+}
+
+export function canTransition(from: JobStatus, to: JobStatus): boolean {
+  return JOB_TRANSITIONS[from]?.includes(to) ?? false;
+}
+
+/** No further transitions are possible. */
+export function isTerminalStatus(status: JobStatus): boolean {
+  return (JOB_TRANSITIONS[status]?.length ?? 0) === 0;
+}
+
+/** Finished one way or another: completed, closed or cancelled. */
+export function isFinishedStatus(status: JobStatus): boolean {
+  return (
+    status === JobStatus.COMPLETED ||
+    status === JobStatus.CLOSED ||
+    status === JobStatus.CANCELLED
+  );
+}
+
+/** The job can still be cancelled. */
+export function isCancellableStatus(status: JobStatus): boolean {
+  return canTransition(status, JobStatus.CANCELLED);
+}
+
+/** 1-based position on the normal path (e.g. for "Stage 3 of 8"), or 0 for CANCELLED / unknown. */
+export function stageNumber(status: JobStatus): number {
+  return JOB_STAGES.indexOf(status) + 1;
+}
+
+/** Why an offer went back to the dispatch queue, or why a job came back after being accepted. */
+export type JobOfferOutcome = 'DECLINED' | 'EXPIRED' | 'REJECTED' | 'WITHDRAWN';
+
+export interface JobOfferRecord {
+  workerId: string;
+  outcome: JobOfferOutcome;
+  reason?: string | null;
+  /** ISO timestamp. */
+  at: string;
 }
 
 export enum FacilityType {
@@ -165,11 +280,36 @@ export const serviceRequestSchema = z.object({
   quoteNotes: z.string().optional().nullable(),
   signature: z.string().optional().nullable(),
   photos: z.array(z.string()).optional().nullable(),
+  urgency: z.string().optional(),
+  /** When the current offer was made / when it lapses (only while PENDING_ACCEPTANCE). */
+  offeredAt: z.union([z.string(), z.date()]).optional().nullable(),
+  offerExpiresAt: z.union([z.string(), z.date()]).optional().nullable(),
+  rejectReason: z.string().optional().nullable(),
+  cancelReason: z.string().optional().nullable(),
+  cancelledAt: z.union([z.string(), z.date()]).optional().nullable(),
   createdAt: z.union([z.string(), z.date()]),
   updatedAt: z.union([z.string(), z.date()]).optional(),
 });
 
-export type ServiceRequest = z.infer<typeof serviceRequestSchema>;
+/** The customer or worker attached to a job, as the API returns it (password is never included). */
+export interface JobParty {
+  id: string;
+  userId?: string;
+  rating?: number;
+  user?: {
+    id?: string;
+    fullName?: string;
+    email?: string;
+    phoneNumber?: string | null;
+  };
+}
+
+export type ServiceRequest = z.infer<typeof serviceRequestSchema> & {
+  customer?: JobParty | null;
+  worker?: JobParty | null;
+  /** Everyone this job was offered to and what they answered. */
+  offerHistory?: JobOfferRecord[] | null;
+};
 
 // Worker Job Queue Response DTO
 export interface WorkerJobQueueResponse {

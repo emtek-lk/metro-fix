@@ -8,6 +8,7 @@ import { Icon } from './ui/Icon';
 import { IconButton } from './ui/IconButton';
 import { GlassSurface } from './ui/GlassSurface';
 import { useToast } from './ui/Toast';
+import { getErrorMessage } from '../lib/errors';
 import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { spacing, radius, layout } from '../theme/layout';
@@ -25,8 +26,8 @@ const LOGO = require('../../assets/logo-tile.png');
 export interface RegisterScreenProps {
   onBack: () => void;
   /**
-   * Creates the account. Self-registration is not connected to the backend yet, so when this is
-   * omitted the form validates and then explains that sign-up is not available.
+   * Creates the account. When omitted (for example in a preview), the form validates and then
+   * explains that sign-up is not available.
    */
   onSubmit?: (values: RegistrationValues) => Promise<void>;
 }
@@ -73,7 +74,7 @@ export function RegisterScreen({ onBack, onSubmit }: RegisterScreenProps) {
     try {
       await onSubmit(values);
     } catch (error: any) {
-      toast.error(error?.message || 'Could not create your account.', 'Sign-up failed');
+      toast.error(getErrorMessage(error, 'Could not create your account.'), 'Sign-up failed');
     } finally {
       setIsSubmitting(false);
     }

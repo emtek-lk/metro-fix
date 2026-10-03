@@ -1,10 +1,11 @@
 import { io, Socket } from 'socket.io-client';
 import { ServiceRequest } from '@metro-fix/core-types';
+import { API_BASE_URL } from '../lib/api';
 
 class RealtimeSocket {
   private socket: Socket | null = null;
-  // Use 10.0.2.2 for Android emulator if localhost fails, but rely on EXPO_PUBLIC_API_URL
-  private url = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:3000';
+  // Same origin as the REST client (10.0.2.2 on the Android emulator, localhost on iOS).
+  private url = API_BASE_URL;
   private listeners: Record<string, Function[]> = {};
 
   connect(token?: string) {
@@ -19,6 +20,12 @@ class RealtimeSocket {
 
     this.socket.on('connect', () => {
       console.log('[WebSocket] Connected to backend gateway');
+      // Fires on every (re)connect so screens can refetch anything they missed while offline.
+      this.emitLocalUpdate('socket.connected', undefined);
+    });
+
+    this.socket.on('connect_error', (error) => {
+      console.warn('[WebSocket] Connection error:', error?.message ?? error);
     });
 
     this.socket.on('disconnect', () => {
@@ -32,6 +39,11 @@ class RealtimeSocket {
     
     this.socket.on('job.created', (job: ServiceRequest) => {
       this.emitLocalUpdate('job.created', job);
+    });
+
+    // A job was just offered to this worker.
+    this.socket.on('job.offered', (job: ServiceRequest) => {
+      this.emitLocalUpdate('job.offered', job);
     });
   }
 

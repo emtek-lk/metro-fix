@@ -3,7 +3,6 @@ import { Animated, Pressable, View, StyleSheet } from 'react-native';
 import { Text } from './ui/AppText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Card } from './ui/Card';
-import { Button } from './ui/Button';
 import { EmptyState } from './ui/EmptyState';
 import { Icon, type FeatherIconName } from './ui/Icon';
 import { ScreenHeader } from './ui/ScreenHeader';
@@ -25,7 +24,6 @@ interface NotificationsScreenProps {
   onMarkRead: (id: string) => void;
   onMarkAllRead: () => void;
   /** Development helper: raises a real dispatch alert to test the accept / reject flow. */
-  onSimulateAlert: () => void;
 }
 
 const KIND_ICON: Record<NotificationKind, FeatherIconName> = {
@@ -49,7 +47,6 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
   unreadCount,
   onMarkRead,
   onMarkAllRead,
-  onSimulateAlert,
 }) => {
   const insets = useSafeAreaInsets();
   const { scrollY, onScroll } = useCollapsingHeader();
@@ -83,25 +80,6 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
           subtitle={unreadCount > 0 ? `${unreadCount} unread` : 'You’re all caught up'}
           right={markAll}
         />
-
-        {__DEV__ && (
-          <Card variant="bordered" borderRadius={radius.xl} padding={spacing.lg + 2} style={styles.testCard}>
-            <View style={styles.testHeader}>
-              <Icon name="sliders" size={15} color={colors.textSecondary} />
-              <Text style={styles.testTitle}>Developer tools</Text>
-            </View>
-            <Text style={styles.testDesc}>
-              Trigger a dispatch alert to verify the worker acceptance flow.
-            </Text>
-            <Button
-              title="Send test alert"
-              onPress={onSimulateAlert}
-              variant="secondary"
-              size="small"
-              style={styles.testButton}
-            />
-          </Card>
-        )}
 
         {groups.length === 0 ? (
           <EmptyState
@@ -182,28 +160,6 @@ const styles = themedStyles(() => StyleSheet.create({
   },
 
   // ── Dev tools panel ──
-  testCard: {
-    marginBottom: spacing.xxl,
-  },
-  testHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  testTitle: {
-    ...typography.label,
-    fontWeight: '700',
-    color: colors.textSecondary,
-  },
-  testDesc: {
-    ...typography.caption,
-    color: colors.textMuted,
-    marginTop: spacing.xs,
-  },
-  testButton: {
-    marginTop: spacing.md,
-    alignSelf: 'flex-start',
-  },
 
   // ── List ──
   group: {

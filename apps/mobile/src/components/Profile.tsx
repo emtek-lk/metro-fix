@@ -11,6 +11,7 @@ import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { spacing, radius, layout, tabBarClearance } from '../theme/layout';
 import { useAuth } from '../context/AuthContext';
+import { useWorkerStats } from '../hooks/useJobs';
 import { useTheme, type ThemePreference } from '../theme/ThemeProvider';
 import { Role } from '@metro-fix/core-types';
 import { themedStyles } from '../theme/themedStyles';
@@ -22,19 +23,11 @@ const APPEARANCE_OPTIONS: { id: ThemePreference; label: string }[] = [
   { id: 'dark', label: 'Dark' },
 ];
 
-/**
- * Worker stats and service pillars are not exposed by the API yet. Release builds show a dash
- * rather than invented numbers; development builds show sample values so the layout can be reviewed.
- * TODO(backend): replace with the worker's real rating, completed jobs, on-time rate and pillars.
- */
 const NOT_AVAILABLE = '—';
-const WORKER_STATS = __DEV__
-  ? { rating: '4.9', completed: '142', onTime: '99%', pillars: 'HARD / SOFT' }
-  : { rating: NOT_AVAILABLE, completed: NOT_AVAILABLE, onTime: NOT_AVAILABLE, pillars: NOT_AVAILABLE };
 
-const SETTINGS_ROWS: { icon: FeatherIconName; label: string; value: string }[] = [
+const settingsRows = (pillars: string): { icon: FeatherIconName; label: string; value: string }[] => [
   { icon: 'radio', label: 'Telemetry GPS Auto-Sync', value: 'ACTIVE' },
-  { icon: 'zap', label: 'Service Pillars', value: WORKER_STATS.pillars },
+  { icon: 'zap', label: 'Service Pillars', value: pillars },
   { icon: 'shield', label: 'Authentication Token', value: 'JWT Bearer' },
 ];
 
@@ -49,6 +42,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onOpenGallery }) =
   const { user, logout } = useAuth();
   const { preference, setPreference } = useTheme();
   const isWorker = user?.role === Role.WORKER;
+  // The worker's real rating, completed and active jobs (GET /workers/me/stats).
+  const statsQuery = useWorkerStats(isWorker);
+  const stats = statsQuery.data;
+  const statValue = (value: number | string | undefined) =>
+    value === undefined ? NOT_AVAILABLE : String(value);
+  const pillars = stats?.servicePillars?.length ? stats.servicePillars.join(' / ') : NOT_AVAILABLE;
   const roleLabel = (user?.role || 'USER').replace(/_/g, ' ');
 
   return (
@@ -89,19 +88,19 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onOpenGallery }) =
               <View style={styles.statBox}>
                 <View style={styles.statValueRow}>
                   <Icon name="star" size={14} color={colors.brand} />
-                  <Text style={styles.statValue}>{WORKER_STATS.rating}</Text>
+                  <Text style={styles.statValue}>{stats ? stats.rating.toFixed(1) : NOT_AVAILABLE}</Text>
                 </View>
-                <Text style={styles.statLabel}>Internal Rating</Text>
+                <Text style={styles.statLabel}>Rating</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statBox}>
-                <Text style={styles.statValue}>{WORKER_STATS.completed}</Text>
-                <Text style={styles.statLabel}>Completed Jobs</Text>
+                <Text style={styles.statValue}>{statValue(stats?.completedJobs)}</Text>
+                <Text style={styles.statLabel}>Completed</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statBox}>
-                <Text style={styles.statValue}>{WORKER_STATS.onTime}</Text>
-                <Text style={styles.statLabel}>On-Time Rate</Text>
+                <Text style={styles.statValue}>{statValue(stats?.activeJobs)}</Text>
+                <Text style={styles.statLabel}>Active now</Text>
               </View>
             </View>
             </>
@@ -114,7 +113,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onOpenGallery }) =
           <Text style={styles.sectionHeading}>Dispatch & system settings</Text>
 
           <Card variant="elevated" borderRadius={radius.lg} padding={spacing.xs}>
-            {SETTINGS_ROWS.map((row, index) => (
+            {settingsRows(pillars).map((row, index) => (
               <View key={row.label}>
                 {index > 0 ? <View style={styles.divider} /> : null}
                 <View style={styles.settingRow}>

@@ -509,3 +509,9 @@ table tbody tr:hover {
     scroll-snap-align: start;
   }
 }
+
+@keyframes metro-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
