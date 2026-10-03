@@ -6,7 +6,7 @@ export const createCustomerSchema = z.object({
   email: z.string().email('Please enter a valid email address.'),
   phoneNumber: z.string().min(7, 'Please enter a valid phone number.'),
   facilityType: z.nativeEnum(FacilityType),
-  subscriptionTier: z.nativeEnum(SubscriptionTier).optional().default(SubscriptionTier.BASIC),
+  subscriptionTier: z.nativeEnum(SubscriptionTier).optional().default(SubscriptionTier.ACCESS),
   physicalAddress: z.string().min(5, 'Physical address must be at least 5 characters long.'),
 });
 

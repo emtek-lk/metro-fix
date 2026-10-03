@@ -76,7 +76,7 @@ export class CustomersService {
       userId: savedUser.id,
       user: savedUser,
       facilityType: dto.facilityType,
-      subscriptionTier: dto.subscriptionTier || SubscriptionTier.BASIC,
+      subscriptionTier: dto.subscriptionTier || SubscriptionTier.ACCESS,
       latitude: coords.latitude,
       longitude: coords.longitude,
     });

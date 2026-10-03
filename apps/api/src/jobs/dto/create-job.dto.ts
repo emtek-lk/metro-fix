@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { ServicePillar, FacilityType, locationCoordinatesSchema } from '@metro-fix/core-types';
+import { ServicePillar, FacilityType } from '@metro-fix/core-types';
+
+// core-types ships zod v3 schemas; the API validates with zod v4, so nested schemas must be local.
+const locationSchema = z.object({
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+});
 
 export const createJobSchema = z.object({
   title: z.string().min(3, 'Title must be at least 3 characters long.'),
@@ -7,7 +13,7 @@ export const createJobSchema = z.object({
   servicePillar: z.nativeEnum(ServicePillar),
   facilityType: z.nativeEnum(FacilityType),
   customerId: z.string().min(1, 'Customer ID is required.'),
-  location: locationCoordinatesSchema,
+  location: locationSchema,
   urgency: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).optional().default('MEDIUM'),
 });
 

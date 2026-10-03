@@ -8,7 +8,9 @@ import {
   CustomerEntity,
   ServiceRequestEntity,
   ServiceCatalogEntity,
+  SubscriptionPlanEntity,
 } from '../entities';
+import { CATALOG_SEEDS, PLAN_SEEDS } from './seed-data';
 import {
   Role,
   ServicePillar,
@@ -32,10 +34,55 @@ export class SeedService implements OnApplicationBootstrap {
     private readonly jobRepository: Repository<ServiceRequestEntity>,
     @InjectRepository(ServiceCatalogEntity)
     private readonly catalogRepository: Repository<ServiceCatalogEntity>,
+    @InjectRepository(SubscriptionPlanEntity)
+    private readonly planRepository: Repository<SubscriptionPlanEntity>,
   ) {}
+
+  /** Moves rows written under the old lifecycle / tier names onto the current ones. */
+  private async migrateLegacyValues() {
+    await this.jobRepository.query(
+      `UPDATE service_requests SET status = 'REQUESTED', workerId = NULL WHERE status = 'PENDING_ACCEPTANCE'`,
+    );
+    await this.customerRepository.query(
+      `UPDATE customers SET subscriptionTier = CASE subscriptionTier
+         WHEN 'BASIC' THEN 'ACCESS' WHEN 'PREMIUM' THEN 'BUSINESS' ELSE subscriptionTier END
+       WHERE subscriptionTier IN ('BASIC', 'PREMIUM')`,
+    );
+  }
+
+  /** Pre-spec rows (old Basic/Premium tiers and the three placeholder services) are retired, not deleted. */
+  private async retireLegacyReferenceData() {
+    await this.planRepository.query(
+      `UPDATE subscription_plans SET status = 'Retired' WHERE tierName IN ('BASIC', 'PREMIUM') AND status <> 'Retired'`,
+    );
+    await this.catalogRepository.query(
+      `UPDATE service_catalog SET status = 'Retired'
+       WHERE serviceName IN ('HVAC System Maintenance', 'Commercial Deep Sanitization', 'Electrical Compliance Audit', 'HVAC Chiller Maintenance', 'Deep Cleaning')
+         AND status <> 'Retired'`,
+    );
+  }
+
+  /** Catalog and plans are reference data: upsert by name/tier on every boot. */
+  private async seedReferenceData() {
+    for (const data of CATALOG_SEEDS) {
+      const existing = await this.catalogRepository.findOne({ where: { serviceName: data.serviceName } });
+      await this.catalogRepository.save(
+        this.catalogRepository.create({ ...existing, ...data, status: existing?.status ?? 'Active' }),
+      );
+    }
+    for (const data of PLAN_SEEDS) {
+      const existing = await this.planRepository.findOne({ where: { tierName: data.tierName } });
+      await this.planRepository.save(
+        this.planRepository.create({ ...existing, ...data, status: existing?.status ?? 'Active' }),
+      );
+    }
+  }
 
   async onApplicationBootstrap() {
     this.logger.log('Starting seed process...');
+    await this.migrateLegacyValues();
+    await this.seedReferenceData();
+    await this.retireLegacyReferenceData();
 
     const saltRounds = 10;
     const password = await bcrypt.hash('Demo123!', saltRounds);
@@ -113,6 +160,16 @@ export class SeedService implements OnApplicationBootstrap {
       worker2 = await this.workerRepository.save(this.workerRepository.create(worker2Data as Partial<WorkerEntity>));
     }
 
+    // Demo customer logins (the customer portal) use the same demo password as staff.
+    const demoCustomerEmails = ['eleanor@skylinetowers.com', 'marcus@residences.lk', 'sophia@industrialpark.com'];
+    for (const email of demoCustomerEmails) {
+      const existing = await this.userRepository.findOne({ where: { email } });
+      if (existing) {
+        existing.password = password;
+        await this.userRepository.save(existing);
+      }
+    }
+
     const jobCount = await this.jobRepository.count();
     if (jobCount > 0) {
       this.logger.log('Data already seeded. Skipping seed process.');
@@ -123,7 +180,7 @@ export class SeedService implements OnApplicationBootstrap {
       {
         user: { fullName: 'Eleanor Vance', email: 'eleanor@skylinetowers.com', role: Role.CUSTOMER, password },
         facilityType: FacilityType.COMMERCIAL,
-        subscriptionTier: SubscriptionTier.PREMIUM,
+        subscriptionTier: SubscriptionTier.BUSINESS,
         latitude: 6.9271,
         longitude: 79.8612,
       },
@@ -137,7 +194,7 @@ export class SeedService implements OnApplicationBootstrap {
       {
         user: { fullName: 'Sophia Martinez', email: 'sophia@industrialpark.com', role: Role.CUSTOMER, password },
         facilityType: FacilityType.INDUSTRIAL,
-        subscriptionTier: SubscriptionTier.BASIC,
+        subscriptionTier: SubscriptionTier.ACCESS,
         latitude: 6.9147,
         longitude: 79.8773,
       },
@@ -161,34 +218,6 @@ export class SeedService implements OnApplicationBootstrap {
         } as Partial<CustomerEntity>));
       }
       customers[data.user.email] = customer!;
-    }
-
-    const catalogData = [
-      {
-        serviceName: 'HVAC System Maintenance',
-        pillarCategory: ServicePillar.HARD,
-        basePrice: '$850.00',
-        requiredSubscriptionTier: SubscriptionTier.BASIC,
-      },
-      {
-        serviceName: 'Commercial Deep Sanitization',
-        pillarCategory: ServicePillar.SOFT,
-        basePrice: '$450.00',
-        requiredSubscriptionTier: SubscriptionTier.PLUS,
-      },
-      {
-        serviceName: 'Electrical Compliance Audit',
-        pillarCategory: ServicePillar.STRATEGIC,
-        basePrice: '$1,200.00',
-        requiredSubscriptionTier: SubscriptionTier.PREMIUM,
-      },
-    ];
-
-    for (const data of catalogData) {
-       let catalog = await this.catalogRepository.findOne({ where: { serviceName: data.serviceName } });
-       if (!catalog) {
-           await this.catalogRepository.save(this.catalogRepository.create(data as Partial<ServiceCatalogEntity>));
-       }
     }
 
     const jobsData = [

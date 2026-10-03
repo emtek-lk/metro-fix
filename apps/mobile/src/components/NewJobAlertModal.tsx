@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Modal, View, Text, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { JobStatus, ServiceRequest } from '@metro-fix/core-types';
+import { ServiceRequest } from '@metro-fix/core-types';
 import { apiService } from '../services/api';
 
 import { Button } from './ui/Button';
@@ -37,29 +37,16 @@ export const NewJobAlertModal: React.FC<NewJobAlertModalProps> = ({
 
   if (!job) return null;
 
-  const handleAccept = async () => {
-    setLoadingAction('accept');
-    try {
-      const updated = await apiService.updateJobStatus(
-        job.id,
-        JobStatus.ASSIGNED,
-        workerId,
-      );
-      onAccept(updated);
-    } catch (error) {
-      console.error('Failed to accept job:', error);
-    } finally {
-      setLoadingAction(null);
-    }
-  };
+  // Dispatch assigns the job directly (status is already ASSIGNED), so accepting just opens it.
+  const handleAccept = () => onAccept(job);
 
   const handleReject = async () => {
     setLoadingAction('reject');
     try {
-      await apiService.updateJobStatus(job.id, JobStatus.REQUESTED, null);
+      await apiService.rejectJob(job.id, 'Declined by technician');
       onReject();
     } catch (error) {
-      console.error('Failed to reject job:', error);
+      console.error('Failed to decline job:', error);
       onReject();
     } finally {
       setLoadingAction(null);
@@ -118,9 +105,8 @@ export const NewJobAlertModal: React.FC<NewJobAlertModalProps> = ({
 
           <View style={styles.buttonGroup}>
             <Button
-              title="Accept Job"
+              title="View Job"
               onPress={handleAccept}
-              isLoading={loadingAction === 'accept'}
               disabled={loadingAction !== null}
               variant="primary"
               size="large"

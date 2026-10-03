@@ -12,14 +12,12 @@ export class SubscriptionsService {
   ) {}
 
   async findAll(): Promise<SubscriptionPlanEntity[]> {
-    return this.planRepo.find({ order: { createdAt: 'DESC' } });
+    return this.planRepo.find({ order: { monthlyFeeLkr: 'ASC' } });
   }
 
   async create(dto: CreateSubscriptionDto): Promise<SubscriptionPlanEntity> {
     const item = this.planRepo.create({
-      tierName: dto.tierName,
-      targetFacility: dto.targetFacility,
-      monthlyFee: dto.monthlyFee,
+      ...dto,
       includedServices: dto.includedServices || 'Comprehensive Facility Service Tier',
       activeAccounts: 0,
       status: dto.status || 'Active',

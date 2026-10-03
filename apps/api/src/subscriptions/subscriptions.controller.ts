@@ -1,6 +1,9 @@
-import { Controller, Get, Post, Body } from '@nestjs/common';
+import { Controller, Get, Post, Body, UsePipes } from '@nestjs/common';
 import { SubscriptionsService } from './subscriptions.service';
-import { CreateSubscriptionDto } from './dto/create-subscription.dto';
+import { createSubscriptionSchema, CreateSubscriptionDto } from './dto/create-subscription.dto';
+import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
+import { Role } from '@metro-fix/core-types';
+import { Roles } from '../auth/roles.decorator';
 import { SubscriptionPlanEntity } from '../entities';
 
 import { Public } from '../auth/public.decorator';
@@ -15,7 +18,9 @@ export class SubscriptionsController {
     return this.subscriptionsService.findAll();
   }
 
+  @Roles(Role.ADMIN)
   @Post()
+  @UsePipes(new ZodValidationPipe(createSubscriptionSchema))
   async create(@Body() dto: CreateSubscriptionDto): Promise<SubscriptionPlanEntity> {
     return this.subscriptionsService.create(dto);
   }

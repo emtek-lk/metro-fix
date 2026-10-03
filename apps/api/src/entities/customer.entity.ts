@@ -32,7 +32,7 @@ export class CustomerEntity {
   @Column({
     type: 'varchar',
     length: 50,
-    default: SubscriptionTier.BASIC,
+    default: SubscriptionTier.ACCESS,
   })
   subscriptionTier: SubscriptionTier;
 

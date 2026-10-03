@@ -27,12 +27,14 @@ function buildService(initial: { status: JobStatus; workerId: string | null }) {
 
 describe('JobsService state machine', () => {
   const validPath: Array<[JobStatus, JobStatus]> = [
-    [JobStatus.REQUESTED, JobStatus.PENDING_ACCEPTANCE],
-    [JobStatus.PENDING_ACCEPTANCE, JobStatus.ASSIGNED],
+    [JobStatus.REQUESTED, JobStatus.ASSIGNED],
     [JobStatus.ASSIGNED, JobStatus.ON_ROUTE],
     [JobStatus.ON_ROUTE, JobStatus.INSPECTION],
     [JobStatus.INSPECTION, JobStatus.IN_PROGRESS],
     [JobStatus.IN_PROGRESS, JobStatus.COMPLETED],
+    [JobStatus.COMPLETED, JobStatus.CLOSED],
+    [JobStatus.INSPECTION, JobStatus.REQUESTED],
+    [JobStatus.ASSIGNED, JobStatus.REQUESTED],
   ];
 
   it.each(validPath)('allows %s -> %s', async (from, to) => {
@@ -46,8 +48,10 @@ describe('JobsService state machine', () => {
     [JobStatus.REQUESTED, JobStatus.INSPECTION],
     [JobStatus.REQUESTED, JobStatus.COMPLETED],
     [JobStatus.ASSIGNED, JobStatus.COMPLETED],
-    [JobStatus.INSPECTION, JobStatus.REQUESTED],
+    [JobStatus.ON_ROUTE, JobStatus.REQUESTED],
     [JobStatus.ON_ROUTE, JobStatus.ASSIGNED],
+    [JobStatus.IN_PROGRESS, JobStatus.CLOSED],
+    [JobStatus.CLOSED, JobStatus.REQUESTED],
     [JobStatus.COMPLETED, JobStatus.ON_ROUTE],
   ])('rejects %s -> %s', async (from, to) => {
     const { service, jobRepo } = buildService({ status: from, workerId: WORKER_ID });
@@ -64,26 +68,19 @@ describe('JobsService state machine', () => {
     expect(jobRepo.update).not.toHaveBeenCalled();
   });
 
-  it('requires a workerId to ping a worker', async () => {
-    const { service } = buildService({ status: JobStatus.REQUESTED, workerId: null });
-    await expect(
-      service.updateJobStatus(JOB_ID, { status: JobStatus.PENDING_ACCEPTANCE }),
-    ).rejects.toBeInstanceOf(BadRequestException);
-  });
-
   it('rejects an unknown worker', async () => {
     const { service } = buildService({ status: JobStatus.REQUESTED, workerId: null });
     await expect(
       service.updateJobStatus(JOB_ID, {
-        status: JobStatus.PENDING_ACCEPTANCE,
+        status: JobStatus.ASSIGNED,
         workerId: '00000000-0000-0000-0000-000000000000',
       }),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it('clears the worker when a pending job is rejected back to REQUESTED', async () => {
+  it('clears the worker when an assigned job is sent back to REQUESTED', async () => {
     const { service, jobRepo } = buildService({
-      status: JobStatus.PENDING_ACCEPTANCE,
+      status: JobStatus.ASSIGNED,
       workerId: WORKER_ID,
     });
     const result = await service.updateJobStatus(JOB_ID, { status: JobStatus.REQUESTED });
@@ -117,5 +114,30 @@ describe('JobsService state machine', () => {
       notes: 'n',
     } as any);
     expect(quoted.status).toBe(JobStatus.IN_PROGRESS);
+  });
+});
+
+describe('JobsService reject / close', () => {
+  it('rejects at INSPECTION: clears worker, stores the reason, returns to REQUESTED', async () => {
+    const { service, jobRepo, gateway } = buildService({ status: JobStatus.INSPECTION, workerId: WORKER_ID });
+    const result = await service.rejectJob(JOB_ID, { reason: 'Outside technician scope' });
+    expect(jobRepo.update).toHaveBeenCalledWith(
+      { id: JOB_ID },
+      { status: JobStatus.REQUESTED, workerId: null, rejectReason: 'Outside technician scope' },
+    );
+    expect(result.status).toBe(JobStatus.REQUESTED);
+    expect(gateway.emitJobUpdated).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses to reject a job that is already in progress', async () => {
+    const { service } = buildService({ status: JobStatus.IN_PROGRESS, workerId: WORKER_ID });
+    await expect(service.rejectJob(JOB_ID, { reason: 'Too late' })).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('closes only COMPLETED jobs', async () => {
+    const done = buildService({ status: JobStatus.COMPLETED, workerId: WORKER_ID });
+    expect((await done.service.closeJob(JOB_ID)).status).toBe(JobStatus.CLOSED);
+    const early = buildService({ status: JobStatus.IN_PROGRESS, workerId: WORKER_ID });
+    await expect(early.service.closeJob(JOB_ID)).rejects.toBeInstanceOf(ConflictException);
   });
 });

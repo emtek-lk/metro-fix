@@ -76,8 +76,23 @@ export class ServiceRequestEntity {
   @Column({ type: 'varchar', length: 'max', nullable: true })
   signature?: string | null;
 
-  @Column({ type: 'simple-array', nullable: true })
+  // Stored as JSON text: base64 photos can contain characters that break `simple-array`.
+  @Column({
+    type: 'varchar',
+    length: 'max',
+    nullable: true,
+    transformer: {
+      to: (value?: string[] | null) => (value ? JSON.stringify(value) : null),
+      from: (value?: string | null) => (value ? (JSON.parse(value) as string[]) : null),
+    },
+  })
   photos?: string[] | null;
+
+  @Column({ type: 'varchar', length: 20, default: 'MEDIUM' })
+  urgency: string;
+
+  @Column({ type: 'varchar', length: 'max', nullable: true })
+  rejectReason?: string | null;
 
   @CreateDateColumn()
   createdAt: Date;

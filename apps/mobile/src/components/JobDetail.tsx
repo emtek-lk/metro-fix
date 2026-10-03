@@ -23,6 +23,7 @@ import { PILLAR_ICON, FACILITY_ICON } from '../theme/status';
 import { useJobDetail, useUpdateJobStatus, useSubmitQuote, useSubmitProof } from '../hooks/useJobs';
 import { startWorkerBackgroundTracking, stopWorkerBackgroundTracking } from '../services/location';
 import { openNativeNavigation } from '../services/linking';
+import { apiService } from '../services/api';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 
@@ -46,6 +47,11 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
   const [quoteCost, setQuoteCost] = useState(currentJob.quoteAmount?.toString() || '');
   const [quoteHours, setQuoteHours] = useState(currentJob.estimatedHours?.toString() || '');
   const [quoteNotes, setQuoteNotes] = useState(currentJob.quoteNotes || '');
+
+  // Reject (unserviceable / out of scope) state
+  const [rejecting, setRejecting] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+  const [rejectBusy, setRejectBusy] = useState(false);
 
   // Proof modal state
   const [proofModalVisible, setProofModalVisible] = useState(false);
@@ -86,6 +92,18 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
       onJobUpdated?.(updated);
       Alert.alert('Quote Submitted', 'Work transitioned to IN PROGRESS.');
     } catch (e: any) { Alert.alert('Error', e.message || 'Failed to submit quote.'); }
+  };
+
+  const handleReject = async () => {
+    if (rejectReason.trim().length < 3) return Alert.alert('Reason Required', 'Tell dispatch why you cannot do this job.');
+    setRejectBusy(true);
+    try {
+      await stopWorkerBackgroundTracking();
+      await apiService.rejectJob(currentJob.id, rejectReason.trim());
+      Alert.alert('Job Returned', 'Dispatch will reassign this ticket.');
+      onBack();
+    } catch (e: any) { Alert.alert('Error', e.message || 'Could not reject the job.'); }
+    finally { setRejectBusy(false); }
   };
 
   const handleTakePhoto = async () => {
@@ -203,11 +221,26 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
               </View>
               <Text style={s.formDesc}>Provide cost estimate and labor hours</Text>
               <View style={s.formFields}>
-                <Input label="Estimated Cost ($)" value={quoteCost} onChangeText={setQuoteCost} placeholder="e.g. 450.00" keyboardType="numeric" />
+                <Input label="Estimated Cost (LKR)" value={quoteCost} onChangeText={setQuoteCost} placeholder="e.g. 4500" keyboardType="numeric" />
                 <Input label="Estimated Hours" value={quoteHours} onChangeText={setQuoteHours} placeholder="e.g. 2.5" keyboardType="numeric" />
                 <Input label="Notes" value={quoteNotes} onChangeText={setQuoteNotes} placeholder="Describe findings…" multiline numberOfLines={3} />
               </View>
               <Button title="SUBMIT QUOTE → IN PROGRESS" onPress={handleQuote} isLoading={submitQuote.isPending} variant="primary" size="large" style={s.formSubmit} />
+            </Card>
+          )}
+
+          {/* ASSIGNED / INSPECTION: worker can decline and bounce the job back to dispatch */}
+          {(currentJob.status === JobStatus.ASSIGNED || currentJob.status === JobStatus.INSPECTION) && (
+            <Card variant="elevated" borderRadius={radius.xl} padding={spacing.xl} style={s.cardGap}>
+              {rejecting ? (
+                <>
+                  <Input label="Why can't you do this job?" value={rejectReason} onChangeText={setRejectReason} placeholder="e.g. Outside my trade / unsafe site" multiline numberOfLines={3} />
+                  <Button title="Return Job to Dispatch" onPress={handleReject} isLoading={rejectBusy} variant="danger" size="large" style={s.formSubmit} />
+                  <Button title="Cancel" onPress={() => setRejecting(false)} variant="secondary" size="large" style={s.formSubmit} />
+                </>
+              ) : (
+                <Button title="Can't do this job" onPress={() => setRejecting(true)} variant="danger" size="large" />
+              )}
             </Card>
           )}
         </View>

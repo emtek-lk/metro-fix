@@ -20,16 +20,16 @@
 
 ```json
 // Request
-{ "email": "amina@metro-fix.com", "password": "Password123!" }
+{ "email": "admin@demo.local", "password": "Demo123!" }
 
 // Response 200
 {
   "accessToken": "eyJhbGci...",
   "user": {
     "id": "uuid",
-    "fullName": "Amina Yusuf",
-    "email": "amina@metro-fix.com",
-    "role": "WORKER",
+    "fullName": "System Administrator",
+    "email": "admin@demo.local",
+    "role": "ADMIN",
     "phoneNumber": "+94 71 012 4491",
     "avatarUrl": null,
     "pushToken": null,
@@ -39,17 +39,17 @@
 }
 ```
 
-**Seeded Accounts (all password `Password123!`):**
+**Seeded Accounts (all password `Demo123!`):**
 
 | Email | Role | Notes |
 |-------|------|-------|
-| `admin@metro-fix.com` | ADMIN | Web dashboard full access |
-| `omar@metro-fix.com` | WORKER | Primary mobile test worker |
-| `amina@metro-fix.com` | WORKER | Secondary worker |
-| `malik@metro-fix.com` | WORKER | Third worker |
-| `eleanor@example.com` | CUSTOMER | Commercial / Premium |
-| `marcus@example.com` | CUSTOMER | Residential / Plus |
-| `sophia@example.com` | CUSTOMER | Industrial / Basic |
+| `admin@demo.local` | ADMIN | Web dashboard full access |
+| `dispatch@demo.local` | CUSTOMER_CARE | Dispatch board, roster |
+| `worker1@demo.local` | WORKER | Carlos Rivera, primary mobile test worker |
+| `worker2@demo.local` | WORKER | Priya Sharma |
+| `eleanor@skylinetowers.com` | CUSTOMER | Commercial / Business |
+| `marcus@residences.lk` | CUSTOMER | Residential / Plus |
+| `sophia@industrialpark.com` | CUSTOMER | Industrial / Access |
 
 ---
 
@@ -99,34 +99,47 @@ Returns: Single `ServiceRequestEntity` with relations.
 
 **Backend behavior:**
 - Resolves `customerId` by checking `customers.id` first, then `customers.userId`
-- Falls back to first customer in DB if neither match
+- Returns 400 if no customer profile matches (no silent fallback to another customer)
 - Emits `job.created` WebSocket event
 
 ### 4.4 Update Status — `PATCH /jobs/:id/status`
 
-**Decorator:** `@Public()`, validated by `updateJobStatusSchema`
+**Roles:** ADMIN, CUSTOMER_CARE, WORKER. Validated by `updateJobStatusSchema`.
 
 ```json
 // Request
 {
-  "status": "PENDING_ACCEPTANCE",    // Target JobStatus value
-  "workerId": "uuid-of-worker"      // Required for PENDING_ACCEPTANCE transition
+  "status": "ASSIGNED",             // Target JobStatus value
+  "workerId": "uuid-of-worker"      // Optional; resolved by worker id or user id
 }
 
 // Response 200 — Updated ServiceRequestEntity
 ```
 
-**Valid Transitions (enforced in `JobsService.updateJobStatus()`):**
+**Valid Transitions (enforced in `JobsService`):**
 
 | From | To | Side Effects |
 |------|----|--------------|
-| `REQUESTED` | `PENDING_ACCEPTANCE` | Sets `workerId` (resolved by worker ID or user ID) |
-| `PENDING_ACCEPTANCE` | `REQUESTED` | Nullifies `workerId` (rejection) |
-| `PENDING_ACCEPTANCE` | `ASSIGNED` | Worker accepts |
+| `REQUESTED` | `ASSIGNED` | Sets `workerId` |
 | `ASSIGNED` | `ON_ROUTE` | GPS tracking should start |
+| `ASSIGNED` | `REQUESTED` | Worker declines; `workerId` cleared |
 | `ON_ROUTE` | `INSPECTION` | Worker arrives on site |
-| `INSPECTION` | `IN_PROGRESS` | (Prefer using POST /quote instead) |
-| `IN_PROGRESS` | `COMPLETED` | (Prefer using POST /proof instead) |
+| `INSPECTION` | `IN_PROGRESS` | (Prefer `POST /quote`) |
+| `INSPECTION` | `REQUESTED` | Worker rejects; `workerId` cleared (prefer `POST /reject`) |
+| `IN_PROGRESS` | `COMPLETED` | (Prefer `POST /proof`) |
+| `COMPLETED` | `CLOSED` | (Prefer `POST /close`) |
+
+### 4.4a Reject — `POST /jobs/:id/reject`
+
+**Roles:** WORKER, ADMIN. Body `{ "reason": "Outside technician scope" }`. Allowed only at `ASSIGNED` or `INSPECTION`; clears the worker, stores `rejectReason`, returns the job to `REQUESTED`.
+
+### 4.4b Close — `POST /jobs/:id/close`
+
+**Roles:** ADMIN, CUSTOMER_CARE. Allowed only at `COMPLETED`; moves the ticket to `CLOSED`.
+
+### 4.4c My Requests — `GET /jobs/mine`
+
+**Roles:** CUSTOMER. Returns only jobs belonging to the logged-in customer. `POST /jobs` by a CUSTOMER always creates the job for their own profile (the `customerId` in the body is ignored).
 
 ### 4.5 Assign Worker — `PATCH /jobs/:id/assign`
 

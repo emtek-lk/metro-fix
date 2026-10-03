@@ -3,15 +3,15 @@ import { UserEntity, WorkerEntity, CustomerEntity, ServiceRequestEntity } from '
 
 describe('Core Types & API Entities Validation', () => {
   describe('Zod Schemas', () => {
-    it('should validate 7-stage JobStatus correctly', () => {
+    it('should validate the 7-stage lifecycle plus CLOSED', () => {
       const validStatuses = [
         JobStatus.REQUESTED,
-        JobStatus.PENDING_ACCEPTANCE,
         JobStatus.ASSIGNED,
         JobStatus.ON_ROUTE,
         JobStatus.INSPECTION,
         JobStatus.IN_PROGRESS,
         JobStatus.COMPLETED,
+        JobStatus.CLOSED,
       ];
       expect(validStatuses).toHaveLength(7);
     });
@@ -77,12 +77,12 @@ describe('Core Types & API Entities Validation', () => {
       const customer = new CustomerEntity();
       customer.id = 'cust-uuid';
       customer.facilityType = FacilityType.INDUSTRIAL;
-      customer.subscriptionTier = SubscriptionTier.PREMIUM;
+      customer.subscriptionTier = SubscriptionTier.BUSINESS;
       customer.latitude = 6.9271;
       customer.longitude = 79.8612;
 
       expect(customer.facilityType).toBe(FacilityType.INDUSTRIAL);
-      expect(customer.subscriptionTier).toBe(SubscriptionTier.PREMIUM);
+      expect(customer.subscriptionTier).toBe(SubscriptionTier.BUSINESS);
       expect(customer.latitude).toBe(6.9271);
     });
 

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { StatusBar, StyleSheet, View, Text, Pressable } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { JobStatus, ServiceRequest, ServicePillar, FacilityType } from '@metro-fix/core-types';
+import { JobStatus, Role, ServiceRequest } from '@metro-fix/core-types';
 
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { ActiveJobDashboard } from './src/components/ActiveJobDashboard';
@@ -19,6 +19,7 @@ import { FloatingTabBar } from './src/components/ui/FloatingTabBar';
 import { Icon } from './src/components/ui/Icon';
 import { LoadingState } from './src/components/ui/LoadingState';
 import { apiService } from './src/services/api';
+import { apiClient } from './src/lib/api';
 import { colors } from './src/theme/colors';
 import { typography } from './src/theme/typography';
 import { spacing, radius, layout } from './src/theme/layout';
@@ -32,25 +33,8 @@ const queryClient = new QueryClient({
   },
 });
 
-const MOCK_CUSTOMER_ID = 'cust_metro_101';
-
-// Template for the "Simulate incoming job" action, which creates a real job via the API.
-const SAMPLE_JOB_INPUT = {
-  title: 'Commercial HVAC Roof Chiller Fault',
-  description: 'Primary compressor circuit pressure drop detected. Requires diagnostic inspection and quote.',
-  servicePillar: ServicePillar.HARD,
-  facilityType: FacilityType.COMMERCIAL,
-  location: { latitude: 37.7749, longitude: -122.4194 },
-};
-
-const ROLE_MODES = [
-  { id: 'worker' as const, label: 'Worker Roster', icon: 'tool' as const },
-  { id: 'customer' as const, label: 'Customer View', icon: 'user' as const },
-];
-
 function MainApp() {
   const { user: currentUser, isLoading: isAuthLoading, isAuthenticated, logout } = useAuth();
-  const [appRoleMode, setAppRoleMode] = useState<'customer' | 'worker'>('worker');
   const [activeTab, setActiveTab] = useState<string>('jobs');
 
   // Customer Portal State
@@ -60,6 +44,10 @@ function MainApp() {
   const [selectedJobForDetail, setSelectedJobForDetail] = useState<ServiceRequest | null>(null);
   const [alertVisible, setAlertVisible] = useState<boolean>(false);
   const [incomingJob, setIncomingJob] = useState<ServiceRequest | null>(null);
+
+  // Field technicians only see the worker app. Customers raise requests through the web portal;
+  // the booking flow stays reachable here only for CUSTOMER accounts.
+  const appRoleMode = currentUser?.role === Role.CUSTOMER ? 'customer' : 'worker';
 
   // Loading State
   if (isAuthLoading) {
@@ -80,19 +68,19 @@ function MainApp() {
     setCustomerActiveJob(newJob);
   };
 
+  // Dev helper: self-assign the oldest open REQUESTED job so the dispatch alert can be exercised.
   const handleSimulateAlert = async () => {
     try {
-      // Create a real REQUESTED job, then ping this worker so accept / reject hit real data.
-      const created = await apiService.createJob({
-        ...SAMPLE_JOB_INPUT,
-        customerId: currentUser.id || MOCK_CUSTOMER_ID,
-      });
-      const pinged = await apiService.updateJobStatus(
-        created.id,
-        JobStatus.PENDING_ACCEPTANCE,
-        currentUser.id,
-      );
-      setIncomingJob(pinged);
+      const res = await apiClient.get<ServiceRequest[]>('/jobs');
+      const open = [...res.data]
+        .filter((job) => job.status === JobStatus.REQUESTED)
+        .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))[0];
+      if (!open) {
+        console.warn('No REQUESTED jobs available to simulate a dispatch.');
+        return;
+      }
+      const assigned = await apiService.updateJobStatus(open.id, JobStatus.ASSIGNED, currentUser.id);
+      setIncomingJob(assigned);
       setAlertVisible(true);
     } catch (error) {
       console.error('Failed to simulate incoming job:', error);
@@ -141,36 +129,6 @@ function MainApp() {
           </Pressable>
         </View>
 
-        {/* Top Role Mode Switcher Bar */}
-        <View style={styles.roleBar}>
-          {ROLE_MODES.map((mode) => {
-            const isActive = appRoleMode === mode.id;
-            return (
-              <Pressable
-                key={mode.id}
-                style={({ pressed }) => [
-                  styles.roleTab,
-                  isActive && styles.roleTabActive,
-                  pressed && !isActive && styles.roleTabPressed,
-                ]}
-                onPress={() => setAppRoleMode(mode.id)}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: isActive }}
-                accessibilityLabel={mode.label}
-              >
-                <Icon
-                  name={mode.icon}
-                  size={15}
-                  color={isActive ? colors.white : colors.textSecondary}
-                />
-                <Text style={[styles.roleTabText, isActive && styles.roleTabTextActive]}>
-                  {mode.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
         {/* Render Active View */}
         {appRoleMode === 'customer' ? (
           customerActiveJob ? (
@@ -180,7 +138,7 @@ function MainApp() {
             />
           ) : (
             <CustomerBookingWizard
-              customerId={currentUser.id || MOCK_CUSTOMER_ID}
+              customerId={currentUser.id}
               onBookingComplete={handleBookingComplete}
             />
           )

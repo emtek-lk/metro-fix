@@ -2,14 +2,18 @@ import { useState, type CSSProperties } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { ServicePillar, SubscriptionTier } from '@metro-fix/core-types';
+import { ServiceGroup, ServicePillar, SubscriptionTier } from '@metro-fix/core-types';
+import { PILLAR_GROUPS, PILLAR_LABELS, SERVICE_GROUP_LABELS, TIER_LABELS } from '../../lib/catalog';
 import { API_BASE_URL } from '../../lib/api';
 import { useModalAccessibility } from '../../hooks/useModalAccessibility';
 
 export const addServiceSchema = z.object({
   serviceName: z.string().trim().min(3, 'Service name must be at least 3 characters'),
   pillarCategory: z.nativeEnum(ServicePillar),
-  basePrice: z.string().trim().min(1, 'Base price is required'),
+  serviceGroup: z.nativeEnum(ServiceGroup),
+  description: z.string().trim().optional(),
+  requiresQuote: z.boolean(),
+  basePrice: z.number({ error: 'Enter a price in LKR' }).nonnegative().nullable(),
   requiredSubscriptionTier: z.nativeEnum(SubscriptionTier),
 });
 
@@ -31,15 +35,23 @@ export function AddServiceModal({ isOpen, onClose, onServiceAdded }: AddServiceM
     handleSubmit,
     reset,
     formState: { errors },
+    watch,
+    setValue,
   } = useForm<AddServiceInput>({
     resolver: zodResolver(addServiceSchema),
     defaultValues: {
       serviceName: '',
       pillarCategory: ServicePillar.HARD,
-      basePrice: '$250.00',
-      requiredSubscriptionTier: SubscriptionTier.BASIC,
+      serviceGroup: ServiceGroup.HVAC,
+      description: '',
+      requiresQuote: false,
+      basePrice: null,
+      requiredSubscriptionTier: SubscriptionTier.ACCESS,
     },
   });
+
+  const pillar = watch('pillarCategory');
+  const requiresQuote = watch('requiresQuote');
 
   if (!isOpen) return null;
 
@@ -56,7 +68,7 @@ export function AddServiceModal({ isOpen, onClose, onServiceAdded }: AddServiceM
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify(values),
+        body: JSON.stringify({ ...values, basePrice: values.requiresQuote ? null : values.basePrice }),
       });
 
       if (!response.ok) {
@@ -125,28 +137,77 @@ export function AddServiceModal({ isOpen, onClose, onServiceAdded }: AddServiceM
               <label style={styles.label} htmlFor="pillar-category">
                 Pillar Category *
               </label>
-              <select id="pillar-category" {...register('pillarCategory')} style={styles.select}>
-                <option value={ServicePillar.HARD}>Hard Services</option>
-                <option value={ServicePillar.SOFT}>Soft Services</option>
-                <option value={ServicePillar.STRATEGIC}>Strategic Services</option>
+              <select
+                id="pillar-category"
+                {...register('pillarCategory', {
+                  onChange: (event) => setValue('serviceGroup', PILLAR_GROUPS[event.target.value as ServicePillar][0]),
+                })}
+                style={styles.select}
+              >
+                {Object.values(ServicePillar)
+                  .filter((value) => value === value.toUpperCase())
+                  .map((value) => (
+                    <option key={value} value={value}>{PILLAR_LABELS[value]}</option>
+                  ))}
               </select>
             </div>
 
             <div style={styles.fieldGroup}>
+              <label style={styles.label} htmlFor="service-group">
+                Service Group *
+              </label>
+              <select id="service-group" {...register('serviceGroup')} style={styles.select}>
+                {PILLAR_GROUPS[pillar].map((group) => (
+                  <option key={group} value={group}>{SERVICE_GROUP_LABELS[group]}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div style={styles.fieldGroup}>
+            <label style={styles.label} htmlFor="service-description">
+              Customer-facing description
+            </label>
+            <textarea
+              id="service-description"
+              rows={2}
+              {...register('description')}
+              placeholder="What the customer gets, in plain language"
+              style={styles.input}
+            />
+          </div>
+
+          <div style={styles.row}>
+            <div style={styles.fieldGroup}>
               <label style={styles.label} htmlFor="base-price">
-                Base Price *
+                Base Price (LKR)
               </label>
               <input
                 id="base-price"
-                type="text"
-                {...register('basePrice')}
-                placeholder="$250.00"
+                type="number"
+                min={0}
+                step="0.01"
+                disabled={requiresQuote}
+                {...register('basePrice', {
+                  setValueAs: (value) => (value === '' || value === null || value === undefined ? null : Number(value)),
+                })}
+                placeholder={requiresQuote ? 'Quoted on inspection' : '2500'}
                 style={{
                   ...styles.input,
                   ...(errors.basePrice ? styles.inputError : undefined),
                 }}
               />
               {errors.basePrice && <span style={styles.fieldError}>{errors.basePrice.message}</span>}
+            </div>
+
+            <div style={styles.fieldGroup}>
+              <label style={styles.label} htmlFor="requires-quote">
+                Pricing
+              </label>
+              <label style={{ ...styles.label, display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input id="requires-quote" type="checkbox" {...register('requiresQuote')} />
+                Quote-based / specialist
+              </label>
             </div>
           </div>
 
@@ -155,9 +216,11 @@ export function AddServiceModal({ isOpen, onClose, onServiceAdded }: AddServiceM
               Required Subscription Tier *
             </label>
             <select id="required-tier" {...register('requiredSubscriptionTier')} style={styles.select}>
-              <option value={SubscriptionTier.BASIC}>Basic Tier</option>
-              <option value={SubscriptionTier.PLUS}>Plus Tier</option>
-              <option value={SubscriptionTier.PREMIUM}>Premium Tier</option>
+              {Object.values(SubscriptionTier)
+                .filter((value) => value === value.toUpperCase())
+                .map((value) => (
+                  <option key={value} value={value}>{TIER_LABELS[value]}</option>
+                ))}
             </select>
           </div>
 

@@ -59,23 +59,6 @@ export function Register({ onSubmit }: RegisterProps) {
           {errors.fullName && <span style={styles.errorText}>{errors.fullName}</span>}
         </div>
 
-        <div style={styles.fieldGroup}>
-          <label style={styles.label} htmlFor="register-role">
-            Role
-          </label>
-          <select
-            id="register-role"
-            value={form.role}
-            onChange={(event) => setForm((current) => ({ ...current, role: event.target.value as Role }))}
-            style={styles.input}
-          >
-            {Object.values(Role).map((role) => (
-              <option key={role} value={role}>
-                {role}
-              </option>
-            ))}
-          </select>
-        </div>
       </div>
 
       <div style={styles.fieldGroup}>
