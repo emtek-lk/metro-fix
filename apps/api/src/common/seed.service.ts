@@ -82,12 +82,8 @@ export class SeedService implements OnApplicationBootstrap {
       users[data.email] = user;
     }
 
-    const jobCount = await this.jobRepository.count();
-    if (jobCount > 0) {
-      this.logger.log('Data already seeded. Skipping seed process.');
-      return;
-    }
-
+    // Worker profiles are idempotent and must exist for the demo worker logins even when
+    // jobs already exist (the demo users may have been added to an older database).
     const worker1Data = {
       user: users['worker1@demo.local'],
       rating: 4.8,
@@ -115,6 +111,12 @@ export class SeedService implements OnApplicationBootstrap {
     let worker2 = await this.workerRepository.findOne({ where: { user: { id: users['worker2@demo.local'].id } } });
     if (!worker2) {
       worker2 = await this.workerRepository.save(this.workerRepository.create(worker2Data as Partial<WorkerEntity>));
+    }
+
+    const jobCount = await this.jobRepository.count();
+    if (jobCount > 0) {
+      this.logger.log('Data already seeded. Skipping seed process.');
+      return;
     }
 
     const customersData = [

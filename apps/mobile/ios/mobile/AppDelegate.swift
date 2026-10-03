@@ -22,13 +22,7 @@ class AppDelegate: ExpoAppDelegate {
     reactNativeDelegate = delegate
     reactNativeFactory = factory
 
-    window = UIWindow(frame: UIScreen.main.bounds)
-
-    factory.startReactNative(
-      withModuleName: "mobile",
-      in: window,
-      launchOptions: launchOptions
-    )
+    // The window is created and React Native started in SceneDelegate (UIScene lifecycle).
 
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
