@@ -25,18 +25,18 @@ interface CustomerTrackingViewProps {
 }
 
 /**
- * Timeline order for the 7-stage lifecycle. Order only — the label, icon and
+ * Timeline order for the job lifecycle. Order only — the label, icon and
  * colour for each stage come from the shared status map so the timeline stays
  * consistent with every StatusPill elsewhere in the app.
  */
 const LIFECYCLE_STAGES: JobStatus[] = [
   JobStatus.REQUESTED,
-  JobStatus.PENDING_ACCEPTANCE,
   JobStatus.ASSIGNED,
   JobStatus.ON_ROUTE,
   JobStatus.INSPECTION,
   JobStatus.IN_PROGRESS,
   JobStatus.COMPLETED,
+  JobStatus.CLOSED,
 ];
 
 export const CustomerTrackingView: React.FC<CustomerTrackingViewProps> = ({

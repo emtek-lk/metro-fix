@@ -12,17 +12,11 @@ export class ServicesService {
   ) {}
 
   async findAll(): Promise<ServiceCatalogEntity[]> {
-    return this.catalogRepo.find({ order: { createdAt: 'DESC' } });
+    return this.catalogRepo.find({ order: { sortOrder: 'ASC', serviceName: 'ASC' } });
   }
 
   async create(dto: CreateServiceDto): Promise<ServiceCatalogEntity> {
-    const item = this.catalogRepo.create({
-      serviceName: dto.serviceName,
-      pillarCategory: dto.pillarCategory,
-      basePrice: dto.basePrice,
-      requiredSubscriptionTier: dto.requiredSubscriptionTier,
-      status: dto.status || 'Active',
-    });
+    const item = this.catalogRepo.create({ ...dto, status: dto.status || 'Active' });
     return this.catalogRepo.save(item);
   }
 }

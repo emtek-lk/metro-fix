@@ -27,7 +27,10 @@ export const JobHistoryScreen: React.FC = () => {
 
   const historyJobs = Array.isArray(jobs)
     ? jobs.filter(
-        (j) => j.status === JobStatus.COMPLETED || j.status === JobStatus.IN_PROGRESS,
+        (j) =>
+          j.status === JobStatus.COMPLETED ||
+          j.status === JobStatus.CLOSED ||
+          j.status === JobStatus.IN_PROGRESS,
       )
     : [];
 

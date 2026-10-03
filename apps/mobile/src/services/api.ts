@@ -130,6 +130,17 @@ export class MobileApiService {
   }
 
   /**
+   * Worker declines a job (e.g. unserviceable at inspection); it returns to REQUESTED
+   * POST /jobs/:id/reject
+   */
+  async rejectJob(jobId: string, reason: string): Promise<ServiceRequest> {
+    const res = await apiClient.post(`/jobs/${jobId}/reject`, { reason });
+    const updated: ServiceRequest = res.data;
+    realtimeSocket.emitLocalUpdate('job.updated', updated);
+    return updated;
+  }
+
+  /**
    * Submits signature and photo proof for a job ticket
    * POST /jobs/:id/proof
    */

@@ -17,7 +17,8 @@ export function AuthShell({ onAuthenticated }: AuthShellProps) {
 
   const handleLoginSuccess = (data: { accessToken: string; user: User }) => {
     const { accessToken, user } = data;
-    const targetPath = user.role === Role.ADMIN ? '/admin' : '/dispatch';
+    const targetPath =
+      user.role === Role.ADMIN ? '/admin' : user.role === Role.CUSTOMER ? '/portal/services' : '/dispatch';
 
     try {
       localStorage.setItem('metrofix_token', accessToken);
@@ -30,8 +31,9 @@ export function AuthShell({ onAuthenticated }: AuthShellProps) {
   };
 
   const handleRegistrationSuccess = (values: RegistrationInput) => {
-    const role = values.role || Role.CUSTOMER;
-    const targetPath = role === Role.ADMIN ? '/admin' : '/dispatch';
+    // Self-registration only ever creates customers; staff accounts are created by an admin.
+    const role = Role.CUSTOMER;
+    const targetPath = '/portal/services';
     const mockToken = `mock_token_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
     const user: User = {

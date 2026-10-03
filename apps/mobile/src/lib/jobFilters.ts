@@ -2,7 +2,9 @@ import { JobStatus, ServiceRequest } from '@metro-fix/core-types';
 
 export type JobFilter = 'all' | 'active' | 'done';
 
-const isDone = (job: Pick<ServiceRequest, 'status'>) => job.status === JobStatus.COMPLETED;
+/** Finished work: completed by the technician, or signed off (closed) by dispatch. */
+const isDone = (job: Pick<ServiceRequest, 'status'>) =>
+  job.status === JobStatus.COMPLETED || job.status === JobStatus.CLOSED;
 
 const stamp = (job: Pick<ServiceRequest, 'createdAt' | 'updatedAt'>): number =>
   new Date((job.updatedAt ?? job.createdAt) as string | Date).getTime() || 0;

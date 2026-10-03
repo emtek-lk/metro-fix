@@ -2,7 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { BackHandler } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { JobStatus, ServiceRequest, ServicePillar, FacilityType } from '@metro-fix/core-types';
+import { JobStatus, ServiceRequest } from '@metro-fix/core-types';
 import { useAuth } from '../context/AuthContext';
 import { NewJobAlertModal } from '../components/NewJobAlertModal';
 import { WorkerDashboard } from '../components/WorkerDashboard';
@@ -11,6 +11,7 @@ import { NotificationsScreen } from '../components/Notifications';
 import { ProfileScreen } from '../components/Profile';
 import { FloatingTabBar, type TabItem } from '../components/ui/FloatingTabBar';
 import { apiService } from '../services/api';
+import { apiClient } from '../lib/api';
 import { useNotifications } from '../hooks/useNotifications';
 import { ScreenShell } from './ScreenShell';
 import { TabPanes } from './TabPanes';
@@ -22,15 +23,6 @@ const WORKER_TABS: TabItem[] = [
   { id: 'alerts', label: 'Alerts', icon: 'bell' },
   { id: 'profile', label: 'Profile', icon: 'user' },
 ];
-
-// Template for the "Simulate incoming job" action, which creates a real job via the API.
-const SAMPLE_JOB_INPUT = {
-  title: 'Commercial HVAC Roof Chiller Fault',
-  description: 'Primary compressor circuit pressure drop detected. Requires diagnostic inspection and quote.',
-  servicePillar: ServicePillar.HARD,
-  facilityType: FacilityType.COMMERCIAL,
-  location: { latitude: 37.7749, longitude: -122.4194 },
-};
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Main'>;
 
@@ -60,12 +52,19 @@ export function WorkerMain({ navigation }: Props) {
 
   const openJob = (job: ServiceRequest) => navigation.navigate('JobDetail', { job });
 
+  // Dev helper: self-assign the oldest open REQUESTED job so the dispatch alert can be exercised.
   const handleSimulateAlert = async () => {
     try {
-      // Create a real REQUESTED job, then ping this worker so accept / reject hit real data.
-      const created = await apiService.createJob({ ...SAMPLE_JOB_INPUT, customerId: user.id });
-      const pinged = await apiService.updateJobStatus(created.id, JobStatus.PENDING_ACCEPTANCE, user.id);
-      setIncomingJob(pinged);
+      const res = await apiClient.get<ServiceRequest[]>('/jobs');
+      const open = [...res.data]
+        .filter((job) => job.status === JobStatus.REQUESTED)
+        .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))[0];
+      if (!open) {
+        console.warn('No REQUESTED jobs available to simulate a dispatch.');
+        return;
+      }
+      const assigned = await apiService.updateJobStatus(open.id, JobStatus.ASSIGNED, user.id);
+      setIncomingJob(assigned);
       setAlertVisible(true);
     } catch (error) {
       console.error('Failed to simulate incoming job:', error);

@@ -8,6 +8,8 @@ import { AddWorkerModal } from './features/workers/AddWorkerModal';
 import { AddServiceModal } from './features/services/AddServiceModal';
 import { AddSubscriptionModal } from './features/subscriptions/AddSubscriptionModal';
 import { ProfileModal } from './features/profile/ProfileModal';
+import { PortalServices } from './features/portal/PortalServices';
+import { PortalRequests } from './features/portal/PortalRequests';
 import { NotFound } from './features/errors/NotFound';
 import { Unauthorized } from './features/errors/Unauthorized';
 import { evaluateRouteGuard, getHomePathForRole, isKnownRoute } from './routing/routeGuard';
@@ -27,6 +29,8 @@ const pathToConfig: Record<string, { label: string; viewType?: AdminViewType }> 
   '/subscriptions': { label: 'Subscriptions', viewType: 'subscriptions' },
   '/financials': { label: 'Financials', viewType: 'financials' },
   '/admin': { label: 'Customers', viewType: 'customers' },
+  '/portal/services': { label: 'Browse Services' },
+  '/portal/requests': { label: 'My Requests' },
 };
 
 const labelToPath: Record<string, string> = {
@@ -37,6 +41,8 @@ const labelToPath: Record<string, string> = {
   'Service Catalog': '/service-catalog',
   'Subscriptions': '/subscriptions',
   'Financials': '/financials',
+  'Browse Services': '/portal/services',
+  'My Requests': '/portal/requests',
 };
 
 // ─── Shared Styles ───────────────────────────────────────────────────
@@ -80,23 +86,6 @@ function getInitialState(): { user: User | null; route: string } {
   }
 
   const currentPath = window.location.pathname;
-  const searchParams = new URLSearchParams(window.location.search);
-
-  if (searchParams.get('bypass') === '1') {
-    const bypassRole = searchParams.get('role') === 'admin' ? Role.ADMIN : Role.CUSTOMER_CARE;
-    const targetRoute = currentPath !== '/' && currentPath !== '/login' ? currentPath : (bypassRole === Role.ADMIN ? '/customers' : '/dispatch');
-    return {
-      user: {
-        id: 'usr_demo_001',
-        fullName: bypassRole === Role.ADMIN ? 'System Administrator' : 'Customer Care Dispatcher',
-        email: bypassRole === Role.ADMIN ? 'admin@demo.local' : 'dispatch@demo.local',
-        role: bypassRole,
-        createdAt: new Date().toISOString(),
-      },
-      route: targetRoute,
-    };
-  }
-
   try {
     const storedToken = localStorage.getItem('metrofix_token');
     const storedUserJson = localStorage.getItem('metrofix_user');
@@ -104,7 +93,7 @@ function getInitialState(): { user: User | null; route: string } {
       const parsedUser = JSON.parse(storedUserJson) as User;
       const validPath = currentPath !== '/' && currentPath !== '/login' && pathToConfig[currentPath]
         ? currentPath
-        : (parsedUser.role === Role.ADMIN ? '/customers' : '/dispatch');
+        : getHomePathForRole(parsedUser.role);
       return { user: parsedUser, route: validPath };
     }
   } catch {
@@ -127,6 +116,7 @@ export default function App() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   const [refreshKey, setRefreshKey] = useState(0);
+  const [portalRefresh, setPortalRefresh] = useState(0);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
@@ -160,7 +150,8 @@ export default function App() {
 
   const handleAuthenticated = (authUser: User, _token: string, targetPath: string) => {
     setUser(authUser);
-    const destination = targetPath === '/admin' ? '/customers' : (targetPath || '/dispatch');
+    // Always land on the role's own home: customers must never open the dispatch board.
+    const destination = targetPath === '/admin' ? '/customers' : (targetPath || getHomePathForRole(authUser.role));
     navigateTo(destination);
   };
 
@@ -370,6 +361,10 @@ export default function App() {
         return <AdminWorkspace activeView="subscriptions" />;
       case '/financials':
         return <AdminWorkspace activeView="financials" />;
+      case '/portal/services':
+        return <PortalServices onRequested={() => { setPortalRefresh((k) => k + 1); showToast('Request sent! Dispatch will assign a technician shortly.', 'success'); navigateTo('/portal/requests'); }} />;
+      case '/portal/requests':
+        return <PortalRequests refreshKey={portalRefresh} />;
       case '/dispatch':
       default:
         return <CustomerCareView />;

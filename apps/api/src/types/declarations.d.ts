@@ -15,8 +15,12 @@ declare module '@nestjs/websockets' {
 declare module 'socket.io' {
   export interface Server {
     emit(event: string, ...args: any[]): boolean;
+    to(room: string): Server;
   }
   export interface Socket {
     id: string;
+    handshake: { auth?: Record<string, unknown> };
+    join(room: string): void;
+    disconnect(close?: boolean): void;
   }
 }

@@ -19,13 +19,14 @@ import { registerPushTokenSchema, RegisterPushTokenDto } from './dto/register-pu
 import { updateWorkerLocationSchema, UpdateWorkerLocationDto } from './dto/update-worker-location.dto';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 
-import { Public } from '../auth/public.decorator';
+import { Role } from '@metro-fix/core-types';
+import { Roles } from '../auth/roles.decorator';
 
 @Controller('workers')
 export class WorkersController {
   constructor(private readonly workersService: WorkersService) {}
 
-  @Public()
+  @Roles(Role.ADMIN, Role.CUSTOMER_CARE)
   @Get()
   async findAll(): Promise<WorkerEntity[]> {
     return this.workersService.findAll();
@@ -46,16 +47,19 @@ export class WorkersController {
     return this.workersService.updateWorkerLocation(userId, dto);
   }
 
+  @Roles(Role.ADMIN)
   @Post()
   async createWorker(@Body() dto: CreateWorkerDto): Promise<WorkerEntity> {
     return this.workersService.createWorker(dto);
   }
 
+  @Roles(Role.ADMIN, Role.CUSTOMER_CARE)
   @Post('ping')
   async pingWorkers() {
     return this.workersService.pingAllWorkers();
   }
 
+  @Roles(Role.ADMIN, Role.CUSTOMER_CARE)
   @Get('dispatch-search')
   async getAvailableWorkersForJob(
     @Query('jobId') jobId: string,
@@ -64,6 +68,7 @@ export class WorkersController {
     return this.workersService.getAvailableWorkersForJob(jobId, radius);
   }
 
+  @Roles(Role.ADMIN, Role.CUSTOMER_CARE)
   @Get(':id')
   async findOne(@Param('id') id: string): Promise<WorkerEntity> {
     return this.workersService.findOne(id);
@@ -74,6 +79,7 @@ export class WorkersController {
 export class UsersController {
   constructor(private readonly workersService: WorkersService) {}
 
+  @Roles(Role.ADMIN)
   @Post()
   async createUser(@Body() dto: CreateWorkerDto): Promise<WorkerEntity> {
     return this.workersService.createWorker(dto);

@@ -3,13 +3,21 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { SubscriptionTier, FacilityType } from '@metro-fix/core-types';
+import { TIER_LABELS } from '../../lib/catalog';
 import { API_BASE_URL } from '../../lib/api';
 import { useModalAccessibility } from '../../hooks/useModalAccessibility';
 
 export const addSubscriptionSchema = z.object({
   tierName: z.nativeEnum(SubscriptionTier),
   targetFacility: z.nativeEnum(FacilityType),
-  monthlyFee: z.string().trim().min(1, 'Monthly fee is required'),
+  monthlyFeeLkr: z.number({ error: 'Enter the monthly fee in LKR' }).nonnegative(),
+  annualFeeLkr: z.number({ error: 'Enter a number' }).nonnegative().nullable(),
+  isCustomPriced: z.boolean(),
+  includedVisitsPerMonth: z.number({ error: 'Enter a number' }).int().nonnegative().nullable(),
+  includedLabourHoursPerMonth: z.number({ error: 'Enter a number' }).nonnegative().nullable(),
+  labourDiscountPct: z.number({ error: 'Enter a percentage' }).min(0).max(100),
+  inspectionCadence: z.enum(['NONE', 'ANNUAL', 'QUARTERLY', 'MONTHLY']),
+  callOutWaived: z.boolean(),
   includedServices: z.string().trim().min(5, 'Included services description is required'),
 });
 
@@ -34,10 +42,17 @@ export function AddSubscriptionModal({ isOpen, onClose, onSubscriptionAdded }: A
   } = useForm<AddSubscriptionInput>({
     resolver: zodResolver(addSubscriptionSchema),
     defaultValues: {
-      tierName: SubscriptionTier.BASIC,
-      targetFacility: FacilityType.COMMERCIAL,
-      monthlyFee: '$499/mo',
-      includedServices: 'Routine Soft Maintenance & Dispatch',
+      tierName: SubscriptionTier.ESSENTIAL,
+      targetFacility: FacilityType.RESIDENTIAL,
+      monthlyFeeLkr: 3500,
+      annualFeeLkr: 35000,
+      isCustomPriced: false,
+      includedVisitsPerMonth: 1,
+      includedLabourHoursPerMonth: 1,
+      labourDiscountPct: 10,
+      inspectionCadence: 'ANNUAL',
+      callOutWaived: true,
+      includedServices: 'Priority technician allocation; one visit per month',
     },
   });
 
@@ -109,9 +124,11 @@ export function AddSubscriptionModal({ isOpen, onClose, onSubscriptionAdded }: A
                 Subscription Tier *
               </label>
               <select id="tier-name" {...register('tierName')} style={styles.select}>
-                <option value={SubscriptionTier.BASIC}>Basic Tier</option>
-                <option value={SubscriptionTier.PLUS}>Plus Tier</option>
-                <option value={SubscriptionTier.PREMIUM}>Premium Tier</option>
+                {Object.values(SubscriptionTier)
+                  .filter((value) => value === value.toUpperCase())
+                  .map((value) => (
+                    <option key={value} value={value}>{TIER_LABELS[value]}</option>
+                  ))}
               </select>
             </div>
 
@@ -127,21 +144,57 @@ export function AddSubscriptionModal({ isOpen, onClose, onSubscriptionAdded }: A
             </div>
           </div>
 
-          <div style={styles.fieldGroup}>
-            <label style={styles.label} htmlFor="monthly-fee">
-              Monthly Fee ($/mo) *
+          <div style={styles.row}>
+            <div style={styles.fieldGroup}>
+              <label style={styles.label} htmlFor="monthly-fee">Monthly Fee (LKR) *</label>
+              <input id="monthly-fee" type="number" min={0} {...register('monthlyFeeLkr', { valueAsNumber: true })}
+                style={{ ...styles.input, ...(errors.monthlyFeeLkr ? styles.inputError : undefined) }} />
+              {errors.monthlyFeeLkr && <span style={styles.fieldError}>{errors.monthlyFeeLkr.message}</span>}
+            </div>
+            <div style={styles.fieldGroup}>
+              <label style={styles.label} htmlFor="annual-fee">Annual Fee (LKR)</label>
+              <input id="annual-fee" type="number" min={0} {...register('annualFeeLkr', { setValueAs: (value) => (value === '' || value === null || value === undefined ? null : Number(value)) })}
+                style={styles.input} />
+            </div>
+          </div>
+
+          <div style={styles.row}>
+            <div style={styles.fieldGroup}>
+              <label style={styles.label} htmlFor="visits">Visits / month (blank = per SLA)</label>
+              <input id="visits" type="number" min={0} {...register('includedVisitsPerMonth', { setValueAs: (value) => (value === '' || value === null || value === undefined ? null : Number(value)) })}
+                style={styles.input} />
+            </div>
+            <div style={styles.fieldGroup}>
+              <label style={styles.label} htmlFor="labour-hours">Labour hours / month</label>
+              <input id="labour-hours" type="number" min={0} step="0.5" {...register('includedLabourHoursPerMonth', { setValueAs: (value) => (value === '' || value === null || value === undefined ? null : Number(value)) })}
+                style={styles.input} />
+            </div>
+          </div>
+
+          <div style={styles.row}>
+            <div style={styles.fieldGroup}>
+              <label style={styles.label} htmlFor="labour-discount">Extra labour discount (%)</label>
+              <input id="labour-discount" type="number" min={0} max={100} {...register('labourDiscountPct', { valueAsNumber: true })}
+                style={styles.input} />
+            </div>
+            <div style={styles.fieldGroup}>
+              <label style={styles.label} htmlFor="inspection-cadence">Facility inspection</label>
+              <select id="inspection-cadence" {...register('inspectionCadence')} style={styles.select}>
+                <option value="NONE">None</option>
+                <option value="ANNUAL">Annual</option>
+                <option value="QUARTERLY">Quarterly</option>
+                <option value="MONTHLY">Monthly</option>
+              </select>
+            </div>
+          </div>
+
+          <div style={{ ...styles.row, alignItems: 'center' }}>
+            <label style={{ ...styles.label, display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input type="checkbox" {...register('callOutWaived')} /> No call-out charge
             </label>
-            <input
-              id="monthly-fee"
-              type="text"
-              {...register('monthlyFee')}
-              placeholder="e.g. $499/mo"
-              style={{
-                ...styles.input,
-                ...(errors.monthlyFee ? styles.inputError : undefined),
-              }}
-            />
-            {errors.monthlyFee && <span style={styles.fieldError}>{errors.monthlyFee.message}</span>}
+            <label style={{ ...styles.label, display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input type="checkbox" {...register('isCustomPriced')} /> Custom priced (SLA)
+            </label>
           </div>
 
           <div style={styles.fieldGroup}>

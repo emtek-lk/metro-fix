@@ -7,22 +7,22 @@ import { WebSocketService } from '../../lib/websocket';
 
 const boardOrder = [
   JobStatus.Requested,
-  JobStatus.PendingAcceptance,
   JobStatus.Assigned,
   JobStatus.OnRoute,
   JobStatus.Inspection,
   JobStatus.InProgress,
   JobStatus.Completed,
+  JobStatus.Closed,
 ] as const;
 
 const statusLabels: Record<JobStatus, string> = {
   [JobStatus.Requested]: 'REQUESTED',
-  [JobStatus.PendingAcceptance]: 'PENDING_ACCEPTANCE',
   [JobStatus.Assigned]: 'ASSIGNED',
   [JobStatus.OnRoute]: 'ON_ROUTE',
   [JobStatus.Inspection]: 'INSPECTION',
   [JobStatus.InProgress]: 'IN_PROGRESS',
   [JobStatus.Completed]: 'COMPLETED',
+  [JobStatus.Closed]: 'CLOSED',
 };
 
 type UrgencyLevel = 'Low' | 'Medium' | 'High' | 'Critical';
@@ -108,18 +108,6 @@ const mockCards: DispatchCard[] = [
     status: JobStatus.Requested,
     summary: 'Primary chilled water pump vibration needs immediate triage.',
     createdAt: '2026-07-22T07:00:00.000Z',
-  },
-  {
-    id: 'req-1002',
-    title: 'Lobby deep clean',
-    customerName: 'Tower One Management',
-    serviceType: ServiceType.Soft,
-    urgency: 'High',
-    location: 'Tower Lobby',
-    assignedWorker: null,
-    status: JobStatus.PendingAcceptance,
-    summary: 'Worker ping sent and awaiting a response before dispatch lock-in.',
-    createdAt: '2026-07-22T08:10:00.000Z',
   },
   {
     id: 'req-1003',
@@ -208,6 +196,11 @@ const mockCards: DispatchCard[] = [
   },
 ];
 
+const toUrgency = (value?: string): UrgencyLevel => {
+  const normalized = (value ?? 'MEDIUM').toUpperCase();
+  return (normalized.charAt(0) + normalized.slice(1).toLowerCase()) as UrgencyLevel;
+};
+
 function createInitialColumns(): Record<JobStatus, DispatchCard[]> {
   return boardOrder.reduce(
     (collection, status) => {
@@ -269,12 +262,12 @@ export function CustomerCareView() {
         if (!Array.isArray(data) || data.length === 0) return;
         const newCols: Record<JobStatus, DispatchCard[]> = {
           [JobStatus.Requested]: [],
-          [JobStatus.PendingAcceptance]: [],
           [JobStatus.Assigned]: [],
           [JobStatus.OnRoute]: [],
           [JobStatus.Inspection]: [],
           [JobStatus.InProgress]: [],
           [JobStatus.Completed]: [],
+          [JobStatus.Closed]: [],
         };
         data.forEach((job) => {
           const card: DispatchCard = {
@@ -282,7 +275,7 @@ export function CustomerCareView() {
             title: job.title || 'Service Request',
             customerName: job.customer?.user?.fullName || 'Customer Site',
             serviceType: (job.servicePillar as ServiceType) || ServiceType.Hard,
-            urgency: 'Medium',
+            urgency: toUrgency(job.urgency),
             location: job.facilityType || 'Site Location',
             assignedWorker: job.worker
               ? {
@@ -319,7 +312,7 @@ export function CustomerCareView() {
   // Setup WebSocket for real-time job updates
   useEffect(() => {
     const wsService = new WebSocketService(API_BASE_URL);
-    wsService.connect();
+    wsService.connect(localStorage.getItem('metrofix_token'));
 
     // Listen for new jobs
     const unsubscribeCreate = wsService.on('job.created', (newJob) => {
@@ -328,9 +321,9 @@ export function CustomerCareView() {
         const card: DispatchCard = {
           id: newJob.id,
           title: newJob.title || 'Service Request',
-          customerName: 'New Job',
+          customerName: (newJob as any).customer?.user?.fullName || 'Customer Site',
           serviceType: (newJob.servicePillar as ServiceType) || ServiceType.Hard,
-          urgency: 'Medium',
+          urgency: toUrgency((newJob as any).urgency),
           location: newJob.facilityType || 'Site Location',
           assignedWorker: null,
           status: (newJob.status as JobStatus) || JobStatus.Requested,
@@ -364,11 +357,18 @@ export function CustomerCareView() {
         const newCard: DispatchCard = {
           id: updatedJob.id,
           title: updatedJob.title || 'Service Request',
-          customerName: 'Updated Job',
+          customerName: (updatedJob as any).customer?.user?.fullName || 'Customer Site',
           serviceType: (updatedJob.servicePillar as ServiceType) || ServiceType.Hard,
-          urgency: 'Medium',
+          urgency: toUrgency((updatedJob as any).urgency),
           location: updatedJob.facilityType || 'Site Location',
-          assignedWorker: null,
+          assignedWorker: (updatedJob as any).worker
+            ? {
+                id: (updatedJob as any).worker.id,
+                fullName: (updatedJob as any).worker.user?.fullName || 'Assigned Worker',
+                rating: (updatedJob as any).worker.rating || 5.0,
+                proximityKm: 1.5,
+              }
+            : null,
           status: (updatedJob.status as JobStatus) || JobStatus.Requested,
           summary: updatedJob.description || 'Service request description',
           createdAt: typeof updatedJob.createdAt === "string" ? updatedJob.createdAt : updatedJob.createdAt instanceof Date ? updatedJob.createdAt.toISOString() : new Date().toISOString(),
@@ -580,17 +580,23 @@ export function CustomerCareView() {
     }
   };
 
-  const handleRejectSimulation = (cardId: string) => {
-    moveCard(
-      cardId,
-      JobStatus.Requested,
-      (card) => ({
-        ...card,
-        status: JobStatus.Requested,
-        assignedWorker: null,
-      }),
-      0
-    );
+  /** Dispatcher sign-off: reviewed proof of work, archive the ticket (COMPLETED -> CLOSED). */
+  const handleCloseJob = async (cardId: string) => {
+    const token = localStorage.getItem('metrofix_token');
+    try {
+      const response = await fetch(`${API_BASE_URL}/jobs/${cardId}/close`, {
+        method: 'POST',
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      moveCard(cardId, JobStatus.Closed, (card) => ({ ...card, status: JobStatus.Closed }), 0);
+      showToast('Job closed and archived.', 'success');
+    } catch (err) {
+      showToast('Could not close the job. Please try again.', 'error');
+      console.warn('Failed to close job:', err);
+    }
   };
 
   const handleDragEnd = (result: DropResult) => {
@@ -607,7 +613,7 @@ export function CustomerCareView() {
     const sourceStatus = source.droppableId as JobStatus;
     const destinationStatus = destination.droppableId as JobStatus;
 
-    if (sourceStatus === JobStatus.Requested && destinationStatus === JobStatus.PendingAcceptance) {
+    if (sourceStatus === JobStatus.Requested && destinationStatus === JobStatus.Assigned) {
       openDispatchModal(draggableId);
       return;
     }
@@ -802,16 +808,16 @@ export function CustomerCareView() {
                                   </button>
                                 )}
 
-                                {status === JobStatus.PendingAcceptance && (
+                                {status === JobStatus.Completed && (
                                   <button
                                     type="button"
-                                    style={styles.rejectButton}
+                                    style={styles.secondaryActionButton}
                                     onClick={(event) => {
                                       event.stopPropagation();
-                                      handleRejectSimulation(item.id);
+                                      void handleCloseJob(item.id);
                                     }}
                                   >
-                                    Simulate Reject
+                                    Approve &amp; Close
                                   </button>
                                 )}
                               </div>
@@ -880,7 +886,7 @@ export function CustomerCareView() {
 
               <div style={styles.dispatchPreview}>
                 <div style={styles.dispatchLaneTitle}>Dispatch summary</div>
-                <div style={styles.dispatchDropZone}>Move job to PENDING_ACCEPTANCE with selected worker.</div>
+                <div style={styles.dispatchDropZone}>Assign job to the selected worker.</div>
                 <button type="button" style={styles.primaryButton} onClick={confirmDispatch} disabled={!selectedWorkerId}>
                   Confirm dispatch
                 </button>

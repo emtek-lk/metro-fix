@@ -32,11 +32,6 @@ const buildStatusPresentation = () => ({
     color: colors.textMuted, // #64748B — unchanged (was the default fallback)
     icon: 'file-text',
   },
-  [JobStatus.PENDING_ACCEPTANCE]: {
-    label: 'Dispatching',
-    color: colors.warning, // #F59E0B — new; previously indistinguishable grey
-    icon: 'radio',
-  },
   [JobStatus.ASSIGNED]: {
     label: 'Assigned',
     color: '#6366F1', // indigo — new; previously indistinguishable grey
@@ -61,6 +56,11 @@ const buildStatusPresentation = () => ({
     label: 'Completed',
     color: colors.success, // #10B981 — unchanged
     icon: 'check-circle',
+  },
+  [JobStatus.CLOSED]: {
+    label: 'Closed',
+    color: colors.textMuted,
+    icon: 'archive',
   },
 } satisfies Record<JobStatus, StatusPresentation>);
 

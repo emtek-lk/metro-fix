@@ -120,13 +120,12 @@ Microsoft SQL Server 2022 (via Docker image `mcr.microsoft.com/mssql/server:2022
 TypeORM `synchronize: true` is enabled in non-production environments. Schema changes in entity files are automatically applied on API restart.
 
 ### Auto-Seed
-`SeedService` runs on application bootstrap and creates:
-- **1 Admin user** (`admin@metro-fix.com`)
-- **3 Worker users** (Omar, Amina, Malik) with worker profiles
-- **3 Customer users** (Eleanor, Marcus, Sophia) with customer profiles
-- **6 Sample jobs** across all 7 lifecycle statuses
+`SeedService` runs on every application bootstrap:
+- Upserts the 4 subscription plans and 16 catalog services (`apps/api/src/common/seed-data.ts`).
+- Creates/refreshes the demo users: admin, dispatcher, 2 workers, 3 customers.
+- Only when there are no jobs: creates 3 sample jobs.
 
-All seeded accounts use password: `Password123!`
+All demo accounts use password: `Demo123!` (see `API.md` for the list).
 
 ### Reset Database
 
@@ -160,7 +159,7 @@ curl http://localhost:3000/workers | head -c 200
 # 4. Login test
 curl -X POST http://localhost:3000/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"omar@metro-fix.com","password":"Password123!"}'
+  -d '{"email":"worker1@demo.local","password":"Demo123!"}'
 # Should return { accessToken: "...", user: { ... } }
 
 # 5. Create job test

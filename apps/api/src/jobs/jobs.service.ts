@@ -7,6 +7,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JobStatus } from '@metro-fix/core-types';
+import { RejectJobDto } from './dto/reject-job.dto';
 import { ServiceRequestEntity, WorkerEntity, CustomerEntity } from '../entities';
 import { UpdateJobStatusDto } from './dto/update-job-status.dto';
 import { CreateJobDto } from './dto/create-job.dto';
@@ -18,17 +19,21 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 
 /**
  * Allowed job lifecycle transitions (AGENTS.md section 4). Anything not listed is rejected.
- * PENDING_ACCEPTANCE -> REQUESTED is the worker reject / ignore auto-revert.
+ * ASSIGNED / INSPECTION -> REQUESTED is the worker reject: the job bounces back to the dispatcher.
  */
 const ALLOWED_TRANSITIONS: Record<JobStatus, JobStatus[]> = {
-  [JobStatus.REQUESTED]: [JobStatus.PENDING_ACCEPTANCE, JobStatus.ASSIGNED],
-  [JobStatus.PENDING_ACCEPTANCE]: [JobStatus.ASSIGNED, JobStatus.REQUESTED],
-  [JobStatus.ASSIGNED]: [JobStatus.ON_ROUTE],
+  [JobStatus.REQUESTED]: [JobStatus.ASSIGNED],
+  [JobStatus.ASSIGNED]: [JobStatus.ON_ROUTE, JobStatus.REQUESTED],
   [JobStatus.ON_ROUTE]: [JobStatus.INSPECTION],
-  [JobStatus.INSPECTION]: [JobStatus.IN_PROGRESS],
+  [JobStatus.INSPECTION]: [JobStatus.IN_PROGRESS, JobStatus.REQUESTED],
   [JobStatus.IN_PROGRESS]: [JobStatus.COMPLETED],
-  [JobStatus.COMPLETED]: [],
+  [JobStatus.COMPLETED]: [JobStatus.CLOSED],
+  [JobStatus.CLOSED]: [],
 };
+
+/** Default map centre (Colombo) used when a request arrives without coordinates. */
+const DEFAULT_LATITUDE = 6.9271;
+const DEFAULT_LONGITUDE = 79.8612;
 
 @Injectable()
 export class JobsService {
@@ -48,6 +53,19 @@ export class JobsService {
         customer: { user: true },
         worker: { user: true },
       },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  /** Jobs belonging to the customer profile of the given user id. */
+  async findForCustomerUser(userId: string): Promise<ServiceRequestEntity[]> {
+    const customer = await this.customerRepo.findOne({ where: { userId } });
+    if (!customer) {
+      return [];
+    }
+    return this.jobRepo.find({
+      where: { customerId: customer.id },
+      relations: { customer: { user: true }, worker: { user: true } },
       order: { createdAt: 'DESC' },
     });
   }
@@ -87,6 +105,10 @@ export class JobsService {
       }
     }
 
+    if (!customerExists && dto.customerId) {
+      throw new BadRequestException('No customer profile found for this account.');
+    }
+
     if (!customerExists) {
       const firstCustomer = await this.customerRepo.findOne({ where: {} });
       if (firstCustomer) {
@@ -102,8 +124,9 @@ export class JobsService {
       status: JobStatus.REQUESTED,
       customerId: targetCustomerId,
       workerId: null,
-      latitude: dto.location?.latitude ?? 37.7749,
-      longitude: dto.location?.longitude ?? -122.4194,
+      latitude: dto.location?.latitude ?? DEFAULT_LATITUDE,
+      longitude: dto.location?.longitude ?? DEFAULT_LONGITUDE,
+      urgency: dto.urgency ?? 'MEDIUM',
     });
 
     const savedJob = await this.jobRepo.save(job);
@@ -153,9 +176,9 @@ export class JobsService {
 
   /**
    * Pipeline State Transition Business Logic:
-   * 1. REQUESTED -> PENDING_ACCEPTANCE: Customer Care pings worker. Requires valid workerId.
-   * 2. PENDING_ACCEPTANCE -> REQUESTED: Worker rejects/ignores. System nullifies workerId.
-   * 3. Handles all 7-stage JobStatus lifecycle transitions.
+   * 1. REQUESTED -> ASSIGNED: Customer Care assigns a worker. Requires valid workerId.
+   * 2. ASSIGNED / INSPECTION -> REQUESTED: Worker rejects. System nullifies workerId.
+   * 3. Handles all 7-stage JobStatus lifecycle transitions (plus COMPLETED -> CLOSED sign-off).
    * Emits 'job.updated' event via WebSockets for real-time UI synchronization.
    */
   async updateJobStatus(
@@ -176,8 +199,6 @@ export class JobsService {
       workerId = null;
     } else if (dto.workerId) {
       workerId = (await this.resolveWorker(dto.workerId)).id;
-    } else if (dto.status === JobStatus.PENDING_ACCEPTANCE) {
-      throw new BadRequestException('A workerId is required to ping a worker.');
     }
 
     if (dto.status !== JobStatus.REQUESTED && workerId === undefined && !job.workerId) {
@@ -242,5 +263,30 @@ export class JobsService {
     const updatedFull = await this.findOne(id);
     this.jobsGateway.emitJobUpdated(updatedFull);
     return updatedFull;
+  }
+
+  /**
+   * Worker declines a job (typically at INSPECTION when it is unserviceable or out of scope).
+   * Clears the worker and returns the ticket to REQUESTED for the dispatcher to reassign.
+   */
+  async rejectJob(id: string, dto: RejectJobDto): Promise<ServiceRequestEntity> {
+    const job = await this.findOne(id);
+    if (job.status !== JobStatus.ASSIGNED && job.status !== JobStatus.INSPECTION) {
+      throw new ConflictException(`A job in ${job.status} cannot be rejected.`);
+    }
+    await this.jobRepo.update(
+      { id },
+      { status: JobStatus.REQUESTED, workerId: null, rejectReason: dto.reason },
+    );
+    const updatedFull = await this.findOne(id);
+    this.jobsGateway.emitJobUpdated(updatedFull);
+    return updatedFull;
+  }
+
+  /** Dispatcher / admin sign-off on a COMPLETED ticket (proof reviewed) -> CLOSED. */
+  async closeJob(id: string): Promise<ServiceRequestEntity> {
+    const job = await this.findOne(id);
+    this.assertTransition(job.status, JobStatus.CLOSED);
+    return this.applyStatus(id, JobStatus.CLOSED, undefined);
   }
 }

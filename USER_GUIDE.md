@@ -19,7 +19,7 @@ Welcome to the **METRO-FIX** Managed Dispatch Facility Management Platform docum
 * **Soft Services:** Commercial Deep Sanitization, Janitorial, Waste Management.
 * **Strategic Services:** Compliance Audits, High-Voltage Switchgear Inspection, Elevator Safety.
 * **Facility Types:** Residential, Commercial, Industrial.
-* **Subscription Tiers:** Basic, Plus, Premium.
+* **Subscription Tiers:** Access, Essential, Plus, Business.
 
 ---
 
@@ -31,8 +31,9 @@ The web dashboard uses a role-based access control (RBAC) entry shell accessible
 
 | Role | Email | Password | Primary Workspace / Route |
 | :--- | :--- | :--- | :--- |
-| **Customer Care Dispatcher** | `dispatch@metro-fix.com` | `password123` (or any 8+ chars) | Dispatch Board (`/dispatch`) |
-| **System Administrator** | `admin@metro-fix.com` | `password123` (or any 8+ chars) | Customer Directory (`/admin/customers`) |
+| **Customer Care Dispatcher** | `dispatch@demo.local` | `Demo123!` | Dispatch Board (`/dispatch`) |
+| **System Administrator** | `admin@demo.local` | `Demo123!` | Customers (`/customers`) |
+| **Customer** | `marcus@residences.lk` | `Demo123!` | Customer portal (`/portal/services`) |
 
 ### Navigation Structure
 * All navigation is unified within the fixed left Sidebar.
@@ -45,15 +46,15 @@ The web dashboard uses a role-based access control (RBAC) entry shell accessible
 
 The **Dispatch Board** (`/dispatch`) provides real-time visibility and manual control over all active service requests across their lifecycle.
 
-### The 7-Stage Service Lifecycle (Kanban Workflow)
+### The Service Lifecycle (Kanban Workflow)
 
-1. `REQUESTED`: New service job logged by customer or system.
-2. `PENDING_ACCEPTANCE`: Worker pinged by Customer Care; awaiting acceptance.
-3. `ASSIGNED`: Worker has accepted the job assignment.
-4. `ON_ROUTE`: Worker traveling to facility site (GPS tracking active).
-5. `INSPECTION`: Worker arrived on site, generating cost & time estimate quote.
-6. `IN_PROGRESS`: Service work actively being performed.
-7. `COMPLETED`: Work finalized, payment cleared, invoice generated.
+1. `REQUESTED`: New service job raised by the customer in the web portal.
+2. `ASSIGNED`: Customer Care has assigned a worker.
+3. `ON_ROUTE`: Worker traveling to facility site (GPS tracking active).
+4. `INSPECTION`: Worker arrived on site, generating cost & time estimate quote. A worker who cannot do the job rejects it with a reason and it returns to `REQUESTED`.
+5. `IN_PROGRESS`: Service work actively being performed.
+6. `COMPLETED`: Work finished; photo proof and customer signature captured.
+7. `CLOSED`: Dispatcher reviewed the proof and clicked **Approve & Close**; ticket archived and billed.
 
 ### Kanban Drag-and-Drop Operations
 * **Updating Status:** Click and hold any service request card, drag it to the desired destination column, and drop it.

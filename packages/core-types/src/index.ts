@@ -6,21 +6,21 @@ import { z } from 'zod';
 
 export enum JobStatus {
   REQUESTED = 'REQUESTED',
-  PENDING_ACCEPTANCE = 'PENDING_ACCEPTANCE',
   ASSIGNED = 'ASSIGNED',
   ON_ROUTE = 'ON_ROUTE',
   INSPECTION = 'INSPECTION',
   IN_PROGRESS = 'IN_PROGRESS',
   COMPLETED = 'COMPLETED',
+  CLOSED = 'CLOSED',
 
   // Backward-compatibility aliases
   Requested = 'REQUESTED',
-  PendingAcceptance = 'PENDING_ACCEPTANCE',
   Assigned = 'ASSIGNED',
   OnRoute = 'ON_ROUTE',
   Inspection = 'INSPECTION',
   InProgress = 'IN_PROGRESS',
   Completed = 'COMPLETED',
+  Closed = 'CLOSED',
 }
 
 export enum FacilityType {
@@ -49,15 +49,41 @@ export enum ServicePillar {
 export { ServicePillar as ServiceType };
 
 export enum SubscriptionTier {
-  BASIC = 'BASIC',
+  ACCESS = 'ACCESS',
+  ESSENTIAL = 'ESSENTIAL',
   PLUS = 'PLUS',
-  PREMIUM = 'PREMIUM',
+  BUSINESS = 'BUSINESS',
 
   // Backward-compatibility aliases
-  Basic = 'BASIC',
+  Access = 'ACCESS',
+  Essential = 'ESSENTIAL',
   Plus = 'PLUS',
-  Premium = 'PREMIUM',
+  Business = 'BUSINESS',
 }
+
+export enum ServiceGroup {
+  // Hard facility services
+  HVAC = 'HVAC',
+  ELECTRICAL = 'ELECTRICAL',
+  PLUMBING = 'PLUMBING',
+  BUILDING_AUTOMATION = 'BUILDING_AUTOMATION',
+  STRUCTURAL = 'STRUCTURAL',
+  FIRE_SAFETY = 'FIRE_SAFETY',
+  VERTICAL_TRANSPORT = 'VERTICAL_TRANSPORT',
+  // Soft facility services
+  CLEANING = 'CLEANING',
+  WASTE = 'WASTE',
+  SECURITY = 'SECURITY',
+  GROUNDS = 'GROUNDS',
+  CATERING = 'CATERING',
+  SPACE_MAIL = 'SPACE_MAIL',
+  // Strategic facility management
+  ENERGY = 'ENERGY',
+  COMPLIANCE = 'COMPLIANCE',
+  ASSET_LIFECYCLE = 'ASSET_LIFECYCLE',
+}
+
+export type InspectionCadence = 'NONE' | 'ANNUAL' | 'QUARTERLY' | 'MONTHLY';
 
 export enum Role {
   ADMIN = 'ADMIN',

@@ -1,7 +1,7 @@
 import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import type { User } from '@metro-fix/core-types';
 import { AdminWorkspace } from './AdminWorkspace';
-import { Sidebar, sidebarSections } from './Sidebar';
+import { Sidebar, sidebarSections, portalSections } from './Sidebar';
 import { useMediaQuery } from './useMediaQuery';
 
 export interface DashboardLayoutProps {
@@ -42,13 +42,21 @@ export function DashboardLayout({
   const filteredSections = useMemo(() => {
     const search = filterText.trim().toLowerCase();
 
-    return sidebarSections
+    // Menu follows the role: customers get the portal, dispatchers don't see Administration.
+    const roleSections =
+      userProfile.role === 'CUSTOMER'
+        ? portalSections
+        : userProfile.role === 'ADMIN'
+          ? sidebarSections
+          : sidebarSections.filter((section) => section.title !== 'ADMINISTRATION');
+
+    return roleSections
       .map((section) => ({
         ...section,
         items: section.items.filter((item) => !search || item.label.toLowerCase().includes(search)),
       }))
       .filter((entry) => entry.items.length > 0);
-  }, [filterText]);
+  }, [filterText, userProfile.role]);
 
   const initials = userProfile.fullName
     .split(' ')

@@ -30,6 +30,7 @@ import { haptics } from '../lib/haptics';
 import { useReduceMotion } from '../theme/useReduceMotion';
 import { themedStyles } from '../theme/themedStyles';
 import { shortRef } from '../lib/ticket';
+import { apiService } from '../services/api';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 
@@ -56,6 +57,11 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
   const [quoteCost, setQuoteCost] = useState(currentJob.quoteAmount?.toString() || '');
   const [quoteHours, setQuoteHours] = useState(currentJob.estimatedHours?.toString() || '');
   const [quoteNotes, setQuoteNotes] = useState(currentJob.quoteNotes || '');
+
+  // Reject (unserviceable / out of scope) state
+  const [rejecting, setRejecting] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+  const [rejectBusy, setRejectBusy] = useState(false);
 
   // Proof modal state
   const [proofModalVisible, setProofModalVisible] = useState(false);
@@ -97,6 +103,19 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
       onJobUpdated?.(updated);
       toast.success('The job is now in progress.', 'Quote submitted');
     } catch (e: any) { toast.error(e.message || 'Failed to submit quote.', 'Quote failed'); }
+  };
+
+  const handleReject = async () => {
+    if (rejectReason.trim().length < 3) return toast.error('Tell dispatch why you cannot do this job.', 'Reason required');
+    setRejectBusy(true);
+    try {
+      await stopWorkerBackgroundTracking();
+      await apiService.rejectJob(currentJob.id, rejectReason.trim());
+      haptics.success();
+      toast.success('Dispatch will reassign this ticket.', 'Job returned');
+      onBack();
+    } catch (e: any) { toast.error(e.message || 'Could not reject the job.', 'Could not return job'); }
+    finally { setRejectBusy(false); }
   };
 
   const handleTakePhoto = async () => {
@@ -285,10 +304,10 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
                 <View style={s.formRow}>
                   <Input
                     containerStyle={s.formHalf}
-                    label="Cost ($)"
+                    label="Cost (LKR)"
                     value={quoteCost}
                     onChangeText={setQuoteCost}
-                    placeholder="450.00"
+                    placeholder="4500"
                     keyboardType="decimal-pad"
                     returnKeyType="next"
                   />
@@ -312,6 +331,21 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
                 />
               </View>
               <Button title="Submit quote" onPress={handleQuote} isLoading={submitQuote.isPending} variant="primary" size="large" style={s.formSubmit} />
+            </Card>
+          )}
+
+          {/* ASSIGNED / INSPECTION: worker can decline and bounce the job back to dispatch */}
+          {(currentJob.status === JobStatus.ASSIGNED || currentJob.status === JobStatus.INSPECTION) && (
+            <Card variant="elevated" borderRadius={radius.xl} padding={spacing.xl} style={s.cardGap}>
+              {rejecting ? (
+                <>
+                  <Input label="Why can't you do this job?" value={rejectReason} onChangeText={setRejectReason} placeholder="e.g. Outside my trade / unsafe site" multiline numberOfLines={3} />
+                  <Button title="Return Job to Dispatch" onPress={handleReject} isLoading={rejectBusy} variant="danger" size="large" style={s.formSubmit} />
+                  <Button title="Cancel" onPress={() => setRejecting(false)} variant="secondary" size="large" style={s.formSubmit} />
+                </>
+              ) : (
+                <Button title="Can't do this job" onPress={() => setRejecting(true)} variant="danger" size="large" />
+              )}
             </Card>
           )}
         </View>

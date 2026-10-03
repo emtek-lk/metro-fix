@@ -220,3 +220,17 @@ cd apps/mobile && npx tsc --noEmit
 # Full monorepo dev
 npm run dev   # Uses turbo to start all apps
 ```
+
+---
+
+## 7. Pitfalls Found During the Spec Alignment (2026-10)
+
+- **Zod versions differ:** `@metro-fix/core-types` ships zod v3 schemas, the API and web use zod v4. Never nest a core-types *schema* inside an API/web schema (it throws `Invalid element at key ...` at request time, a 500). Re-declare the small schema locally, as `create-job.dto.ts` does. Core-types *enums and TS types* are fine to share.
+- **Zod v4 messages:** use `z.number({ error: '...' })`, not `invalid_type_error`.
+- **Authorization:** the global `JwtAuthGuard` authenticates; `@Roles()` (global `RolesGuard`) authorizes. Every new mutating route needs a `@Roles(...)`. Do not add `@Public()` to anything that reads or writes customer data.
+- **Customers never pick their own customerId:** `POST /jobs` by a CUSTOMER ignores the body `customerId` and uses the JWT user.
+- **Do not re-introduce `PENDING_ACCEPTANCE`.** Dispatch assigns directly; workers decline via `POST /jobs/:id/reject`.
+- **Money is LKR numbers in the DB** (`decimal`, read through a transformer). Format in the UI only (`formatLkr`). Do not store `"$500"`-style strings.
+- **Reference data lives in `apps/api/src/common/seed-data.ts`.** Change plans or the catalog there, not in two seed files.
+- **Schema changes rely on TypeORM `synchronize`** (no migrations yet). Changing a column's type on a table with data can fail or drop data; ask before altering shared dev databases.
+- **socket.io everywhere:** the web client must use `socket.io-client` and send `auth.token`; a raw `WebSocket` cannot talk to the gateway.

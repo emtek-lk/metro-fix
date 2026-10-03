@@ -14,7 +14,7 @@ import { z } from 'zod';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 export type FacilityType = 'Residential' | 'Commercial' | 'Industrial';
-export type SubscriptionTier = 'Basic' | 'Plus' | 'Premium';
+export type SubscriptionTier = 'Access' | 'Essential' | 'Plus' | 'Business';
 export type ServiceStatus = 'Active' | 'Disabled';
 export type ServicePillar = 'Hard' | 'Soft' | 'Strategic';
 
@@ -33,6 +33,8 @@ export type ServiceRecord = {
   id: string;
   serviceName: string;
   pillarCategory: ServicePillar;
+  serviceGroup: string;
+  description: string;
   basePrice: string;
   requiredSubscriptionTier: SubscriptionTier;
   status: ServiceStatus;
@@ -54,10 +56,19 @@ export type SubscriptionPlanRecord = {
   tierName: SubscriptionTier;
   targetFacility: FacilityType;
   monthlyFee: string;
+  annualFee: string;
+  allowance: string;
+  labourDiscount: string;
+  inspection: string;
   activeAccounts: number;
   includedServices: string;
   status: 'Active' | 'Draft';
 };
+
+/** API enums arrive upper-case (HARD, ACCESS...); the grids show them title-cased. */
+const titleCase = (value: string) => value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+const formatLkr = (value?: number | string | null) =>
+  value === null || value === undefined || value === '' ? '—' : `LKR ${Number(value).toLocaleString('en-LK')}`;
 
 export type FinancialRecord = {
   id: string;
@@ -75,7 +86,7 @@ export const createCustomerFormSchema = z.object({
   email: z.string().trim().email('Please enter a valid email address.'),
   phoneNumber: z.string().trim().min(7, 'Please enter a valid phone number.'),
   facilityType: z.enum(['Residential', 'Commercial', 'Industrial']),
-  subscriptionTier: z.enum(['Basic', 'Plus', 'Premium']).default('Basic'),
+  subscriptionTier: z.enum(['Access', 'Essential', 'Plus', 'Business']).default('Access'),
   physicalAddress: z.string().trim().min(5, 'Physical address must be at least 5 characters.'),
 });
 
@@ -99,7 +110,7 @@ const initialCustomerRows: CustomerRecord[] = [
     email: 'ops@metrologistics.com',
     phone: '+1 (555) 010-7781',
     facilityType: 'Industrial',
-    subscriptionTier: 'Premium',
+    subscriptionTier: 'Business',
     physicalAddress: '890 Harbor Blvd, Oakland, CA',
   },
   {
@@ -109,7 +120,7 @@ const initialCustomerRows: CustomerRecord[] = [
     email: 'facilities@crescentrg.com',
     phone: '+1 (555) 010-3389',
     facilityType: 'Commercial',
-    subscriptionTier: 'Basic',
+    subscriptionTier: 'Access',
     physicalAddress: '450 Plaza Way, San Jose, CA',
   },
   {
@@ -129,7 +140,7 @@ const initialCustomerRows: CustomerRecord[] = [
     email: 'property@greenfieldmall.com',
     phone: '+1 (555) 010-1208',
     facilityType: 'Commercial',
-    subscriptionTier: 'Premium',
+    subscriptionTier: 'Business',
     physicalAddress: '100 Grand Galleria, San Mateo, CA',
   },
   {
@@ -149,7 +160,7 @@ const initialCustomerRows: CustomerRecord[] = [
     email: 'dispatch@skylinetowers.com',
     phone: '+1 (555) 010-8819',
     facilityType: 'Commercial',
-    subscriptionTier: 'Premium',
+    subscriptionTier: 'Business',
     physicalAddress: '550 California St, San Francisco, CA',
   },
   {
@@ -169,7 +180,9 @@ const serviceRows: ServiceRecord[] = [
     id: 'svc-001',
     serviceName: 'Chiller Maintenance',
     pillarCategory: 'Hard',
-    basePrice: '$450',
+    serviceGroup: 'Hard',
+    description: '',
+    basePrice: 'LKR 135,000',
     requiredSubscriptionTier: 'Plus',
     status: 'Active',
   },
@@ -177,23 +190,29 @@ const serviceRows: ServiceRecord[] = [
     id: 'svc-002',
     serviceName: 'Deep Cleaning',
     pillarCategory: 'Soft',
-    basePrice: '$180',
-    requiredSubscriptionTier: 'Basic',
+    serviceGroup: 'Soft',
+    description: '',
+    basePrice: 'LKR 54,000',
+    requiredSubscriptionTier: 'Access',
     status: 'Active',
   },
   {
     id: 'svc-003',
     serviceName: 'Security Patrol Review',
     pillarCategory: 'Strategic',
-    basePrice: '$650',
-    requiredSubscriptionTier: 'Premium',
+    serviceGroup: 'Strategic',
+    description: '',
+    basePrice: 'LKR 195,000',
+    requiredSubscriptionTier: 'Business',
     status: 'Active',
   },
   {
     id: 'svc-004',
     serviceName: 'Fire Panel Compliance',
     pillarCategory: 'Hard',
-    basePrice: '$520',
+    serviceGroup: 'Hard',
+    description: '',
+    basePrice: 'LKR 156,000',
     requiredSubscriptionTier: 'Plus',
     status: 'Disabled',
   },
@@ -201,32 +220,40 @@ const serviceRows: ServiceRecord[] = [
     id: 'svc-005',
     serviceName: 'Floor Restoration',
     pillarCategory: 'Soft',
-    basePrice: '$320',
-    requiredSubscriptionTier: 'Basic',
+    serviceGroup: 'Soft',
+    description: '',
+    basePrice: 'LKR 96,000',
+    requiredSubscriptionTier: 'Access',
     status: 'Active',
   },
   {
     id: 'svc-006',
     serviceName: 'Energy Audit Planning',
     pillarCategory: 'Strategic',
-    basePrice: '$980',
-    requiredSubscriptionTier: 'Premium',
+    serviceGroup: 'Strategic',
+    description: '',
+    basePrice: 'LKR 294,000',
+    requiredSubscriptionTier: 'Business',
     status: 'Active',
   },
   {
     id: 'svc-007',
     serviceName: 'HVAC Air Filter Replacement',
     pillarCategory: 'Hard',
-    basePrice: '$280',
-    requiredSubscriptionTier: 'Basic',
+    serviceGroup: 'Hard',
+    description: '',
+    basePrice: 'LKR 84,000',
+    requiredSubscriptionTier: 'Access',
     status: 'Active',
   },
   {
     id: 'svc-008',
     serviceName: 'Waste Management Triage',
     pillarCategory: 'Soft',
-    basePrice: '$210',
-    requiredSubscriptionTier: 'Basic',
+    serviceGroup: 'Soft',
+    description: '',
+    basePrice: 'LKR 63,000',
+    requiredSubscriptionTier: 'Access',
     status: 'Active',
   },
 ];
@@ -241,9 +268,10 @@ const initialWorkerRows: WorkerRecord[] = [
 ];
 
 const initialSubscriptionRows: SubscriptionPlanRecord[] = [
-  { id: 'sub-tier-01', tierName: 'Basic', targetFacility: 'Residential', monthlyFee: '$299/mo', activeAccounts: 42, includedServices: 'Basic Soft FM, Standard Dispatch', status: 'Active' },
-  { id: 'sub-tier-02', tierName: 'Plus', targetFacility: 'Commercial', monthlyFee: '$799/mo', activeAccounts: 28, includedServices: 'Hard + Soft FM, Priority Dispatch', status: 'Active' },
-  { id: 'sub-tier-03', tierName: 'Premium', targetFacility: 'Industrial', monthlyFee: '$1,499/mo', activeAccounts: 14, includedServices: 'All Pillars, Dedicated Supervisor, SLA Guarantee', status: 'Active' },
+  { id: 'sub-tier-01', tierName: 'Access', targetFacility: 'Residential', monthlyFee: 'LKR 1,500', annualFee: 'LKR 15,000', allowance: 'Pay per job', labourDiscount: '5%', inspection: 'None', activeAccounts: 0, includedServices: '24/7 platform access, standard priority', status: 'Active' },
+  { id: 'sub-tier-02', tierName: 'Essential', targetFacility: 'Residential', monthlyFee: 'LKR 3,500', annualFee: 'LKR 35,000', allowance: '1 visit · 1 labour hr / mo', labourDiscount: '10%', inspection: 'Annual', activeAccounts: 0, includedServices: 'Priority allocation, no call-out charge', status: 'Active' },
+  { id: 'sub-tier-03', tierName: 'Plus', targetFacility: 'Commercial', monthlyFee: 'LKR 7,500', annualFee: 'LKR 75,000', allowance: '2 visits · 3 labour hrs / mo', labourDiscount: '15%', inspection: 'Quarterly', activeAccounts: 0, includedServices: 'High-priority allocation, annual condition report', status: 'Active' },
+  { id: 'sub-tier-04', tierName: 'Business', targetFacility: 'Commercial', monthlyFee: 'From LKR 15,000', annualFee: 'Custom', allowance: 'Per SLA', labourDiscount: 'Per agreement', inspection: 'Monthly', activeAccounts: 0, includedServices: 'Dedicated coordination, SLA reporting', status: 'Active' },
 ];
 
 const initialFinancialRows: FinancialRecord[] = [
@@ -276,7 +304,9 @@ const customerColumns: ColumnDef<CustomerRecord>[] = [
 
 const serviceColumns: ColumnDef<ServiceRecord>[] = [
   { accessorKey: 'serviceName', header: 'Service Name' },
-  { accessorKey: 'pillarCategory', header: 'Pillar Category' },
+  { accessorKey: 'pillarCategory', header: 'Pillar' },
+  { accessorKey: 'serviceGroup', header: 'Group' },
+  { accessorKey: 'description', header: 'Description' },
   { accessorKey: 'basePrice', header: 'Base Price' },
   { accessorKey: 'requiredSubscriptionTier', header: 'Required Tier' },
   {
@@ -314,6 +344,10 @@ const subscriptionColumns: ColumnDef<SubscriptionPlanRecord>[] = [
   { accessorKey: 'tierName', header: 'Tier Name' },
   { accessorKey: 'targetFacility', header: 'Target Facility' },
   { accessorKey: 'monthlyFee', header: 'Monthly Fee' },
+  { accessorKey: 'annualFee', header: 'Annual Fee' },
+  { accessorKey: 'allowance', header: 'Included Allowance' },
+  { accessorKey: 'labourDiscount', header: 'Labour Discount' },
+  { accessorKey: 'inspection', header: 'Inspection' },
   { accessorKey: 'activeAccounts', header: 'Active Accounts' },
   { accessorKey: 'includedServices', header: 'Included Services' },
   {
@@ -447,7 +481,7 @@ function AddCustomerModal({
       email: '',
       phoneNumber: '',
       facilityType: 'Residential',
-      subscriptionTier: 'Basic',
+      subscriptionTier: 'Access',
       physicalAddress: '',
     },
   });
@@ -575,9 +609,10 @@ function AddCustomerModal({
             <div>
               <label style={styles.fieldLabel}>SUBSCRIPTION TIER</label>
               <select {...register('subscriptionTier')} style={styles.formSelect}>
-                <option value="Basic">Basic</option>
+                <option value="Access">Access</option>
+                <option value="Essential">Essential</option>
                 <option value="Plus">Plus</option>
-                <option value="Premium">Premium</option>
+                <option value="Business">Business</option>
               </select>
             </div>
           </div>
@@ -658,7 +693,7 @@ export function AdminWorkspace({
     const q = searchQuery.toLowerCase().trim();
     if (!q) return services;
     return services.filter((s) =>
-      [s.serviceName, s.pillarCategory, s.basePrice, s.requiredSubscriptionTier, s.status]
+      [s.serviceName, s.pillarCategory, s.serviceGroup, s.description, s.basePrice, s.requiredSubscriptionTier, s.status]
         .some((v) => v.toLowerCase().includes(q))
     );
   }, [services, searchQuery]);
@@ -667,7 +702,7 @@ export function AdminWorkspace({
     const q = searchQuery.toLowerCase().trim();
     if (!q) return subscriptions;
     return subscriptions.filter((s) =>
-      [s.tierName, s.targetFacility, s.monthlyFee, s.includedServices, s.status]
+      [s.tierName, s.targetFacility, s.monthlyFee, s.annualFee, s.allowance, s.includedServices, s.status]
         .some((v) => v.toLowerCase().includes(q))
     );
   }, [subscriptions, searchQuery]);
@@ -724,18 +759,29 @@ export function AdminWorkspace({
           const mappedServices: ServiceRecord[] = data.map((item) => ({
             id: item.id || `srv-${Math.random().toString(36).slice(2, 6)}`,
             serviceName: item.serviceName || 'Service Item',
-            pillarCategory: item.pillarCategory || 'Hard',
-            basePrice: item.basePrice || '$250.00',
-            requiredSubscriptionTier: item.requiredSubscriptionTier || 'Basic',
+            pillarCategory: titleCase(item.pillarCategory || 'HARD') as ServicePillar,
+            serviceGroup: item.serviceGroup ? titleCase(String(item.serviceGroup).replace(/_/g, ' ')) : '—',
+            description: item.description || '',
+            basePrice: item.basePrice != null && !item.requiresQuote ? formatLkr(item.basePrice) : item.requiresQuote ? 'Specialist · quoted' : 'Priced per job',
+            requiredSubscriptionTier: titleCase(item.requiredSubscriptionTier || 'ACCESS') as SubscriptionTier,
             status: item.status || 'Active',
           }));
           setServices(mappedServices);
         } else if (activeView === 'subscriptions') {
           const mappedSubs: SubscriptionPlanRecord[] = data.map((item) => ({
             id: item.id || `sub-${Math.random().toString(36).slice(2, 6)}`,
-            tierName: item.tierName || 'Basic',
-            targetFacility: item.targetFacility || 'Commercial',
-            monthlyFee: item.monthlyFee || '$499/mo',
+            tierName: titleCase(item.tierName || 'ACCESS') as SubscriptionTier,
+            targetFacility: titleCase(item.targetFacility || 'COMMERCIAL') as FacilityType,
+            monthlyFee: item.isCustomPriced ? `From ${formatLkr(item.monthlyFeeLkr)}` : formatLkr(item.monthlyFeeLkr),
+            annualFee: item.annualFeeLkr == null ? 'Custom' : formatLkr(item.annualFeeLkr),
+            allowance:
+              item.includedVisitsPerMonth == null
+                ? 'Per SLA'
+                : item.includedVisitsPerMonth === 0
+                  ? 'Pay per job'
+                  : `${item.includedVisitsPerMonth} visit${item.includedVisitsPerMonth > 1 ? 's' : ''} · ${item.includedLabourHoursPerMonth ?? 0} labour hr / mo`,
+            labourDiscount: item.isCustomPriced ? 'Per agreement' : `${item.labourDiscountPct ?? 0}%`,
+            inspection: titleCase(item.inspectionCadence || 'NONE'),
             activeAccounts: item.activeAccounts ?? 0,
             includedServices: item.includedServices || 'Facility Service Tier',
             status: item.status || 'Active',
@@ -759,8 +805,8 @@ export function AdminWorkspace({
             displayName: (item.user?.fullName || 'Customer').split(' ')[0],
             email: item.user?.email || 'N/A',
             phone: item.user?.phoneNumber || 'N/A',
-            facilityType: (item.facilityType as FacilityType) || 'Commercial',
-            subscriptionTier: (item.subscriptionTier as SubscriptionTier) || 'Basic',
+            facilityType: titleCase(item.facilityType || 'COMMERCIAL') as FacilityType,
+            subscriptionTier: titleCase(item.subscriptionTier || 'ACCESS') as SubscriptionTier,
             physicalAddress: 'Site Location',
           }));
           setCustomers(mappedCustomers);

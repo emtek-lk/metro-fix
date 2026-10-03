@@ -29,12 +29,12 @@ import { useTheme, type ThemePreference } from '../theme/ThemeProvider';
 
 const STATUSES: JobStatus[] = [
   JobStatus.REQUESTED,
-  JobStatus.PENDING_ACCEPTANCE,
   JobStatus.ASSIGNED,
   JobStatus.ON_ROUTE,
   JobStatus.INSPECTION,
   JobStatus.IN_PROGRESS,
   JobStatus.COMPLETED,
+  JobStatus.CLOSED,
 ];
 
 const THEME_OPTIONS: { id: ThemePreference; label: string }[] = [

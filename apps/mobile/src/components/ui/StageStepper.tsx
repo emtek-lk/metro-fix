@@ -8,15 +8,15 @@ import { spacing, radius } from '../../theme/layout';
 import { getStatusPresentation } from '../../theme/status';
 import { themedStyles } from '../../theme/themedStyles';
 
-/** Display order of the 7 job stages (the lifecycle itself is defined in core-types). */
+/** Display order of the job stages (the lifecycle itself is defined in core-types). */
 const STAGES: JobStatus[] = [
   JobStatus.REQUESTED,
-  JobStatus.PENDING_ACCEPTANCE,
   JobStatus.ASSIGNED,
   JobStatus.ON_ROUTE,
   JobStatus.INSPECTION,
   JobStatus.IN_PROGRESS,
   JobStatus.COMPLETED,
+  JobStatus.CLOSED,
 ];
 
 export interface StageStepperProps {

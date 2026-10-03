@@ -21,6 +21,8 @@ import {
   JobStatus
 } from '@metro-fix/core-types';
 
+import { CATALOG_SEEDS, PLAN_SEEDS } from '../common/seed-data';
+
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 const AppDataSource = new DataSource({
@@ -148,7 +150,7 @@ async function run() {
     const customer1 = customerRepo.create({
       user: cust1User,
       facilityType: FacilityType.COMMERCIAL,
-      subscriptionTier: SubscriptionTier.PREMIUM,
+      subscriptionTier: SubscriptionTier.BUSINESS,
       latitude: 6.9271,
       longitude: 79.8612,
     } as Partial<CustomerEntity>);
@@ -164,36 +166,18 @@ async function run() {
     const customer3 = customerRepo.create({
       user: cust3User,
       facilityType: FacilityType.INDUSTRIAL,
-      subscriptionTier: SubscriptionTier.BASIC,
+      subscriptionTier: SubscriptionTier.ACCESS,
       latitude: 6.9147,
       longitude: 79.8773,
     } as Partial<CustomerEntity>);
 
     await customerRepo.save([customer1, customer2, customer3]);
 
-    // 4. Service Catalog
-    const catalog1 = catalogRepo.create({
-      serviceName: 'HVAC System Maintenance',
-      pillarCategory: ServicePillar.HARD,
-      basePrice: '$850.00',
-      requiredSubscriptionTier: SubscriptionTier.BASIC,
-    });
-
-    const catalog2 = catalogRepo.create({
-      serviceName: 'Commercial Deep Sanitization',
-      pillarCategory: ServicePillar.SOFT,
-      basePrice: '$450.00',
-      requiredSubscriptionTier: SubscriptionTier.PLUS,
-    });
-
-    const catalog3 = catalogRepo.create({
-      serviceName: 'Electrical Compliance Audit',
-      pillarCategory: ServicePillar.STRATEGIC,
-      basePrice: '$1,200.00',
-      requiredSubscriptionTier: SubscriptionTier.PREMIUM,
-    });
-
-    await catalogRepo.save([catalog1, catalog2, catalog3]);
+    // 4. Service Catalog + Subscription Plans (shared with SeedService)
+    await catalogRepo.save(CATALOG_SEEDS.map((c) => catalogRepo.create({ ...c, status: 'Active' })));
+    await AppDataSource.getRepository(SubscriptionPlanEntity).save(
+      PLAN_SEEDS.map((p) => AppDataSource.getRepository(SubscriptionPlanEntity).create({ ...p, status: 'Active' })),
+    );
 
     // 5. Jobs
     const job1 = jobRepo.create({
@@ -232,7 +216,8 @@ async function run() {
       { Entity: 'Users', Count: savedUsers.length },
       { Entity: 'Workers', Count: 2 },
       { Entity: 'Customers', Count: 3 },
-      { Entity: 'Service Catalog', Count: 3 },
+      { Entity: 'Service Catalog', Count: CATALOG_SEEDS.length },
+      { Entity: 'Subscription Plans', Count: PLAN_SEEDS.length },
       { Entity: 'Jobs', Count: 3 },
     ]);
     console.log('Seed completed successfully!');

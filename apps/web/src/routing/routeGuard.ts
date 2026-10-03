@@ -32,6 +32,10 @@ const routeAcl: Record<string, Role[]> = {
   // ── Customer Care Operations ──
   '/dispatch':        [Role.ADMIN, Role.CUSTOMER_CARE],
   '/active-roster':   [Role.ADMIN, Role.CUSTOMER_CARE],
+
+  // ── Customer Portal ──
+  '/portal/services': [Role.CUSTOMER],
+  '/portal/requests': [Role.CUSTOMER],
 };
 
 /**
@@ -75,6 +79,8 @@ export function getHomePathForRole(role?: Role | string): string {
       return '/customers';
     case Role.CUSTOMER_CARE:
       return '/dispatch';
+    case Role.CUSTOMER:
+      return '/portal/services';
     default:
       return '/dispatch';
   }
@@ -93,6 +99,8 @@ const knownPaths = new Set([
   '/subscriptions',
   '/financials',
   '/admin',
+  '/portal/services',
+  '/portal/requests',
   '/login',
   '/',
 ]);

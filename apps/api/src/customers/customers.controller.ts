@@ -14,13 +14,14 @@ import {
 } from './dto/create-customer.dto';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 
-import { Public } from '../auth/public.decorator';
+import { Role } from '@metro-fix/core-types';
+import { Roles } from '../auth/roles.decorator';
 
+@Roles(Role.ADMIN, Role.CUSTOMER_CARE)
 @Controller('customers')
 export class CustomersController {
   constructor(private readonly customersService: CustomersService) {}
 
-  @Public()
   @Get()
   async findAll(): Promise<CustomerEntity[]> {
     return this.customersService.findAll();
@@ -31,6 +32,7 @@ export class CustomersController {
     return this.customersService.findOne(id);
   }
 
+  @Roles(Role.ADMIN)
   @Post()
   @UsePipes(new ZodValidationPipe(createCustomerSchema))
   async createCustomer(
