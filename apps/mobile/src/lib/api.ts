@@ -56,3 +56,9 @@ apiClient.interceptors.response.use(
     return Promise.reject(error);
   },
 );
+
+/** Turns a stored media path ("/uploads/x.jpg") into a URL this device can load. Full URLs and data URIs pass through. */
+export function mediaUrl(path: string): string {
+  if (!path || /^(https?:|data:|file:|content:)/i.test(path)) return path;
+  return `${API_BASE_URL}${path.startsWith('/') ? '' : '/'}${path}`;
+}

@@ -90,6 +90,7 @@ describe('RegisterScreen', () => {
       fullName: 'Eleanor Vance',
       email: 'eleanor@skylinetowers.com',
       phone: '+94 77 123 4567',
+      address: '',
       password: 'Skyline2026',
       confirmPassword: 'Skyline2026',
     });

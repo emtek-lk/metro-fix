@@ -1,12 +1,18 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useQueryClient } from '@tanstack/react-query';
 import type { ServiceRequest } from '@metro-fix/core-types';
 import { useAuth } from '../context/AuthContext';
-import { useMyRequests } from '../hooks/useJobs';
+import { useToast } from '../components/ui/Toast';
+import { realtimeSocket } from '../services/websocket';
+import { statusChangeAlert } from '../lib/trackingCopy';
+import { haptics } from '../lib/haptics';
+import { useMyRequests, useMySubscription } from '../hooks/useJobs';
 import { getErrorMessage } from '../lib/errors';
+import { SubscriptionGate } from '../components/SubscriptionGate';
+import { LoadingState } from '../components/ui/LoadingState';
 import { CustomerBookingWizard } from '../components/CustomerBookingWizard';
 import { MyRequestsScreen } from '../components/MyRequestsScreen';
 import { ProfileScreen } from '../components/Profile';
@@ -30,8 +36,29 @@ export function CustomerMain({ navigation }: Props) {
   const [activeTab, setActiveTab] = useState<string>(CUSTOMER_TABS[0].id);
   // The customer's own requests from the API, kept live by the realtime sync.
   const myRequests = useMyRequests();
+  // Raising a request needs a paid plan; until they have one the Request tab explains and links to the plans.
+  const subscription = useMySubscription();
   // Changing the key gives the next booking a fresh, empty wizard.
   const [bookingKey, setBookingKey] = useState(0);
+
+  // Tell the customer in-app when one of their requests moves to a new step (push is not wired yet).
+  const toast = useToast();
+  const lastStatus = useRef(new Map<string, string>());
+  useEffect(() => {
+    (myRequests.data ?? []).forEach((job) => {
+      if (!lastStatus.current.has(job.id)) lastStatus.current.set(job.id, job.status);
+    });
+  }, [myRequests.data]);
+  useEffect(() => {
+    return realtimeSocket.on('job.updated', (job: ServiceRequest) => {
+      const alert = statusChangeAlert(lastStatus.current.get(job.id), job);
+      lastStatus.current.set(job.id, job.status);
+      if (alert) {
+        haptics.success();
+        toast.info(alert.message, alert.title);
+      }
+    });
+  }, [toast]);
 
   // Android back: return to the first tab before leaving the app.
   useFocusEffect(
@@ -56,13 +83,22 @@ export function CustomerMain({ navigation }: Props) {
   };
 
   const panes: Record<string, () => React.ReactNode> = {
-    book: () => (
-      <CustomerBookingWizard
-        key={bookingKey}
-        customerId={user.id}
-        onBookingComplete={handleBookingComplete}
-      />
-    ),
+    book: () =>
+      subscription.isLoading ? (
+        <LoadingState message="Checking your plan…" />
+      ) : subscription.data && !subscription.data.tier ? (
+        <SubscriptionGate onViewPlans={() => navigation.navigate('Plans')} />
+      ) : (
+        <CustomerBookingWizard
+          key={bookingKey}
+          customerId={user.id}
+          onBookingComplete={handleBookingComplete}
+          onNeedSubscription={() => {
+            subscription.refetch();
+            navigation.navigate('Plans');
+          }}
+        />
+      ),
     requests: () => (
       <MyRequestsScreen
         requests={myRequests.data ?? []}
@@ -75,7 +111,10 @@ export function CustomerMain({ navigation }: Props) {
       />
     ),
     profile: () => (
-      <ProfileScreen onOpenGallery={__DEV__ ? () => navigation.navigate('Gallery') : undefined} />
+      <ProfileScreen
+        onOpenGallery={__DEV__ ? () => navigation.navigate('Gallery') : undefined}
+        onOpenSubscription={() => navigation.navigate('Plans')}
+      />
     ),
   };
 

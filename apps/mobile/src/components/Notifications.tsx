@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Animated, Pressable, View, StyleSheet } from 'react-native';
+import { Animated, RefreshControl, Pressable, View, StyleSheet } from 'react-native';
 import { Text } from './ui/AppText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Card } from './ui/Card';
@@ -10,6 +10,7 @@ import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { spacing, radius, layout, tabBarClearance } from '../theme/layout';
 import { themedStyles } from '../theme/themedStyles';
+import { usePullRefresh } from '../hooks/usePullRefresh';
 import { GlassHeader, useCollapsingHeader } from './ui/GlassHeader';
 import { relativeTime } from '../lib/time';
 import {
@@ -23,6 +24,8 @@ interface NotificationsScreenProps {
   unreadCount: number;
   onMarkRead: (id: string) => void;
   onMarkAllRead: () => void;
+  /** Pull-to-refresh: reloads the alerts' source data. */
+  onRefresh?: () => Promise<unknown> | void;
   /** Development helper: raises a real dispatch alert to test the accept / reject flow. */
 }
 
@@ -47,10 +50,12 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
   unreadCount,
   onMarkRead,
   onMarkAllRead,
+  onRefresh: reload,
 }) => {
   const insets = useSafeAreaInsets();
   const { scrollY, onScroll } = useCollapsingHeader();
   const groups = useMemo(() => groupNotifications(notifications), [notifications]);
+  const { refreshing, onRefresh } = usePullRefresh(() => reload?.());
 
   const markAll =
     unreadCount > 0 ? (
@@ -71,8 +76,8 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
         onScroll={onScroll}
         scrollEventThrottle={16}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: tabBarClearance(insets) }]}
-        bounces={false}
         showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brand} colors={[colors.brand]} />}
       >
         <ScreenHeader
           eyebrow="Notifications"

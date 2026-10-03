@@ -8,6 +8,7 @@ interface CustomerOption {
   facilityType?: FacilityType;
   latitude?: number | null;
   longitude?: number | null;
+  companyName?: string | null;
   user?: { fullName?: string; email?: string; phoneNumber?: string | null };
 }
 
@@ -58,7 +59,7 @@ export function CreateRequestModal({ onClose, onCreated }: CreateRequestModalPro
     if (!q) return customers.slice(0, 50);
     return customers
       .filter((c) =>
-        [c.user?.fullName, c.user?.email, c.user?.phoneNumber].some((text) => (text ?? '').toLowerCase().includes(q)),
+        [c.user?.fullName, c.companyName, c.user?.email, c.user?.phoneNumber].some((text) => (text ?? '').toLowerCase().includes(q)),
       )
       .slice(0, 50);
   }, [customers, customerQuery]);
@@ -127,7 +128,7 @@ export function CreateRequestModal({ onClose, onCreated }: CreateRequestModalPro
         {selected ? (
           <div style={styles.selected}>
             <span>
-              <strong>{selected.user?.fullName}</strong> · {selected.user?.email}
+              <strong>{selected.companyName ? `${selected.companyName} · ` : ''}{selected.user?.fullName}</strong> · {selected.user?.email}
               {selected.user?.phoneNumber ? ` · ${selected.user.phoneNumber}` : ''}
             </span>
             <button type="button" style={styles.link} onClick={() => setCustomerId('')}>
@@ -149,7 +150,7 @@ export function CreateRequestModal({ onClose, onCreated }: CreateRequestModalPro
               {!customersError && matches.length === 0 && <div style={styles.muted}>No customers match.</div>}
               {matches.map((customer) => (
                 <button key={customer.id} type="button" role="option" aria-selected={false} style={styles.customerRow} onClick={() => pickCustomer(customer)}>
-                  <strong>{customer.user?.fullName ?? 'Customer'}</strong>
+                  <strong>{customer.companyName ? `${customer.companyName} · ` : ''}{customer.user?.fullName ?? 'Customer'}</strong>
                   <span style={styles.muted}>
                     {customer.user?.email}
                     {customer.user?.phoneNumber ? ` · ${customer.user.phoneNumber}` : ''}

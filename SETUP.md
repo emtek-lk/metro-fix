@@ -240,3 +240,11 @@ If the mobile app shows empty job list with 401 errors:
 | `android` | Run on Android |
 | `ios` | Run on iOS |
 | `web` | Run on web |
+
+## Environment variables worth knowing
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `UPLOAD_DIR` | `apps/api/uploads` | Where job photos are stored (served at `/uploads/*`). Mount a volume in production. |
+| `OFFER_TIMEOUT_SECONDS` | 32400 (9 h) | How long a worker has to answer an offer. |
+| `MAX_ACTIVE_JOBS` | 5 | Jobs a worker can hold before dispatch treats them as at capacity. |

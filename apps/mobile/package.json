@@ -8,6 +8,7 @@
     "android": "react-native run-android",
     "ios": "react-native run-ios",
     "lint": "eslint .",
+    "build:leaflet": "node scripts/generate-leaflet-bundle.js",
     "start": "react-native start",
     "test": "jest"
   },
@@ -59,6 +60,7 @@
     "babel-preset-expo": "~56.0.0",
     "eslint": "^8.19.0",
     "jest": "^29.6.3",
+    "leaflet": "1.9.4",
     "prettier": "2.8.8",
     "react-test-renderer": "19.2.3",
     "typescript": "~6.0.3"

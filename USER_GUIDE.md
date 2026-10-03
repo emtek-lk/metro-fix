@@ -63,6 +63,10 @@ The **Dispatch Board** (`/dispatch`) provides real-time visibility and manual co
   * **Success:** A toast notification confirms: `✓ Job status updated to "[NEW_STATUS]"`.
   * **Failure/Offline:** If the backend network call fails, the action is automatically rolled back to its previous column and an error toast is displayed: `✕ Failed to persist job status change to backend API. Action reverted.`.
 
+### Finding things on the board
+* Search by title, customer, worker or ticket reference (`#K3F9Q2`); filter by **service** and **urgency**; sort by newest, oldest or most urgent. **Refresh** reloads the board (it also updates live).
+* **Job card** on a card opens the worker's itemised estimate and the final; you can correct the final until the ticket is closed.
+
 ### Worker Dispatch Algorithm & Modal
 1. Click **"Assign Worker"** on any unassigned card in the `REQUESTED` column.
 2. A dispatch modal opens showing worker candidates ranked by the internal dispatch algorithm:
@@ -84,7 +88,12 @@ Administrators manage system entities, customer profiles, service catalogs, and 
 ### Service Catalog (`/admin/services`)
 * View all defined service offerings, assigned service pillars (Hard, Soft, Strategic), SLA response targets, and base rate pricing.
 
+### Customers: plans and leads
+* The **Plan** column shows each customer's subscription, or **No plan (lead)** for someone who signed up but has not subscribed. **View** opens their details (contact, address, plan, billing, subscribed since); **Edit** changes name, company, email (their login), phone, address, facility and plan. Changing a plan here records no payment, so use it to comp a plan; choosing *No plan* makes them a lead again.
+* Customers cannot raise requests without a plan. Use **+ New request** on the Dispatch Board to raise one for them (support cases).
+
 ### Worker Directory (`/admin/workers`)
+* **Edit** a worker's contact details, internal rating (1–5, which dispatch ranks by), the services they cover, and whether they are on duty.
 * Monitor technician profiles, internal 1-5 quality ratings, current availability status, and active job loads.
 
 ---
@@ -115,3 +124,11 @@ npm run dev
 # Build for Production Verification
 npm run build --workspace=apps/web
 ```
+
+
+## 6. Customers: subscription and requests
+
+* **Sign-up** (web or mobile): step one saves the account; step two offers the plans with **Skip for now**. Either way you land on the app home.
+* **Raising a request needs a plan.** Without one, the apps show *Choose a plan* and link to the plans.
+* **Subscription** (web menu, or mobile Profile): see your plan, compare plans, upgrade or downgrade, and see payment history. Payment is a demo card checkout: `4242 4242 4242 4242` with any future date and code works; `4000 0000 0000 0002` is declined. No money moves.
+* **Refresh**: every list has a **Refresh** button on the web and pull-to-refresh on mobile.

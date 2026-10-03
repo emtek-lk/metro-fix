@@ -67,7 +67,7 @@ export class JobsController {
     @Req() req: AuthedRequest,
   ): Promise<ServiceRequestEntity> {
     if (req.user.role === Role.CUSTOMER) {
-      return this.jobsService.createJob({ ...dto, customerId: req.user.id });
+      return this.jobsService.createJob({ ...dto, customerId: req.user.id }, { requireSubscription: true });
     }
     return this.jobsService.createJob(dto);
   }

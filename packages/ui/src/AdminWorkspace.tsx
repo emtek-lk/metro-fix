@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { RefreshButton } from './RefreshButton';
+import { Skeleton } from './Skeleton';
+import { EditCustomerModal, EditWorkerModal, type EditableCustomer, type EditableWorker } from './EditRecordModals';
 import {
   type ColumnDef,
   flexRender,
@@ -22,11 +25,17 @@ export type CustomerRecord = {
   id: string;
   fullName: string;
   displayName: string;
+  companyName?: string;
   email: string;
   phone: string;
   facilityType: FacilityType;
+  /** A plan name, or "No plan (lead)" for someone who signed up but has not subscribed. */
   subscriptionTier: SubscriptionTier;
   physicalAddress?: string;
+  billing?: string;
+  subscribedSince?: string;
+  /** Raw API values, used to pre-fill the edit form. */
+  raw?: EditableCustomer;
 };
 
 export type ServiceRecord = {
@@ -45,10 +54,12 @@ export type WorkerRecord = {
   fullName: string;
   email: string;
   phone: string;
-  coverageZone: string;
   rating: number;
   serviceTypes: string;
-  status: 'Active' | 'On Route' | 'Offline';
+  /** Accepted unfinished jobs plus open offers, counted live by the API. */
+  activeJobs: number;
+  status: 'Available' | 'On job' | 'Off duty';
+  raw?: EditableWorker;
 };
 
 export type SubscriptionPlanRecord = {
@@ -76,8 +87,18 @@ export type FinancialRecord = {
   customerName: string;
   servicePillar: ServicePillar;
   amount: string;
-  paymentStatus: 'Paid' | 'Pending' | 'Refunded';
+  amountLkr: number;
+  hours: number;
+  /** Invoiced = approved and closed by dispatch; Awaiting approval = work done, not yet closed. */
+  paymentStatus: 'Invoiced' | 'Awaiting approval';
   invoiceDate: string;
+};
+
+export type FinancialSummary = {
+  currency: string;
+  months: { key: string; label: string; jobs: number; subscriptions: number; total: number }[];
+  byPillar: { name: string; value: number }[];
+  kpis: { invoiced: number; awaitingApproval: number; subscriptions: number; invoiceCount: number };
 };
 
 // Zod schema for Customer Creation Form
@@ -92,211 +113,34 @@ export const createCustomerFormSchema = z.object({
 
 export type CreateCustomerFormValues = z.infer<typeof createCustomerFormSchema>;
 
-const initialCustomerRows: CustomerRecord[] = [
-  {
-    id: 'cust-001',
-    fullName: 'Aisha Rahman',
-    displayName: 'Aisha R.',
-    email: 'aisha.rahman@metrofix.dev',
-    phone: '+1 (555) 010-2234',
-    facilityType: 'Residential',
-    subscriptionTier: 'Plus',
-    physicalAddress: '124 Market St, San Francisco, CA',
-  },
-  {
-    id: 'cust-002',
-    fullName: 'Metro Logistics LLC',
-    displayName: 'Metro Logistics',
-    email: 'ops@metrologistics.com',
-    phone: '+1 (555) 010-7781',
-    facilityType: 'Industrial',
-    subscriptionTier: 'Business',
-    physicalAddress: '890 Harbor Blvd, Oakland, CA',
-  },
-  {
-    id: 'cust-003',
-    fullName: 'Crescent Retail Group',
-    displayName: 'Crescent Retail',
-    email: 'facilities@crescentrg.com',
-    phone: '+1 (555) 010-3389',
-    facilityType: 'Commercial',
-    subscriptionTier: 'Access',
-    physicalAddress: '450 Plaza Way, San Jose, CA',
-  },
-  {
-    id: 'cust-004',
-    fullName: 'Northpoint Residences',
-    displayName: 'Northpoint',
-    email: 'admin@northpointresidences.com',
-    phone: '+1 (555) 010-9912',
-    facilityType: 'Residential',
-    subscriptionTier: 'Plus',
-    physicalAddress: '782 Pine Ave, Berkeley, CA',
-  },
-  {
-    id: 'cust-005',
-    fullName: 'Greenfield Mall',
-    displayName: 'Greenfield Mall',
-    email: 'property@greenfieldmall.com',
-    phone: '+1 (555) 010-1208',
-    facilityType: 'Commercial',
-    subscriptionTier: 'Business',
-    physicalAddress: '100 Grand Galleria, San Mateo, CA',
-  },
-  {
-    id: 'cust-006',
-    fullName: 'Harbor Offices',
-    displayName: 'Harbor Offices',
-    email: 'admin@harboroffices.com',
-    phone: '+1 (555) 010-4507',
-    facilityType: 'Commercial',
-    subscriptionTier: 'Plus',
-    physicalAddress: '300 Embarcadero Center, San Francisco, CA',
-  },
-  {
-    id: 'cust-007',
-    fullName: 'Skyline Towers FM',
-    displayName: 'Skyline Towers',
-    email: 'dispatch@skylinetowers.com',
-    phone: '+1 (555) 010-8819',
-    facilityType: 'Commercial',
-    subscriptionTier: 'Business',
-    physicalAddress: '550 California St, San Francisco, CA',
-  },
-  {
-    id: 'cust-008',
-    fullName: 'Pacific Bay Logistics',
-    displayName: 'Pacific Bay',
-    email: 'admin@pacificbaylogistics.com',
-    phone: '+1 (555) 010-6641',
-    facilityType: 'Industrial',
-    subscriptionTier: 'Plus',
-    physicalAddress: '1200 Maritime St, Oakland, CA',
-  },
-];
+const planBadge = (tier: string): CSSProperties =>
+  tier.startsWith('No plan')
+    ? { ...styles.statusPill, background: 'rgba(148, 163, 184, 0.18)', color: 'var(--text-secondary)' }
+    : { ...styles.statusPill, ...styles.statusActive };
 
-const serviceRows: ServiceRecord[] = [
-  {
-    id: 'svc-001',
-    serviceName: 'Chiller Maintenance',
-    pillarCategory: 'Hard',
-    serviceGroup: 'Hard',
-    description: '',
-    basePrice: 'LKR 135,000',
-    requiredSubscriptionTier: 'Plus',
-    status: 'Active',
-  },
-  {
-    id: 'svc-002',
-    serviceName: 'Deep Cleaning',
-    pillarCategory: 'Soft',
-    serviceGroup: 'Soft',
-    description: '',
-    basePrice: 'LKR 54,000',
-    requiredSubscriptionTier: 'Access',
-    status: 'Active',
-  },
-  {
-    id: 'svc-003',
-    serviceName: 'Security Patrol Review',
-    pillarCategory: 'Strategic',
-    serviceGroup: 'Strategic',
-    description: '',
-    basePrice: 'LKR 195,000',
-    requiredSubscriptionTier: 'Business',
-    status: 'Active',
-  },
-  {
-    id: 'svc-004',
-    serviceName: 'Fire Panel Compliance',
-    pillarCategory: 'Hard',
-    serviceGroup: 'Hard',
-    description: '',
-    basePrice: 'LKR 156,000',
-    requiredSubscriptionTier: 'Plus',
-    status: 'Disabled',
-  },
-  {
-    id: 'svc-005',
-    serviceName: 'Floor Restoration',
-    pillarCategory: 'Soft',
-    serviceGroup: 'Soft',
-    description: '',
-    basePrice: 'LKR 96,000',
-    requiredSubscriptionTier: 'Access',
-    status: 'Active',
-  },
-  {
-    id: 'svc-006',
-    serviceName: 'Energy Audit Planning',
-    pillarCategory: 'Strategic',
-    serviceGroup: 'Strategic',
-    description: '',
-    basePrice: 'LKR 294,000',
-    requiredSubscriptionTier: 'Business',
-    status: 'Active',
-  },
-  {
-    id: 'svc-007',
-    serviceName: 'HVAC Air Filter Replacement',
-    pillarCategory: 'Hard',
-    serviceGroup: 'Hard',
-    description: '',
-    basePrice: 'LKR 84,000',
-    requiredSubscriptionTier: 'Access',
-    status: 'Active',
-  },
-  {
-    id: 'svc-008',
-    serviceName: 'Waste Management Triage',
-    pillarCategory: 'Soft',
-    serviceGroup: 'Soft',
-    description: '',
-    basePrice: 'LKR 63,000',
-    requiredSubscriptionTier: 'Access',
-    status: 'Active',
-  },
-];
-
-const initialWorkerRows: WorkerRecord[] = [
-  { id: 'wrk-01', fullName: 'Amina Yusuf', email: 'amina.y@metrofix.dev', phone: '+1 (555) 012-4491', coverageZone: 'North District', rating: 4.9, serviceTypes: 'Hard, Strategic', status: 'Active' },
-  { id: 'wrk-02', fullName: 'Malik Thompson', email: 'malik.t@metrofix.dev', phone: '+1 (555) 012-7720', coverageZone: 'Central Business', rating: 4.7, serviceTypes: 'Soft', status: 'On Route' },
-  { id: 'wrk-03', fullName: 'Nadia Khan', email: 'nadia.k@metrofix.dev', phone: '+1 (555) 012-3310', coverageZone: 'East Park', rating: 4.8, serviceTypes: 'Hard, Soft', status: 'Active' },
-  { id: 'wrk-04', fullName: 'Omar Silva', email: 'omar.s@metrofix.dev', phone: '+1 (555) 012-8843', coverageZone: 'Harbor Loop', rating: 4.5, serviceTypes: 'Strategic', status: 'Active' },
-  { id: 'wrk-05', fullName: 'Elena Rostova', email: 'elena.r@metrofix.dev', phone: '+1 (555) 012-9901', coverageZone: 'South Bay', rating: 4.9, serviceTypes: 'Hard', status: 'Offline' },
-  { id: 'wrk-06', fullName: 'David Chen', email: 'david.c@metrofix.dev', phone: '+1 (555) 012-1152', coverageZone: 'West Campus', rating: 4.6, serviceTypes: 'Soft, Strategic', status: 'Active' },
-];
-
-const initialSubscriptionRows: SubscriptionPlanRecord[] = [
-  { id: 'sub-tier-01', tierName: 'Access', targetFacility: 'Residential', monthlyFee: 'LKR 1,500', annualFee: 'LKR 15,000', allowance: 'Pay per job', labourDiscount: '5%', inspection: 'None', activeAccounts: 0, includedServices: '24/7 platform access, standard priority', status: 'Active' },
-  { id: 'sub-tier-02', tierName: 'Essential', targetFacility: 'Residential', monthlyFee: 'LKR 3,500', annualFee: 'LKR 35,000', allowance: '1 visit · 1 labour hr / mo', labourDiscount: '10%', inspection: 'Annual', activeAccounts: 0, includedServices: 'Priority allocation, no call-out charge', status: 'Active' },
-  { id: 'sub-tier-03', tierName: 'Plus', targetFacility: 'Commercial', monthlyFee: 'LKR 7,500', annualFee: 'LKR 75,000', allowance: '2 visits · 3 labour hrs / mo', labourDiscount: '15%', inspection: 'Quarterly', activeAccounts: 0, includedServices: 'High-priority allocation, annual condition report', status: 'Active' },
-  { id: 'sub-tier-04', tierName: 'Business', targetFacility: 'Commercial', monthlyFee: 'From LKR 15,000', annualFee: 'Custom', allowance: 'Per SLA', labourDiscount: 'Per agreement', inspection: 'Monthly', activeAccounts: 0, includedServices: 'Dedicated coordination, SLA reporting', status: 'Active' },
-];
-
-const initialFinancialRows: FinancialRecord[] = [
-  { id: 'inv-9001', jobId: 'req-1001', customerName: 'Skyline Towers', servicePillar: 'Hard', amount: '$1,250.00', paymentStatus: 'Paid', invoiceDate: '2026-07-22' },
-  { id: 'inv-9002', jobId: 'req-1002', customerName: 'Tower One Management', servicePillar: 'Soft', amount: '$480.00', paymentStatus: 'Pending', invoiceDate: '2026-07-22' },
-  { id: 'inv-9003', jobId: 'req-1003', customerName: 'Metro Logistics LLC', servicePillar: 'Strategic', amount: '$2,100.00', paymentStatus: 'Paid', invoiceDate: '2026-07-21' },
-  { id: 'inv-9004', jobId: 'req-1004', customerName: 'Northpoint Residences', servicePillar: 'Hard', amount: '$350.00', paymentStatus: 'Paid', invoiceDate: '2026-07-21' },
-  { id: 'inv-9005', jobId: 'req-1005', customerName: 'Greenfield Mall', servicePillar: 'Strategic', amount: '$1,850.00', paymentStatus: 'Paid', invoiceDate: '2026-07-20' },
-  { id: 'inv-9006', jobId: 'req-1006', customerName: 'Crescent Retail Group', servicePillar: 'Soft', amount: '$620.00', paymentStatus: 'Paid', invoiceDate: '2026-07-19' },
-];
-
-const customerColumns: ColumnDef<CustomerRecord>[] = [
+const makeCustomerColumns = (onView: (row: CustomerRecord) => void, onEdit: (row: CustomerRecord) => void): ColumnDef<CustomerRecord>[] => [
   { accessorKey: 'fullName', header: 'Full Name' },
-  { accessorKey: 'displayName', header: 'Display Name' },
+  { accessorKey: 'companyName', header: 'Company', cell: ({ getValue }) => getValue<string>() || '—' },
   { accessorKey: 'email', header: 'Email' },
   { accessorKey: 'phone', header: 'Phone' },
   { accessorKey: 'facilityType', header: 'Facility Type' },
-  { accessorKey: 'subscriptionTier', header: 'Active Subscription Tier' },
+  {
+    accessorKey: 'subscriptionTier',
+    header: 'Plan',
+    cell: ({ getValue }) => <span style={planBadge(getValue<string>())}>{getValue<string>()}</span>,
+  },
+  { accessorKey: 'subscribedSince', header: 'Subscribed since', cell: ({ getValue }) => getValue<string>() || '—' },
   {
     id: 'actions',
     header: 'Actions',
-    cell: () => (
+    cell: ({ row }) => (
       <div style={styles.inlineActions}>
-        <button type="button" className="metro-text-btn" style={styles.textButton}>View</button>
-        <button type="button" className="metro-text-btn" style={styles.textButton}>Edit</button>
+        <button type="button" className="metro-text-btn" style={styles.textButton} onClick={() => onView(row.original)}>
+          View
+        </button>
+        <button type="button" className="metro-text-btn" style={styles.textButton} onClick={() => onEdit(row.original)}>
+          Edit
+        </button>
       </div>
     ),
   },
@@ -319,24 +163,41 @@ const serviceColumns: ColumnDef<ServiceRecord>[] = [
   },
 ];
 
-const workerColumns: ColumnDef<WorkerRecord>[] = [
+const WORKER_STATUS_STYLE: Record<WorkerRecord['status'], CSSProperties> = {
+  Available: { background: 'rgba(74, 173, 131, 0.18)', color: '#4aad83' },
+  'On job': { background: 'rgba(243, 136, 8, 0.18)', color: '#f38808' },
+  'Off duty': { background: 'rgba(148, 163, 184, 0.18)', color: '#94a3b8' },
+};
+
+const makeWorkerColumns = (onEdit: (row: WorkerRecord) => void): ColumnDef<WorkerRecord>[] => [
   { accessorKey: 'fullName', header: 'Full Name' },
   { accessorKey: 'email', header: 'Email' },
   { accessorKey: 'phone', header: 'Phone' },
-  { accessorKey: 'coverageZone', header: 'Coverage Zone' },
   {
     accessorKey: 'rating',
     header: 'Internal Rating',
     cell: ({ getValue }) => <span style={styles.ratingPill}>★ {getValue<number>().toFixed(1)}</span>,
   },
-  { accessorKey: 'serviceTypes', header: 'Pillar Capabilities' },
+  { accessorKey: 'serviceTypes', header: 'Services' },
+  { accessorKey: 'activeJobs', header: 'Active jobs' },
   {
     accessorKey: 'status',
     header: 'Status',
     cell: ({ getValue }) => {
-      const val = getValue<string>();
-      return <span style={{ ...styles.statusPill, ...(val === 'Active' ? styles.statusActive : styles.statusDisabled) }}>{val}</span>;
+      const val = getValue<WorkerRecord['status']>();
+      return <span style={{ ...styles.statusPill, ...WORKER_STATUS_STYLE[val] }}>{val}</span>;
     },
+  },
+  {
+    id: 'actions',
+    header: 'Actions',
+    cell: ({ row }) => (
+      <div style={styles.inlineActions}>
+        <button type="button" className="metro-text-btn" style={styles.textButton} onClick={() => onEdit(row.original)}>
+          Edit
+        </button>
+      </div>
+    ),
   },
 ];
 
@@ -358,39 +219,51 @@ const subscriptionColumns: ColumnDef<SubscriptionPlanRecord>[] = [
 ];
 
 const financialColumns: ColumnDef<FinancialRecord>[] = [
-  { accessorKey: 'id', header: 'Invoice ID' },
-  { accessorKey: 'jobId', header: 'Job ID' },
+  { accessorKey: 'id', header: 'Invoice' },
+  { accessorKey: 'jobId', header: 'Ticket' },
   { accessorKey: 'customerName', header: 'Customer' },
-  { accessorKey: 'servicePillar', header: 'Service Pillar' },
-  { accessorKey: 'amount', header: 'Amount' },
-  { accessorKey: 'invoiceDate', header: 'Invoice Date' },
+  { accessorKey: 'servicePillar', header: 'Service', cell: ({ getValue }) => titleCase(getValue<string>()) },
+  { accessorKey: 'hours', header: 'Hours', cell: ({ getValue }) => `${getValue<number>()} h` },
+  {
+    accessorKey: 'amountLkr',
+    header: 'Amount',
+    cell: ({ row }) => <span style={{ fontWeight: 700 }}>{row.original.amount}</span>,
+  },
+  { accessorKey: 'invoiceDate', header: 'Date' },
   {
     accessorKey: 'paymentStatus',
-    header: 'Payment Status',
+    header: 'Status',
     cell: ({ getValue }) => {
       const val = getValue<string>();
-      return <span style={{ ...styles.statusPill, ...(val === 'Paid' ? styles.statusActive : styles.statusDisabled) }}>{val}</span>;
+      return (
+        <span style={{ ...styles.statusPill, ...(val === 'Invoiced' ? styles.statusActive : { background: 'rgba(243, 136, 8, 0.18)', color: '#d37105' }), whiteSpace: 'nowrap' }}>
+          {val}
+        </span>
+      );
     },
   },
 ];
 
-function DataTable<TData>({ columns, data, emptyMessage }: { columns: ColumnDef<TData>[]; data: TData[]; emptyMessage: string; }) {
+const PAGE_SIZES = [10, 25, 50];
+
+function DataTable<TData>({ columns, data, emptyMessage, loading = false }: { columns: ColumnDef<TData>[]; data: TData[]; emptyMessage: string; loading?: boolean }) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [pageIndex, setPageIndex] = useState(0);
+  const [pageSize, setPageSize] = useState(PAGE_SIZES[0]);
 
   const table = useReactTable({
     data,
     columns,
     state: {
       sorting,
-      pagination: { pageIndex, pageSize: 8 },
+      pagination: { pageIndex, pageSize },
     },
     onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     onPaginationChange: (updater) => {
-      const nextState = typeof updater === 'function' ? updater({ pageIndex, pageSize: 8 }) : updater;
+      const nextState = typeof updater === 'function' ? updater({ pageIndex, pageSize }) : updater;
       setPageIndex(nextState.pageIndex);
     },
   });
@@ -407,7 +280,8 @@ function DataTable<TData>({ columns, data, emptyMessage }: { columns: ColumnDef<
                 {headerGroup.headers.map((header) => (
                   <th
                     key={header.id}
-                    style={styles.th}
+                    style={{ ...styles.th, cursor: header.column.getCanSort() ? 'pointer' : 'default' }}
+                    aria-sort={header.column.getIsSorted() === 'asc' ? 'ascending' : header.column.getIsSorted() === 'desc' ? 'descending' : 'none'}
                     onClick={header.column.getToggleSortingHandler()}
                   >
                     {header.isPlaceholder ? null : (
@@ -422,7 +296,17 @@ function DataTable<TData>({ columns, data, emptyMessage }: { columns: ColumnDef<
             ))}
           </thead>
           <tbody>
-            {pageRows.length > 0 ? (
+            {loading && data.length === 0 ? (
+              Array.from({ length: 6 }, (_, i) => (
+                <tr key={`sk-${i}`} aria-hidden="true">
+                  {columns.map((_c, j) => (
+                    <td key={j} style={styles.td}>
+                      <Skeleton width={j === 0 ? '70%' : '55%'} />
+                    </td>
+                  ))}
+                </tr>
+              ))
+            ) : pageRows.length > 0 ? (
               pageRows.map((row) => (
                 <tr key={row.id}>
                   {row.getVisibleCells().map((cell) => (
@@ -446,7 +330,27 @@ function DataTable<TData>({ columns, data, emptyMessage }: { columns: ColumnDef<
           Previous
         </button>
         <div style={styles.pageMeta}>
-          Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount() || 1}
+          {data.length === 0
+            ? '0 rows'
+            : `${pageIndex * pageSize + 1}–${Math.min(data.length, (pageIndex + 1) * pageSize)} of ${data.length}`}
+          {' · '}Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount() || 1}
+          {' · '}
+          <label>
+            <span className="sr-only">Rows per page</span>
+            <select
+              aria-label="Rows per page"
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setPageIndex(0);
+              }}
+              style={{ background: 'transparent', color: 'inherit', border: '1px solid var(--border-subtle)', borderRadius: 6, padding: '2px 4px' }}
+            >
+              {PAGE_SIZES.map((size) => (
+                <option key={size} value={size}>{size} / page</option>
+              ))}
+            </select>
+          </label>
         </div>
         <button type="button" className="metro-page-btn" style={styles.pageButton} onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
           Next
@@ -657,12 +561,17 @@ export function AdminWorkspace({
   workersList,
   onWorkerCreated,
 }: AdminWorkspaceProps) {
-  const [customers, setCustomers] = useState<CustomerRecord[]>(initialCustomerRows);
-  const [workers, setWorkers] = useState<WorkerRecord[]>(initialWorkerRows);
-  const [services, setServices] = useState<ServiceRecord[]>(serviceRows);
-  const [subscriptions, setSubscriptions] = useState<SubscriptionPlanRecord[]>(initialSubscriptionRows);
-  const [financials, setFinancials] = useState<FinancialRecord[]>(initialFinancialRows);
+  const [customers, setCustomers] = useState<CustomerRecord[]>([]);
+  const [workers, setWorkers] = useState<WorkerRecord[]>([]);
+  const [services, setServices] = useState<ServiceRecord[]>([]);
+  const [subscriptions, setSubscriptions] = useState<SubscriptionPlanRecord[]>([]);
+  const [financials, setFinancials] = useState<FinancialRecord[]>([]);
+  const [summary, setSummary] = useState<FinancialSummary | null>(null);
+  const [viewedCustomer, setViewedCustomer] = useState<CustomerRecord | null>(null);
+  const [editedCustomer, setEditedCustomer] = useState<CustomerRecord | null>(null);
+  const [editedWorker, setEditedWorker] = useState<WorkerRecord | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [reloadKey, setReloadKey] = useState(0);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showCharts, setShowCharts] = useState(true);
@@ -675,7 +584,7 @@ export function AdminWorkspace({
     const q = searchQuery.toLowerCase().trim();
     if (!q) return customers;
     return customers.filter((c) =>
-      [c.fullName, c.email, c.phone, c.facilityType, c.subscriptionTier, c.physicalAddress ?? '']
+      [c.fullName, c.companyName ?? '', c.email, c.phone, c.facilityType, c.subscriptionTier, c.physicalAddress ?? '']
         .some((v) => v.toLowerCase().includes(q))
     );
   }, [customers, searchQuery]);
@@ -684,7 +593,7 @@ export function AdminWorkspace({
     const q = searchQuery.toLowerCase().trim();
     if (!q) return workers;
     return workers.filter((w) =>
-      [w.fullName, w.email, w.phone, w.coverageZone, w.serviceTypes, w.status]
+      [w.fullName, w.email, w.phone, w.serviceTypes, w.status]
         .some((v) => v.toLowerCase().includes(q))
     );
   }, [workers, searchQuery]);
@@ -729,6 +638,13 @@ export function AdminWorkspace({
     if (activeView === 'subscriptions') endpoint = `${apiBase}/subscriptions`;
     if (activeView === 'financials') endpoint = `${apiBase}/financials`;
 
+    if (activeView === 'financials') {
+      fetch(`${apiBase}/financials/summary`, { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => isMounted && setSummary(data))
+        .catch(() => isMounted && setSummary(null));
+    }
+
     fetch(endpoint, {
       headers: {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -741,7 +657,7 @@ export function AdminWorkspace({
       .then((data: any[]) => {
         if (!isMounted) return;
         setIsLoading(false);
-        if (!Array.isArray(data) || data.length === 0) return;
+        if (!Array.isArray(data)) return;
 
         if (activeView === 'workers') {
           const mappedWorkers: WorkerRecord[] = data.map((item) => ({
@@ -749,10 +665,19 @@ export function AdminWorkspace({
             fullName: item.user?.fullName || 'Field Worker',
             email: item.user?.email || 'N/A',
             phone: item.user?.phoneNumber || 'N/A',
-            coverageZone: 'Colombo Central',
             rating: item.rating ?? 5.0,
-            serviceTypes: Array.isArray(item.servicePillars) ? item.servicePillars.join(', ') : 'Hard',
-            status: item.isAvailable ? 'Active' : 'Offline',
+            serviceTypes: Array.isArray(item.servicePillars) ? item.servicePillars.map(titleCase).join(', ') : '—',
+            activeJobs: item.liveActiveJobs ?? 0,
+            status: item.isAvailable === false ? 'Off duty' : (item.liveActiveJobs ?? 0) > 0 ? 'On job' : 'Available',
+            raw: {
+              id: item.id,
+              fullName: item.user?.fullName || '',
+              email: item.user?.email || '',
+              phone: item.user?.phoneNumber || '',
+              rating: item.rating ?? 5,
+              servicePillars: Array.isArray(item.servicePillars) ? item.servicePillars : [],
+              isAvailable: item.isAvailable !== false,
+            },
           }));
           setWorkers(mappedWorkers);
         } else if (activeView === 'service-catalog') {
@@ -789,13 +714,15 @@ export function AdminWorkspace({
           setSubscriptions(mappedSubs);
         } else if (activeView === 'financials') {
           const mappedFin: FinancialRecord[] = data.map((item) => ({
-            id: item.id || 'INV-9001',
-            jobId: item.jobId || 'REQ-1001',
-            customerName: item.customerName || 'Facility Customer',
-            servicePillar: item.servicePillar || 'Hard',
-            amount: item.amount || '$500.00',
-            paymentStatus: item.paymentStatus || 'Paid',
-            invoiceDate: item.invoiceDate || '2026-07-28',
+            id: item.id,
+            jobId: item.jobId,
+            customerName: item.customerName || 'Customer',
+            servicePillar: titleCase(item.servicePillar || 'Hard') as ServicePillar,
+            amount: item.amount,
+            amountLkr: Number(item.amountLkr ?? 0),
+            hours: Number(item.hours ?? 0),
+            paymentStatus: item.paymentStatus,
+            invoiceDate: item.invoiceDate,
           }));
           setFinancials(mappedFin);
         } else {
@@ -803,11 +730,26 @@ export function AdminWorkspace({
             id: item.id || `cust-${Math.random().toString(36).slice(2, 6)}`,
             fullName: item.user?.fullName || 'Customer User',
             displayName: (item.user?.fullName || 'Customer').split(' ')[0],
+            companyName: item.companyName || '',
             email: item.user?.email || 'N/A',
             phone: item.user?.phoneNumber || 'N/A',
             facilityType: titleCase(item.facilityType || 'COMMERCIAL') as FacilityType,
-            subscriptionTier: titleCase(item.subscriptionTier || 'ACCESS') as SubscriptionTier,
-            physicalAddress: 'Site Location',
+            // No plan yet means a lead: signed up, not subscribed.
+            subscriptionTier: (item.subscriptionTier ? titleCase(item.subscriptionTier) : 'No plan (lead)') as SubscriptionTier,
+            physicalAddress: item.address || '—',
+            billing: item.billingCycle ? (item.billingCycle === 'ANNUAL' ? 'Annual' : 'Monthly') : '—',
+            subscribedSince: item.subscribedAt ? new Date(item.subscribedAt).toLocaleDateString() : '',
+            raw: {
+              id: item.id,
+              fullName: item.user?.fullName || '',
+              companyName: item.companyName || '',
+              email: item.user?.email || '',
+              phone: item.user?.phoneNumber || '',
+              address: item.address || '',
+              facilityKey: item.facilityType || 'COMMERCIAL',
+              planKey: item.subscriptionTier || null,
+              billingKey: item.billingCycle || null,
+            },
           }));
           setCustomers(mappedCustomers);
         }
@@ -815,14 +757,14 @@ export function AdminWorkspace({
       .catch((err) => {
         if (!isMounted) return;
         setIsLoading(false);
-        setFetchError(`Unable to load live ${activeView} directory from API. Displaying default records.`);
+        setFetchError(`Could not load ${activeView.replace('-', ' ')} from the API. Press Refresh to try again.`);
         console.warn(`Using default ${activeView} rows, NestJS API connecting or starting:`, err);
       });
 
     return () => {
       isMounted = false;
     };
-  }, [activeView]);
+  }, [activeView, reloadKey]);
 
   const handleCustomerCreated = (newCustomer: CustomerRecord) => {
     setCustomers((prev) => [newCustomer, ...prev]);
@@ -857,29 +799,13 @@ export function AdminWorkspace({
   const filtered = filteredCountMap[activeView] ?? 0;
   const isFiltering = searchQuery.trim().length > 0;
 
-  // Prepare Financial Chart Data
-  const revenueTrend = useMemo(() => {
-    if (activeView !== 'financials') return [];
-    // Mock trend over the last 6 months
-    return [
-      { month: 'Mar', revenue: 12500 },
-      { month: 'Apr', revenue: 15000 },
-      { month: 'May', revenue: 13200 },
-      { month: 'Jun', revenue: 18400 },
-      { month: 'Jul', revenue: 21000 },
-      { month: 'Aug', revenue: 24500 },
-    ];
-  }, [activeView]);
-
-  const revenueByPillar = useMemo(() => {
-    if (activeView !== 'financials') return [];
-    const counts = { Hard: 0, Soft: 0, Strategic: 0 };
-    financials.forEach((f) => {
-      const val = parseFloat(f.amount.replace(/[^0-9.-]+/g,""));
-      counts[f.servicePillar] += val;
-    });
-    return Object.entries(counts).map(([name, value]) => ({ name, value }));
-  }, [activeView, financials]);
+  // Financial charts come straight from the API summary (invoiced jobs plus subscription payments).
+  const revenueTrend = summary?.months ?? [];
+  const revenueByPillar = summary?.byPillar ?? [];
+  const lkr = (value: number) => `LKR ${Math.round(value).toLocaleString('en-LK')}`;
+  const lkrShort = (value: number) => (value >= 1000 ? `${Math.round(value / 100) / 10}k` : String(value));
+  const customerColumns = useMemo(() => makeCustomerColumns(setViewedCustomer, setEditedCustomer), []);
+  const workerColumns = useMemo(() => makeWorkerColumns(setEditedWorker), []);
 
   const searchBar = (
     <div className="metro-search-row">
@@ -925,6 +851,8 @@ export function AdminWorkspace({
           )}
         </div>
       </div>
+      <RefreshButton onClick={() => setReloadKey((k) => k + 1)} loading={isLoading} subject={activeView.replace('-', ' ')} />
+      {fetchError && <span role="alert" style={{ color: '#ff8a80', fontSize: 13 }}>{fetchError}</span>}
       {isFiltering && (
         <div className="metro-search-count-pill">
           {filtered === 0 ? 'No matches' : `${filtered} of ${total}`}
@@ -942,6 +870,7 @@ export function AdminWorkspace({
           key={`customers-${searchQuery}`}
           columns={customerColumns}
           data={filteredCustomers}
+          loading={isLoading}
           emptyMessage={isFiltering ? 'No customers match your search.' : 'No customers found in directory.'}
         />
       )}
@@ -951,6 +880,7 @@ export function AdminWorkspace({
           key={`services-${searchQuery}`}
           columns={serviceColumns}
           data={filteredServices}
+          loading={isLoading}
           emptyMessage={isFiltering ? 'No services match your search.' : 'No service catalog records.'}
         />
       )}
@@ -960,6 +890,7 @@ export function AdminWorkspace({
           key={`workers-${searchQuery}`}
           columns={workerColumns}
           data={filteredWorkers}
+          loading={isLoading}
           emptyMessage={isFiltering ? 'No workers match your search.' : 'No workers registered in system.'}
         />
       )}
@@ -969,12 +900,26 @@ export function AdminWorkspace({
           key={`subscriptions-${searchQuery}`}
           columns={subscriptionColumns}
           data={filteredSubscriptions}
+          loading={isLoading}
           emptyMessage={isFiltering ? 'No subscription tiers match your search.' : 'No subscription tiers defined.'}
         />
       )}
 
       {activeView === 'financials' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', flex: 1, minHeight: 0 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '14px', flexShrink: 0 }}>
+            {[
+              { label: 'Invoiced (approved jobs)', value: summary?.kpis.invoiced ?? 0, note: `${summary?.kpis.invoiceCount ?? 0} invoice${summary?.kpis.invoiceCount === 1 ? '' : 's'}` },
+              { label: 'Awaiting approval', value: summary?.kpis.awaitingApproval ?? 0, note: 'Completed, not yet closed' },
+              { label: 'Subscriptions', value: summary?.kpis.subscriptions ?? 0, note: 'Successful card payments' },
+            ].map((kpi) => (
+              <div key={kpi.label} style={{ background: 'var(--surface)', border: '1px solid var(--border-subtle)', borderRadius: '14px', padding: '14px 16px' }}>
+                <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-secondary)', fontWeight: 700 }}>{kpi.label}</div>
+                <div style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-primary)', marginTop: 4 }}>{lkr(kpi.value)}</div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: 2 }}>{kpi.note}</div>
+              </div>
+            ))}
+          </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '-10px' }}>
             <button 
               onClick={() => setShowCharts(!showCharts)} 
@@ -987,35 +932,35 @@ export function AdminWorkspace({
           {showCharts && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px', flexShrink: 0 }}>
               <div style={{ background: 'var(--surface)', border: '1px solid var(--border-subtle)', borderRadius: '16px', padding: '20px', boxShadow: 'var(--shadow-elevated)' }}>
-                <h3 style={{ margin: '0 0 16px 0', fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>Revenue Trend (6 Months)</h3>
+                <h3 style={{ margin: '0 0 16px 0', fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>Revenue, last 6 months</h3>
                 <div style={{ width: '100%', height: 200 }}>
                   <ResponsiveContainer>
                     <LineChart data={revenueTrend} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
-                      <XAxis dataKey="month" stroke="var(--text-secondary)" fontSize={12} tickLine={false} axisLine={false} />
-                      <YAxis stroke="var(--text-secondary)" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `$${val / 1000}k`} />
+                      <XAxis dataKey="label" stroke="var(--text-secondary)" fontSize={12} tickLine={false} axisLine={false} />
+                      <YAxis stroke="var(--text-secondary)" fontSize={12} tickLine={false} axisLine={false} tickFormatter={lkrShort} width={44} />
                       <Tooltip 
                         contentStyle={{ backgroundColor: 'var(--surface-strong)', border: '1px solid var(--border-subtle)', borderRadius: '8px' }} 
                         itemStyle={{ color: 'var(--text-primary)' }}
-                        formatter={(val: any) => [`$${val.toLocaleString()}`, 'Revenue']}
+                        formatter={(val: any) => [lkr(Number(val)), 'Revenue']}
                       />
-                      <Line type="monotone" dataKey="revenue" stroke="#f38808" strokeWidth={3} dot={{ fill: '#f38808', strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                      <Line type="monotone" dataKey="total" stroke="#f38808" strokeWidth={3} dot={{ fill: '#f38808', strokeWidth: 2 }} activeDot={{ r: 6 }} />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
               </div>
               <div style={{ background: 'var(--surface)', border: '1px solid var(--border-subtle)', borderRadius: '16px', padding: '20px', boxShadow: 'var(--shadow-elevated)' }}>
-                <h3 style={{ margin: '0 0 16px 0', fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>Revenue by Pillar</h3>
+                <h3 style={{ margin: '0 0 16px 0', fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>Revenue by Service</h3>
                 <div style={{ width: '100%', height: 200 }}>
                   <ResponsiveContainer>
                     <BarChart data={revenueByPillar} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
                       <XAxis dataKey="name" stroke="var(--text-secondary)" fontSize={12} tickLine={false} axisLine={false} />
-                      <YAxis stroke="var(--text-secondary)" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `$${val / 1000}k`} />
+                      <YAxis stroke="var(--text-secondary)" fontSize={12} tickLine={false} axisLine={false} tickFormatter={lkrShort} width={44} />
                       <Tooltip 
                         cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                         contentStyle={{ backgroundColor: 'var(--surface-strong)', border: '1px solid var(--border-subtle)', borderRadius: '8px' }}
-                        formatter={(val: any) => [`$${val.toLocaleString()}`, 'Revenue']}
+                        formatter={(val: any) => [lkr(Number(val)), 'Revenue']}
                       />
                       <Bar dataKey="value" fill="#47bfff" radius={[4, 4, 0, 0]} barSize={30} />
                     </BarChart>
@@ -1029,9 +974,56 @@ export function AdminWorkspace({
             key={`financials-${searchQuery}`}
             columns={financialColumns}
             data={filteredFinancials}
-            emptyMessage={isFiltering ? 'No financial records match your search.' : 'No financial ledger entries found.'}
+            loading={isLoading}
+            emptyMessage={isFiltering ? 'No financial records match your search.' : 'No invoices yet. A job appears here once the worker completes it with a priced job card.'}
           />
         </div>
+      )}
+
+      {viewedCustomer && (
+        <div style={styles.modalOverlay} role="dialog" aria-modal="true" aria-label="Customer details" onClick={() => setViewedCustomer(null)}>
+          <div style={{ ...styles.modalContent, maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <h3 style={styles.modalTitle}>{viewedCustomer.fullName}</h3>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <button type="button" style={styles.textButton} onClick={() => { setEditedCustomer(viewedCustomer); setViewedCustomer(null); }}>Edit</button>
+                <button type="button" style={styles.textButton} onClick={() => setViewedCustomer(null)}>Close</button>
+              </div>
+            </div>
+            <dl style={{ display: 'grid', gridTemplateColumns: 'max-content 1fr', gap: '8px 18px', margin: 0, fontSize: '0.9rem' }}>
+              {[
+                ['Company', viewedCustomer.companyName || '—'],
+                ['Email', viewedCustomer.email],
+                ['Phone', viewedCustomer.phone],
+                ['Facility', viewedCustomer.facilityType],
+                ['Address', viewedCustomer.physicalAddress || '—'],
+                ['Plan', viewedCustomer.subscriptionTier],
+                ['Billing', viewedCustomer.billing || '—'],
+                ['Subscribed since', viewedCustomer.subscribedSince || '—'],
+              ].map(([label, value]) => (
+                <div key={label} style={{ display: 'contents' }}>
+                  <dt style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{label}</dt>
+                  <dd style={{ margin: 0, color: 'var(--text-primary)' }}>{value}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        </div>
+      )}
+
+      {editedCustomer?.raw && (
+        <EditCustomerModal
+          customer={editedCustomer.raw}
+          onClose={() => setEditedCustomer(null)}
+          onSaved={() => setReloadKey((k) => k + 1)}
+        />
+      )}
+      {editedWorker?.raw && (
+        <EditWorkerModal
+          worker={editedWorker.raw}
+          onClose={() => setEditedWorker(null)}
+          onSaved={() => setReloadKey((k) => k + 1)}
+        />
       )}
 
       {/* Creation Modal */}

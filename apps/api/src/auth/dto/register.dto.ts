@@ -13,6 +13,7 @@ export const registerSchema = z.object({
       const digits = (value.match(PHONE_DIGITS) ?? []).length;
       return digits >= 7 && digits <= 15;
     }, 'Enter a valid phone number.'),
+  address: z.string().trim().max(300).optional().or(z.literal('')),
   password: z
     .string()
     .min(8, 'Use at least 8 characters.')
@@ -24,5 +25,6 @@ export class RegisterDto {
   fullName!: string;
   email!: string;
   phoneNumber!: string;
+  address?: string;
   password!: string;
 }

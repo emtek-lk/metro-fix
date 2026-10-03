@@ -36,6 +36,7 @@ const EMPTY: RegistrationValues = {
   fullName: '',
   email: '',
   phone: '',
+  address: '',
   password: '',
   confirmPassword: '',
 };
@@ -50,6 +51,7 @@ export function RegisterScreen({ onBack, onSubmit }: RegisterScreenProps) {
 
   const emailRef = useRef<TextInput>(null);
   const phoneRef = useRef<TextInput>(null);
+  const addressRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
   const confirmRef = useRef<TextInput>(null);
 
@@ -156,11 +158,25 @@ export function RegisterScreen({ onBack, onSubmit }: RegisterScreenProps) {
                   returnKeyType="next"
                   blurOnSubmit={false}
                   inputRef={phoneRef}
-                  onSubmitEditing={() => passwordRef.current?.focus()}
+                  onSubmitEditing={() => addressRef.current?.focus()}
                   value={values.phone}
                   onChangeText={set('phone')}
                   error={errors.phone}
                   helperText="Technicians use this to reach you on the day."
+                />
+                <Input
+                  label="Address (optional)"
+                  icon="map-pin"
+                  placeholder="Street, city"
+                  textContentType="fullStreetAddress"
+                  autoComplete="street-address"
+                  returnKeyType="next"
+                  blurOnSubmit={false}
+                  inputRef={addressRef}
+                  onSubmitEditing={() => passwordRef.current?.focus()}
+                  value={values.address ?? ''}
+                  onChangeText={set('address')}
+                  helperText="Where you usually need service. You can change it per request."
                 />
                 <Input
                   label="Password"
@@ -206,6 +222,15 @@ export function RegisterScreen({ onBack, onSubmit }: RegisterScreenProps) {
                   value={values.confirmPassword}
                   onChangeText={set('confirmPassword')}
                   error={errors.confirmPassword}
+                  trailing={
+                    <IconButton
+                      onPress={() => setShowPassword((shown) => !shown)}
+                      accessibilityLabel={showPassword ? 'Hide confirm password' : 'Show confirm password'}
+                      icon={<Icon name={showPassword ? 'eye-off' : 'eye'} size={18} color={colors.textSecondary} />}
+                      backgroundColor="transparent"
+                      size={44}
+                    />
+                  }
                 />
               </View>
 

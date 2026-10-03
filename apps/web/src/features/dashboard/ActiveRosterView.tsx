@@ -1,4 +1,7 @@
-import { useState, useMemo, type CSSProperties } from 'react';
+import { useState, useMemo, useEffect, useCallback, type CSSProperties } from 'react';
+import { API_BASE_URL } from '../../lib/api';
+import { RefreshButton } from '../../components/RefreshButton';
+import { SkeletonCards } from '@metro-fix/ui';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 
 export type RosterWorker = {
@@ -8,73 +11,76 @@ export type RosterWorker = {
   zone: string;
   rating: number;
   currentTask: string;
-  status: 'ON_ROUTE' | 'INSPECTION' | 'IN_PROGRESS' | 'AVAILABLE';
+  status: 'ASSIGNED' | 'ON_ROUTE' | 'INSPECTION' | 'IN_PROGRESS' | 'AVAILABLE' | 'OFF_DUTY';
   lastPing: string;
 };
-
-const rosterData: RosterWorker[] = [
-  {
-    id: 'wrk-101',
-    name: 'Amina Yusuf',
-    phone: '+1 (555) 012-4491',
-    zone: 'North District',
-    rating: 4.9,
-    currentTask: 'REQ-1001 • HVAC Chiller Maintenance',
-    status: 'IN_PROGRESS',
-    lastPing: '2 mins ago (GPS Live)',
-  },
-  {
-    id: 'wrk-102',
-    name: 'Malik Thompson',
-    phone: '+1 (555) 012-7720',
-    zone: 'Central Business',
-    rating: 4.7,
-    currentTask: 'REQ-1002 • Emergency Deep Clean',
-    status: 'ON_ROUTE',
-    lastPing: '1 min ago (GPS Live)',
-  },
-  {
-    id: 'wrk-103',
-    name: 'Nadia Khan',
-    phone: '+1 (555) 012-3310',
-    zone: 'East Park',
-    rating: 4.8,
-    currentTask: 'REQ-1003 • Security Patrol Audit',
-    status: 'INSPECTION',
-    lastPing: '4 mins ago (GPS Live)',
-  },
-  {
-    id: 'wrk-104',
-    name: 'Omar Silva',
-    phone: '+1 (555) 012-8843',
-    zone: 'Harbor Loop',
-    rating: 4.5,
-    currentTask: 'Standby / Unassigned',
-    status: 'AVAILABLE',
-    lastPing: 'Just now (GPS Live)',
-  },
-  {
-    id: 'wrk-105',
-    name: 'David Chen',
-    phone: '+1 (555) 012-1152',
-    zone: 'West Campus',
-    rating: 4.6,
-    currentTask: 'REQ-1004 • Fire Panel Compliance',
-    status: 'ON_ROUTE',
-    lastPing: '3 mins ago (GPS Live)',
-  },
-];
 
 const statusStyles: Record<RosterWorker['status'], { label: string; bg: string; color: string }> = {
   IN_PROGRESS: { label: 'In Progress', bg: 'rgba(243, 136, 8, 0.18)', color: '#f38808' },
   ON_ROUTE: { label: 'On Route', bg: 'rgba(59, 130, 246, 0.18)', color: '#60a5fa' },
   INSPECTION: { label: 'Inspection', bg: 'rgba(168, 85, 247, 0.18)', color: '#c084fc' },
   AVAILABLE: { label: 'Available', bg: 'rgba(74, 173, 131, 0.18)', color: '#4aad83' },
+  ASSIGNED: { label: 'Assigned', bg: 'rgba(129, 140, 248, 0.18)', color: '#818cf8' },
+  OFF_DUTY: { label: 'Off duty', bg: 'rgba(148, 163, 184, 0.18)', color: '#94a3b8' },
 };
+
+// The furthest-along job decides what a worker is doing right now.
+const ACTIVITY_ORDER: RosterWorker['status'][] = ['IN_PROGRESS', 'INSPECTION', 'ON_ROUTE', 'ASSIGNED'];
+
+const timeAgo = (iso?: string | null): string => {
+  if (!iso) return 'No GPS yet';
+  const minutes = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  return hours < 48 ? `${hours} h ago` : `${Math.round(hours / 24)} d ago`;
+};
+
+/** Builds the roster from live workers and jobs: who is on what, and who is free. */
+function buildRoster(workers: any[], jobs: any[]): RosterWorker[] {
+  return workers.map((worker) => {
+    const mine = jobs.filter((job) => job.workerId === worker.id && ACTIVITY_ORDER.includes(job.status));
+    const current = ACTIVITY_ORDER.map((status) => mine.find((job) => job.status === status)).find(Boolean);
+    const status: RosterWorker['status'] = current
+      ? (current.status as RosterWorker['status'])
+      : worker.isAvailable === false
+        ? 'OFF_DUTY'
+        : 'AVAILABLE';
+    return {
+      id: worker.id,
+      name: worker.user?.fullName || 'Field Worker',
+      phone: worker.user?.phoneNumber || '—',
+      zone: (worker.servicePillars ?? []).join(' · ') || 'All services',
+      rating: worker.rating ?? 0,
+      currentTask: current ? `#${String(current.id).slice(0, 6).toUpperCase()} • ${current.title}` : 'Standby / unassigned',
+      status,
+      lastPing: worker.latitude != null ? timeAgo(worker.updatedAt) : 'No GPS yet',
+    };
+  });
+}
 
 export function ActiveRosterView() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showCharts, setShowCharts] = useState(true);
+  const [rosterData, setRosterData] = useState<RosterWorker[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    const token = localStorage.getItem('metrofix_token');
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+    setLoading(true);
+    setLoadError(null);
+    Promise.all([
+      fetch(`${API_BASE_URL}/workers`, { headers }).then((res) => (res.ok ? res.json() : Promise.reject(res.status))),
+      fetch(`${API_BASE_URL}/jobs`, { headers }).then((res) => (res.ok ? res.json() : Promise.reject(res.status))),
+    ])
+      .then(([workers, jobs]) => setRosterData(buildRoster(workers, jobs)))
+      .catch(() => setLoadError('Could not load the roster from the API. Press Refresh to try again.'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(load, [load]);
 
   const filteredRoster = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
@@ -84,20 +90,20 @@ export function ActiveRosterView() {
         v.toLowerCase().includes(q)
       )
     );
-  }, [searchQuery]);
+  }, [searchQuery, rosterData]);
 
   const isFiltering = searchQuery.trim().length > 0;
 
   // Prepare Chart Data
   const statusCounts = useMemo(() => {
-    const counts = { IN_PROGRESS: 0, ON_ROUTE: 0, INSPECTION: 0, AVAILABLE: 0 };
+    const counts: Record<RosterWorker['status'], number> = { IN_PROGRESS: 0, ON_ROUTE: 0, INSPECTION: 0, ASSIGNED: 0, AVAILABLE: 0, OFF_DUTY: 0 };
     rosterData.forEach((w) => counts[w.status]++);
     return Object.entries(counts).map(([status, value]) => ({
       name: statusStyles[status as RosterWorker['status']].label,
       value,
       color: statusStyles[status as RosterWorker['status']].color,
     })).filter(item => item.value > 0);
-  }, []);
+  }, [rosterData]);
 
   const ratingByZone = useMemo(() => {
     const zones: Record<string, { total: number; count: number }> = {};
@@ -110,7 +116,7 @@ export function ActiveRosterView() {
       name: zone,
       rating: Number((data.total / data.count).toFixed(1)),
     }));
-  }, []);
+  }, [rosterData]);
 
   return (
     <div style={styles.container}>
@@ -130,7 +136,7 @@ export function ActiveRosterView() {
             <div style={{ width: '100%', height: 200 }}>
               <ResponsiveContainer>
                 <PieChart>
-                  <Pie data={statusCounts} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5}>
+                  <Pie data={statusCounts} dataKey="value" nameKey="name" cx="35%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5}>
                     {statusCounts.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
@@ -139,13 +145,24 @@ export function ActiveRosterView() {
                     contentStyle={{ backgroundColor: 'var(--surface-strong)', border: '1px solid var(--border-subtle)', borderRadius: '8px' }} 
                     itemStyle={{ color: 'var(--text-primary)' }} 
                   />
+                  <Legend
+                    verticalAlign="middle"
+                    align="right"
+                    layout="vertical"
+                    iconType="circle"
+                    formatter={(value, entry: any) => (
+                      <span style={{ color: 'var(--text-primary)', fontSize: 12 }}>
+                        {value} · {entry?.payload?.value}
+                      </span>
+                    )}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             </div>
           </div>
           
           <div style={styles.chartCard}>
-            <h3 style={styles.chartTitle}>Average Rating by Zone</h3>
+            <h3 style={styles.chartTitle}>Average Rating by Service</h3>
             <div style={{ width: '100%', height: 200 }}>
               <ResponsiveContainer>
                 <BarChart data={ratingByZone} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -199,6 +216,8 @@ export function ActiveRosterView() {
             )}
           </div>
         </div>
+        <RefreshButton onClick={load} loading={loading} subject="active roster" />
+        {loadError && <span role="alert" style={{ color: '#ff8a80', fontSize: 13 }}>{loadError}</span>}
         {isFiltering && (
           <div className="metro-search-count-pill">
             {filteredRoster.length === 0
@@ -214,7 +233,7 @@ export function ActiveRosterView() {
             <thead>
               <tr>
                 <th style={styles.th}>Worker Name</th>
-                <th style={styles.th}>Coverage Zone</th>
+                <th style={styles.th}>Services</th>
                 <th style={styles.th}>Current Task</th>
                 <th style={styles.th}>Internal Rating</th>
                 <th style={styles.th}>Status</th>
@@ -225,7 +244,7 @@ export function ActiveRosterView() {
               {filteredRoster.length === 0 ? (
                 <tr>
                   <td colSpan={6} style={{ ...styles.td, textAlign: 'center', padding: '32px', color: 'var(--text-secondary)' }}>
-                    {isFiltering ? 'No workers match your search.' : 'No active roster data.'}
+                    {loading ? <SkeletonCards count={3} height={36} /> : isFiltering ? 'No workers match your search.' : 'No workers registered yet.'}
                   </td>
                 </tr>
               ) : (
@@ -243,7 +262,7 @@ export function ActiveRosterView() {
                       <span style={styles.rating}>★ {worker.rating.toFixed(1)}</span>
                     </td>
                     <td style={styles.td}>
-                      <span style={{ ...styles.statusPill, backgroundColor: s.bg, color: s.color }}>
+                      <span style={{ ...styles.statusPill, backgroundColor: s.bg, color: s.color, whiteSpace: 'nowrap' }}>
                         {s.label}
                       </span>
                     </td>

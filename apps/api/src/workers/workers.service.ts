@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { WorkerEntity, ServiceRequestEntity, UserEntity } from '../entities';
@@ -11,6 +11,7 @@ import {
 } from '@metro-fix/core-types';
 
 import { CreateWorkerDto } from './dto/create-worker.dto';
+import { UpdateWorkerDto } from './dto/update-worker.dto';
 
 /** A worker's own numbers, for the Profile screen. */
 export interface WorkerStats {
@@ -29,6 +30,15 @@ export interface WorkerStats {
  * carry fewer than this many accepted, unfinished jobs. Override with MAX_ACTIVE_JOBS.
  */
 export const DEFAULT_MAX_ACTIVE_JOBS = 5;
+
+/** Statuses in which a job counts against its worker's workload. */
+const OPEN_STATUSES = [
+  JobStatus.PENDING_ACCEPTANCE,
+  JobStatus.ASSIGNED,
+  JobStatus.ON_ROUTE,
+  JobStatus.INSPECTION,
+  JobStatus.IN_PROGRESS,
+];
 
 export type UnavailableReason = 'OFF_DUTY' | 'AT_CAPACITY' | 'DECLINED_THIS_JOB';
 
@@ -54,8 +64,18 @@ export class WorkersService {
     private readonly userRepo: Repository<UserEntity>,
   ) {}
 
-  async findAll(): Promise<WorkerEntity[]> {
-    return this.workerRepo.find({ relations: { user: true } });
+  /** All workers, each with `liveActiveJobs`: accepted unfinished jobs plus open offers, counted now. */
+  async findAll(): Promise<(WorkerEntity & { liveActiveJobs: number })[]> {
+    const workers = await this.workerRepo.find({ relations: { user: true } });
+    const open = await this.jobRepo.find({
+      where: { status: In(OPEN_STATUSES) },
+      select: { id: true, workerId: true },
+    });
+    const workload = new Map<string, number>();
+    for (const { workerId } of open) {
+      if (workerId) workload.set(workerId, (workload.get(workerId) ?? 0) + 1);
+    }
+    return workers.map((worker) => Object.assign(worker, { liveActiveJobs: workload.get(worker.id) ?? 0 }));
   }
 
   async findOne(id: string): Promise<WorkerEntity> {
@@ -158,7 +178,7 @@ export class WorkersService {
 
     // Live workload per worker: accepted unfinished jobs and open offers.
     const open = await this.jobRepo.find({
-      where: { status: In([JobStatus.PENDING_ACCEPTANCE, JobStatus.ASSIGNED, JobStatus.ON_ROUTE, JobStatus.INSPECTION, JobStatus.IN_PROGRESS]) },
+      where: { status: In(OPEN_STATUSES) },
       select: { id: true, workerId: true },
     });
     const workload = new Map<string, number>();
@@ -198,6 +218,31 @@ export class WorkersService {
       .filter((res) => includeUnavailable || res.available)
       .filter((res) => radiusMeters <= 0 || res.distanceMeters <= radiusMeters)
       .sort((a, b) => Number(b.available) - Number(a.available) || b.dispatchScore - a.dispatchScore);
+  }
+
+  /**
+   * Admin edit of a worker: contact details (the email is their login, so it stays unique), the
+   * internal rating dispatch ranks by, which services they cover, and whether they are on duty.
+   */
+  async updateWorker(id: string, dto: UpdateWorkerDto): Promise<WorkerEntity> {
+    const worker = await this.findOne(id);
+
+    if (dto.email !== undefined && dto.email !== worker.user.email) {
+      const taken = await this.userRepo.findOne({ where: { email: dto.email } });
+      if (taken && taken.id !== worker.user.id) {
+        throw new ConflictException(`Another account already uses "${dto.email}".`);
+      }
+      worker.user.email = dto.email;
+    }
+    if (dto.fullName !== undefined) worker.user.fullName = dto.fullName;
+    if (dto.phoneNumber !== undefined) worker.user.phoneNumber = dto.phoneNumber;
+    await this.userRepo.save(worker.user);
+
+    if (dto.rating !== undefined) worker.rating = dto.rating;
+    if (dto.servicePillars !== undefined) worker.servicePillars = dto.servicePillars;
+    if (dto.isAvailable !== undefined) worker.isAvailable = dto.isAvailable;
+    await this.workerRepo.save(worker);
+    return this.findOne(id);
   }
 
   /** A worker's own on-duty switch. Off-duty workers are not offered new jobs. */

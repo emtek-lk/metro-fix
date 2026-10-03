@@ -83,7 +83,7 @@ function build(initial: Initial) {
     }),
   };
   const customerRepo = {
-    findOne: jest.fn(async () => ({ id: 'cust-1', userId: 'user-c1' })),
+    findOne: jest.fn(async (): Promise<any> => ({ id: 'cust-1', userId: 'user-c1' })),
   };
   const gateway = {
     emitJobUpdated: jest.fn(),
@@ -96,7 +96,7 @@ function build(initial: Initial) {
     customerRepo as any,
     gateway as any,
   );
-  return { service, jobRepo, gateway, job, loseNextRace: () => (loseNextRace = true) };
+  return { service, jobRepo, customerRepo, gateway, job, loseNextRace: () => (loseNextRace = true) };
 }
 
 const lastHistory = (job: any): JobOfferRecord => job.offerHistory[job.offerHistory.length - 1];
@@ -589,5 +589,26 @@ describe('cancelling', () => {
   it('says so when it is already cancelled', async () => {
     const { service } = build({ status: JobStatus.CANCELLED });
     await expect(service.cancelJob(JOB_ID, {}, customer)).rejects.toThrow('already cancelled');
+  });
+});
+
+describe('subscription gate on raising a request', () => {
+  const dto: any = { title: 'Leaky tap', description: 'Drips all day', servicePillar: 'HARD', facilityType: 'RESIDENTIAL', customerId: 'cust-1', location: { latitude: 6.9, longitude: 79.8 } };
+
+  it('refuses a customer with no plan, with a code the apps can act on', async () => {
+    const { service, customerRepo } = build({ status: JobStatus.REQUESTED });
+    customerRepo.findOne.mockResolvedValue({ id: 'cust-1', userId: 'user-c1', subscriptionTier: null });
+    await expect(service.createJob(dto, { requireSubscription: true })).rejects.toMatchObject({
+      status: 402,
+      response: expect.objectContaining({ code: 'SUBSCRIPTION_REQUIRED' }),
+    });
+  });
+
+  it('lets a subscribed customer through, and lets dispatch raise one for anyone', async () => {
+    const { service, customerRepo } = build({ status: JobStatus.REQUESTED });
+    customerRepo.findOne.mockResolvedValue({ id: 'cust-1', userId: 'user-c1', subscriptionTier: 'PLUS' });
+    await expect(service.createJob(dto, { requireSubscription: true })).resolves.toBeDefined();
+    customerRepo.findOne.mockResolvedValue({ id: 'cust-1', userId: 'user-c1', subscriptionTier: null });
+    await expect(service.createJob(dto)).resolves.toBeDefined();
   });
 });

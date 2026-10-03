@@ -4,3 +4,4 @@ export * from './customer.entity';
 export * from './service-request.entity';
 export * from './service-catalog.entity';
 export * from './subscription-plan.entity';
+export * from './subscription-payment.entity';

@@ -4,6 +4,8 @@ import { BrandLogo, useMediaQuery } from '@metro-fix/ui';
 import ThemeToggle from '../../theme/ThemeToggle';
 import { Login } from './Login';
 import { Register } from './Register';
+import { OnboardingPlans } from '../subscriptions/OnboardingPlans';
+import { API_BASE_URL } from '../../lib/api';
 
 export interface AuthShellProps {
   onAuthenticated: (user: User, token: string, targetPath: string) => void;
@@ -13,6 +15,7 @@ type AuthMode = 'login' | 'register';
 
 export function AuthShell({ onAuthenticated }: AuthShellProps) {
   const [mode, setMode] = useState<AuthMode>('login');
+  const [onboarding, setOnboarding] = useState<{ user: User; token: string } | null>(null);
   const isCompact = useMediaQuery('(max-width: 960px)');
 
   const handleLoginSuccess = (data: { accessToken: string; user: User }) => {
@@ -30,30 +33,52 @@ export function AuthShell({ onAuthenticated }: AuthShellProps) {
     onAuthenticated(user, accessToken, targetPath);
   };
 
-  const handleRegistrationSuccess = (values: RegistrationInput) => {
-    // Self-registration only ever creates customers; staff accounts are created by an admin.
-    const role = Role.CUSTOMER;
-    const targetPath = '/portal/services';
-    const mockToken = `mock_token_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-
-    const user: User = {
-      id: `usr_${Date.now()}`,
-      fullName: values.fullName,
-      email: values.email,
-      role,
-      phoneNumber: values.phoneNumber || undefined,
-      createdAt: new Date().toISOString(),
-    };
-
-    try {
-      localStorage.setItem('metrofix_token', mockToken);
-      localStorage.setItem('metrofix_user', JSON.stringify(user));
-    } catch {
-      // Storage fallback
-    }
-
-    onAuthenticated(user, mockToken, targetPath);
+  const finishSignIn = (user: User, token: string) => {
+    onAuthenticated(user, token, '/portal/services');
   };
+
+  // Step one of sign-up: create the account. It exists from here on (as a lead with no plan).
+  const handleRegistrationSuccess = async (values: RegistrationInput, address: string): Promise<string | null> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: values.fullName,
+          email: values.email,
+          phoneNumber: values.phoneNumber,
+          password: values.password,
+          ...(address ? { address } : {}),
+        }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        const fieldErrors = data?.errors && Object.values(data.errors).flat().join(' ');
+        return fieldErrors || data?.message || 'We could not create your account. Please try again.';
+      }
+      try {
+        localStorage.setItem('metrofix_token', data.accessToken);
+        localStorage.setItem('metrofix_user', JSON.stringify(data.user));
+      } catch {
+        // Storage fallback
+      }
+      setOnboarding({ user: data.user as User, token: data.accessToken as string });
+      return null;
+    } catch {
+      return 'We could not reach the server. Check your connection and try again.';
+    }
+  };
+
+  // Step two: choose a plan, or skip. Either way they land on the app home.
+  if (onboarding) {
+    return (
+      <OnboardingPlans
+        firstName={onboarding.user.fullName.split(' ')[0]}
+        token={onboarding.token}
+        onDone={() => finishSignIn(onboarding.user, onboarding.token)}
+      />
+    );
+  }
 
   return (
     <div style={{ ...styles.screen, ...(isCompact ? styles.screenCompact : undefined) }}>

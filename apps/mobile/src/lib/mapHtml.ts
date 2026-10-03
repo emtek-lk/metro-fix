@@ -1,3 +1,5 @@
+import { LEAFLET_CSS, LEAFLET_JS } from '../vendor/leafletBundle';
+
 /**
  * The page shown inside the location picker's WebView (or iframe on web): a Leaflet map on
  * OpenStreetMap tiles with one draggable pin. It reports the pin as `{ type: 'pick', latitude,
@@ -9,10 +11,15 @@ export function buildMapHtml(initial: { latitude: number; longitude: number } | 
   return `<!doctype html>
 <html><head>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<style>html,body,#map{height:100%;margin:0;padding:0;background:#e5e7eb}.leaflet-control-attribution{font-size:9px}</style>
+<style>${LEAFLET_CSS}</style>
+<style>
+html,body,#map{height:100%;margin:0;padding:0;background:#e5e7eb}
+.leaflet-control-attribution{font-size:9px}
+.metro-pin{width:26px;height:26px;border-radius:50% 50% 50% 0;background:#f38808;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.4);transform:rotate(-45deg)}
+.metro-pin::after{content:'';position:absolute;top:6px;left:6px;width:8px;height:8px;border-radius:50%;background:#fff}
+</style>
 </head><body><div id="map"></div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>${LEAFLET_JS}</script>
 <script>
 (function () {
   var post = function (payload) {
@@ -23,10 +30,11 @@ export function buildMapHtml(initial: { latitude: number; longitude: number } | 
   if (!window.L) { post({ type: 'error', message: 'The map could not be loaded. Check your internet connection.' }); return; }
   var map = L.map('map', { zoomControl: true }).setView([${center.latitude}, ${center.longitude}], ${startZoom});
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(map);
+  var PIN = L.divIcon({ className: '', html: '<div class="metro-pin"></div>', iconSize: [26, 26], iconAnchor: [13, 26] });
   var marker = null;
   function put(lat, lng, pan, notify) {
     if (!marker) {
-      marker = L.marker([lat, lng], { draggable: true }).addTo(map);
+      marker = L.marker([lat, lng], { draggable: true, icon: PIN }).addTo(map);
       marker.on('dragend', function () { var p = marker.getLatLng(); post({ type: 'pick', latitude: p.lat, longitude: p.lng }); });
     } else { marker.setLatLng([lat, lng]); }
     if (pan) map.setView([lat, lng], Math.max(map.getZoom(), 16));

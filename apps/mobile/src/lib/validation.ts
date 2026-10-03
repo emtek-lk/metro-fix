@@ -2,6 +2,8 @@ export interface RegistrationValues {
   fullName: string;
   email: string;
   phone: string;
+  /** Optional site or billing address. */
+  address?: string;
   password: string;
   confirmPassword: string;
 }

@@ -47,3 +47,6 @@ apps/web/.eslintcache
 
 # --- Testing ---
 coverage/
+
+# user uploads (job photos)
+apps/api/uploads/

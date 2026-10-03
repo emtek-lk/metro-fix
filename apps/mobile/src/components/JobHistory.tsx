@@ -1,5 +1,5 @@
 import React from 'react';
-import { Animated, Pressable, View, StyleSheet } from 'react-native';
+import { Animated, Pressable, RefreshControl, View, StyleSheet } from 'react-native';
 import { Text } from './ui/AppText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { JobStatus, ServiceRequest, isFinishedStatus } from '@metro-fix/core-types';
@@ -26,7 +26,7 @@ export interface JobHistoryScreenProps {
 
 export const JobHistoryScreen: React.FC<JobHistoryScreenProps> = ({ onSelectJob }) => {
   const insets = useSafeAreaInsets();
-  const { data: jobs, isLoading } = useWorkerJobs();
+  const { data: jobs, isLoading, isRefetching, refetch } = useWorkerJobs();
   const { scrollY, onScroll } = useCollapsingHeader();
 
   const historyJobs = Array.isArray(jobs)
@@ -72,6 +72,9 @@ export const JobHistoryScreen: React.FC<JobHistoryScreenProps> = ({ onSelectJob 
             { paddingBottom: tabBarClearance(insets) },
           ]}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.brand} colors={[colors.brand]} />
+          }
           renderItem={({ item }: { item: ServiceRequest }) => (
             <Pressable
               disabled={!onSelectJob}

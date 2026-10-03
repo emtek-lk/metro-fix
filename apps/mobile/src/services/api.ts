@@ -1,5 +1,8 @@
+import { Platform } from 'react-native';
 import {
   JobStatus,
+  type CustomerSubscription,
+  type CheckoutInput,
   ServiceRequest,
   ServicePillar,
   FacilityType,
@@ -22,6 +25,7 @@ export interface RegisterInput {
   fullName: string;
   email: string;
   phone: string;
+  address?: string;
   password: string;
 }
 
@@ -38,6 +42,23 @@ export interface WorkerStats {
 export interface LoginResponse {
   accessToken: string;
   user: User;
+}
+
+/** A subscription plan as GET /subscriptions returns it. */
+export interface SubscriptionPlan {
+  id: string;
+  tierName: string;
+  targetCustomer?: string | null;
+  monthlyFeeLkr: number | null;
+  annualFeeLkr: number | null;
+  isCustomPriced: boolean;
+  includedVisitsPerMonth?: number | null;
+  includedLabourHoursPerMonth?: number | null;
+  labourDiscountPct?: number;
+  inspectionCadence?: string;
+  callOutWaived?: boolean;
+  includedServices?: string;
+  status: string;
 }
 
 export class MobileApiService {
@@ -207,6 +228,52 @@ export class MobileApiService {
   }
 
   /**
+   * Uploads one job photo and returns the stored path (`/uploads/<id>.jpg`).
+   * POST /uploads (multipart)
+   */
+  async uploadPhoto(uri: string): Promise<string> {
+    const form = new FormData();
+    if (Platform.OS === 'web') {
+      // On web the picker hands back a blob / data URL, which has to be sent as a Blob.
+      (form as any).append('file', await (await fetch(uri)).blob(), 'photo.jpg');
+    } else {
+      form.append('file', { uri, name: 'photo.jpg', type: 'image/jpeg' } as unknown as Blob);
+    }
+    const res = await apiClient.post('/uploads', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60000,
+    });
+    return res.data.url as string;
+  }
+
+  /**
+   * The plans on offer (public).
+   * GET /subscriptions
+   */
+  async fetchPlans(): Promise<SubscriptionPlan[]> {
+    const res = await apiClient.get('/subscriptions');
+    return (res.data as SubscriptionPlan[]).filter((plan) => plan.status === 'Active');
+  }
+
+  /**
+   * The signed-in customer's plan (tier is null until they subscribe) and payment history.
+   * GET /subscriptions/me
+   */
+  async fetchMySubscription(): Promise<CustomerSubscription> {
+    const res = await apiClient.get('/subscriptions/me');
+    return res.data;
+  }
+
+  /**
+   * Buy or change a plan with a (demo) card.
+   * POST /subscriptions/checkout
+   */
+  async checkout(input: CheckoutInput): Promise<CustomerSubscription> {
+    const res = await apiClient.post('/subscriptions/checkout', input);
+    return res.data;
+  }
+
+  /**
    * Customer self-registration; returns a signed-in session.
    * POST /auth/register
    */
@@ -215,6 +282,7 @@ export class MobileApiService {
       fullName: input.fullName,
       email: input.email,
       phoneNumber: input.phone,
+      ...(input.address?.trim() ? { address: input.address.trim() } : {}),
       password: input.password,
     });
     return res.data;

@@ -45,11 +45,15 @@
 |-------|------|-------|
 | `admin@demo.local` | ADMIN | Web dashboard full access |
 | `dispatch@demo.local` | CUSTOMER_CARE | Dispatch board, roster |
-| `worker1@demo.local` | WORKER | Carlos Rivera, primary mobile test worker |
-| `worker2@demo.local` | WORKER | Priya Sharma |
-| `eleanor@skylinetowers.com` | CUSTOMER | Commercial / Business |
-| `marcus@residences.lk` | CUSTOMER | Residential / Plus |
-| `sophia@industrialpark.com` | CUSTOMER | Industrial / Access |
+| `worker1@demo.local` | WORKER | Ruwan Kumara, primary mobile test worker (Hard + Strategic) |
+| `worker2@demo.local` | WORKER | Nadeesha Rathnayake (Soft) |
+| `eleanor@skylinetowers.com` | CUSTOMER | Nimali Fernando, Skyline Towers: Commercial / Business |
+| `marcus@residences.lk` | CUSTOMER | Kasun Wijesinghe, Havelock Residencies: Residential / Plus |
+| `sophia@industrialpark.com` | CUSTOMER | Priyanka Jayawardena, Biyagama Precision Components: Industrial / Essential |
+| `dilshan.perera@demo.local` and 6 more | CUSTOMER | Perera & Sons Hardware (Access), Lotus Wellness Spa (Essential), Crescent Medical Centre (Business), Gunasekara Residence (Access), Ceylon Tea Traders (Plus); `sachini.abeywickrama@demo.local` and `ibrahim.hussain@demo.local` have no plan (leads) |
+| `asanka.jayasuriya@demo.local` and 7 more | WORKER | Colombo technicians across Hard, Soft and Strategic; `thushara.mendis@demo.local` is off duty |
+
+The dataset (10 customers, 10 workers, 29 jobs across every lifecycle stage, job cards, six months of invoices and subscription payments) lives in `apps/api/src/common/demo-data.ts`. It is added on startup when the marker customer `dilshan.perera@demo.local` has no jobs yet, and never overwrites existing plans or jobs.
 
 ---
 
@@ -141,6 +145,9 @@ Returns: Single `ServiceRequestEntity` with relations.
 
 **Roles:** CUSTOMER. Returns only jobs belonging to the logged-in customer. `POST /jobs` by a CUSTOMER always creates the job for their own profile (the `customerId` in the body is ignored).
 
+### 3.x Customer subscription
+`GET /subscriptions` (public) lists plans. `GET /subscriptions/me` (CUSTOMER) returns `{tier|null, billingCycle, subscribedAt, address, payments[]}`. `POST /subscriptions/checkout` (CUSTOMER) body `{tier, billingCycle: MONTHLY|ANNUAL, card:{number,name,expiry MM/YY,cvc}}` charges the demo gateway and switches the plan (upgrade and downgrade are the same call); a declined card returns 402 with the reason. `POST /auth/register` accepts an optional `address` and creates the customer with no plan. `POST /jobs` by a customer with no plan returns 402 `{code: "SUBSCRIPTION_REQUIRED"}`.
+
 ### 4.5 Offer to Worker — `POST /jobs/:id/offer` (alias `PATCH /jobs/:id/assign`)
 
 REQUESTED -> PENDING_ACCEPTANCE. The worker then calls `POST /jobs/:id/accept` or `POST /jobs/:id/decline`; an unanswered offer returns to REQUESTED after `OFFER_TIMEOUT_SECONDS` (9 hours). `POST /jobs/:id/cancel` cancels before work starts.
@@ -183,13 +190,15 @@ Body: `{ lineItems: [{kind: LABOUR|MATERIAL|OTHER, description, quantity, unitPr
 // Request
 {
   "signature": "data:image/png;base64,iVBORw0K...",
-  "photos": ["https://example.com/photo1.jpg", "data:image/jpeg;base64,..."]
+  "photos": ["/uploads/3f2c9a.jpg"]
 }
 
 // Response 201 — Updated ServiceRequestEntity with status: "COMPLETED"
 ```
 
-**Side effects:** Sets `signature`, `photos`. Transitions to `COMPLETED`.
+**Side effects:** Sets `signature`, `photos` (paths from `POST /uploads`; older proofs may hold data URIs), and the optional `finalCard`. Transitions to `COMPLETED`.
+
+`GET /workers` (ADMIN, CUSTOMER_CARE) now also returns `liveActiveJobs` per worker (accepted unfinished jobs plus open offers).
 
 ---
 
@@ -278,11 +287,24 @@ Sends push notification to all available workers (FCM).
 
 ---
 
+### 8a. Admin edits
+
+| Method | Route | Auth | Body (all optional, only what is sent changes) |
+|--------|-------|------|------|
+| `PATCH` | `/customers/:id` | ADMIN | `fullName, email, phoneNumber, companyName, address, facilityType, subscriptionTier (null clears the plan), billingCycle`. Email must stay unique (409 otherwise); setting a plan records no payment. |
+| `PATCH` | `/workers/:id` | ADMIN | `fullName, email, phoneNumber, rating (1-5), servicePillars[], isAvailable`. Email must stay unique (409). |
+
 ## 9. Financials
 
 | Method | Route | Auth | Description |
 |--------|-------|------|-------------|
-| `GET` | `/financials/summary` | Public | Aggregate dashboard stats |
+| `GET` | `/financials` | ADMIN | One invoice per COMPLETED / CLOSED job that has a price: `{id: "INV-<ref>", jobId, customerName, servicePillar, amount: "LKR 4,500.00", amountLkr, hours, paymentStatus: "Invoiced"\|"Awaiting approval", invoiceDate}`. Billed from the final job card, else the estimate, else the flat quote. No jobs, no rows. |
+| `GET` | `/financials/summary` | ADMIN | `{months[6]: {key,label,jobs,subscriptions,total}, byPillar[], kpis: {invoiced, awaitingApproval, subscriptions, invoiceCount}}` in LKR; invoiced = CLOSED jobs by `closedAt`, plus successful subscription payments |
+| `GET` | `/financials/export` | ADMIN | CSV of the invoices above |
+
+## 9a. Uploads
+
+`POST /uploads` (WORKER, ADMIN, CUSTOMER_CARE), multipart field `file`, JPEG / PNG / WebP / HEIC up to 8 MB (checked by content, not by the name the client sends). Returns `{url: "/uploads/<uuid>.jpg", bytes}`. Files are served from `/uploads/*` and stored in `UPLOAD_DIR` (default `apps/api/uploads`). Store the returned relative path in `photos`; clients prefix their API base.
 
 ---
 

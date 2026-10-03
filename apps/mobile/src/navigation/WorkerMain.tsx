@@ -110,6 +110,7 @@ export function WorkerMain({ navigation }: Props) {
         unreadCount={notifications.unreadCount}
         onMarkRead={notifications.markRead}
         onMarkAllRead={notifications.markAllRead}
+        onRefresh={() => queryClient.invalidateQueries({ queryKey: ['workerJobs'] })}
       />
     ),
     profile: () => (

@@ -10,6 +10,7 @@ import { AddSubscriptionModal } from './features/subscriptions/AddSubscriptionMo
 import { ProfileModal } from './features/profile/ProfileModal';
 import { PortalServices } from './features/portal/PortalServices';
 import { PortalRequests } from './features/portal/PortalRequests';
+import { PortalSubscription } from './features/portal/PortalSubscription';
 import { NotFound } from './features/errors/NotFound';
 import { Unauthorized } from './features/errors/Unauthorized';
 import { evaluateRouteGuard, getHomePathForRole, isKnownRoute } from './routing/routeGuard';
@@ -31,6 +32,7 @@ const pathToConfig: Record<string, { label: string; viewType?: AdminViewType }> 
   '/admin': { label: 'Customers', viewType: 'customers' },
   '/portal/services': { label: 'Browse Services' },
   '/portal/requests': { label: 'My Requests' },
+  '/portal/subscription': { label: 'Subscription' },
 };
 
 const labelToPath: Record<string, string> = {
@@ -43,6 +45,7 @@ const labelToPath: Record<string, string> = {
   'Financials': '/financials',
   'Browse Services': '/portal/services',
   'My Requests': '/portal/requests',
+  'Subscription': '/portal/subscription',
 };
 
 // ─── Shared Styles ───────────────────────────────────────────────────
@@ -362,9 +365,11 @@ export default function App() {
       case '/financials':
         return <AdminWorkspace activeView="financials" />;
       case '/portal/services':
-        return <PortalServices onRequested={() => { setPortalRefresh((k) => k + 1); showToast('Request sent! Dispatch will assign a technician shortly.', 'success'); navigateTo('/portal/requests'); }} />;
+        return <PortalServices onNeedSubscription={() => navigateTo('/portal/subscription')} onRequested={() => { setPortalRefresh((k) => k + 1); showToast('Request sent! Dispatch will assign a technician shortly.', 'success'); navigateTo('/portal/requests'); }} />;
       case '/portal/requests':
         return <PortalRequests refreshKey={portalRefresh} />;
+      case '/portal/subscription':
+        return <PortalSubscription onChanged={() => showToast('Your subscription was updated.', 'success')} onDeclined={(message) => showToast(message, 'error')} />;
       case '/dispatch':
       default:
         return <CustomerCareView />;

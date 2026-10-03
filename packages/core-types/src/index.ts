@@ -257,7 +257,7 @@ export type Worker = z.infer<typeof workerSchema>;
 // Customer Schema (Extends User with facility type and subscription tier)
 export const customerSchema = userSchema.extend({
   facilityType: z.nativeEnum(FacilityType),
-  subscriptionTier: z.nativeEnum(SubscriptionTier),
+  subscriptionTier: z.nativeEnum(SubscriptionTier).nullable().optional(),
   facilityLocation: locationCoordinatesSchema.optional(),
 });
 
@@ -400,6 +400,137 @@ export function computeJobCardTotals(
 export function jobCardBillable(card: JobCard | null | undefined): JobCardSection | null {
   if (!card) return null;
   return card.final ?? card.estimate ?? null;
+}
+
+// ==========================================
+// Customer subscription & (demo) card payment
+// ==========================================
+
+export type BillingCycle = 'MONTHLY' | 'ANNUAL';
+
+/** Error code the API sends when a customer without a paid plan tries to raise a request. */
+export const SUBSCRIPTION_REQUIRED_CODE = 'SUBSCRIPTION_REQUIRED';
+
+export type CardBrand = 'VISA' | 'MASTERCARD' | 'AMEX' | 'UNKNOWN';
+
+export interface SubscriptionPaymentRecord {
+  id: string;
+  tier: SubscriptionTier;
+  billingCycle: BillingCycle;
+  amountLkr: number;
+  cardBrand: CardBrand;
+  cardLast4: string;
+  status: 'SUCCEEDED' | 'DECLINED';
+  reference: string;
+  createdAt: string;
+}
+
+/** A customer's own subscription as `GET /subscriptions/me` returns it. `tier` is null until they pick a plan. */
+export interface CustomerSubscription {
+  tier: SubscriptionTier | null;
+  billingCycle: BillingCycle | null;
+  subscribedAt: string | null;
+  address: string | null;
+  payments: SubscriptionPaymentRecord[];
+}
+
+export interface DemoCardInput {
+  number: string;
+  name: string;
+  /** MM/YY */
+  expiry: string;
+  cvc: string;
+}
+
+export interface CheckoutInput {
+  tier: SubscriptionTier;
+  billingCycle: BillingCycle;
+  card: DemoCardInput;
+}
+
+/** Card number with spaces / dashes removed. */
+export const cardDigits = (value: string): string => value.replace(/\D/g, '');
+
+export function detectCardBrand(value: string): CardBrand {
+  const digits = cardDigits(value);
+  if (/^4/.test(digits)) return 'VISA';
+  if (/^(5[1-5]|2[2-7])/.test(digits)) return 'MASTERCARD';
+  if (/^3[47]/.test(digits)) return 'AMEX';
+  return 'UNKNOWN';
+}
+
+/** Luhn check, the checksum every real card number satisfies. */
+export function isValidCardNumber(value: string): boolean {
+  const digits = cardDigits(value);
+  if (digits.length < 13 || digits.length > 19) return false;
+  let sum = 0;
+  let double = false;
+  for (let i = digits.length - 1; i >= 0; i -= 1) {
+    let n = Number(digits[i]);
+    if (double) {
+      n *= 2;
+      if (n > 9) n -= 9;
+    }
+    sum += n;
+    double = !double;
+  }
+  return sum % 10 === 0;
+}
+
+/** `MM/YY` that is a real month and not already past. */
+export function isValidCardExpiry(value: string, now: Date = new Date()): boolean {
+  const match = /^(\d{2})\s*\/\s*(\d{2})$/.exec(value.trim());
+  if (!match) return false;
+  const month = Number(match[1]);
+  const year = 2000 + Number(match[2]);
+  if (month < 1 || month > 12) return false;
+  // A card is good through the last day of its expiry month.
+  return new Date(year, month, 1).getTime() > now.getTime();
+}
+
+export const isValidCardCvc = (value: string, brand: CardBrand = 'UNKNOWN'): boolean =>
+  new RegExp(brand === 'AMEX' ? '^\\d{4}$' : '^\\d{3,4}$').test(value.trim());
+
+/** Groups digits as the card shows them: 4-4-4-4 (4-6-5 for Amex). */
+export function formatCardNumber(value: string): string {
+  const digits = cardDigits(value).slice(0, 19);
+  if (detectCardBrand(digits) === 'AMEX') {
+    return [digits.slice(0, 4), digits.slice(4, 10), digits.slice(10, 15)].filter(Boolean).join(' ');
+  }
+  return (digits.match(/.{1,4}/g) ?? []).join(' ');
+}
+
+/** Turns typing into `MM/YY`, adding the slash by itself. */
+export function formatCardExpiry(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 4);
+  return digits.length > 2 ? `${digits.slice(0, 2)}/${digits.slice(2)}` : digits;
+}
+
+/** Monthly price for a billing cycle (annual is shown per month for comparison). */
+export function planPriceFor(
+  plan: { monthlyFeeLkr?: number | null; annualFeeLkr?: number | null },
+  cycle: BillingCycle,
+): number | null {
+  if (cycle === 'ANNUAL') return plan.annualFeeLkr ?? null;
+  return plan.monthlyFeeLkr ?? null;
+}
+
+/**
+ * A short, stable reference for display ("TICKET #K3F9Q2") derived from the whole id.
+ *
+ * Do not use the tail of the id: SQL Server's sequential GUIDs share their last 12 characters, so
+ * every ticket would read the same. Display convenience only; a proper sequential ticket number
+ * should come from the backend, and this can then be retired.
+ */
+export function ticketRef(id: string | null | undefined, length = 6): string {
+  if (!id) return '';
+  // FNV-1a over the full id.
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < id.length; i += 1) {
+    hash ^= id.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(36).toUpperCase().padStart(length, '0').slice(-length);
 }
 
 // Job Quote DTO (worker estimate submission)

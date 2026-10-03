@@ -43,3 +43,16 @@ export function trackingMessage(status: JobStatus | string, technician?: string 
       return { caption: 'In progress', detail: 'We’re working on your request.' };
   }
 }
+
+/**
+ * The in-app alert for a customer when one of their requests moves to a new step, or null when
+ * nothing changed (or this is the first time the request is seen, so there is nothing to compare).
+ */
+export function statusChangeAlert(
+  previous: string | undefined,
+  job: { title: string; status: JobStatus | string; worker?: { user?: { fullName?: string | null } | null } | null },
+): { title: string; message: string } | null {
+  if (!previous || previous === job.status) return null;
+  const { caption, detail } = trackingMessage(job.status, job.worker?.user?.fullName);
+  return { title: `${job.title}: ${caption}`, message: detail };
+}

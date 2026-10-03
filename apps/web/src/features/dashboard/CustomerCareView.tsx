@@ -7,6 +7,7 @@ import {
   describeOfferTimeout,
   formatCountdown,
   canTransition,
+  ticketRef,
   jobCardBillable,
   type JobCard,
 } from '@metro-fix/core-types';
@@ -14,6 +15,7 @@ import { useMediaQuery } from '@metro-fix/ui';
 import { API_BASE_URL } from '../../lib/api';
 import { WebSocketService } from '../../lib/websocket';
 import { CreateRequestModal } from './CreateRequestModal';
+import { RefreshButton } from '../../components/RefreshButton';
 import { JobCardModal } from './JobCardModal';
 
 // Column order and the rules for moving between columns come from the shared lifecycle in
@@ -87,7 +89,9 @@ function jobToCard(job: any): DispatchCard {
   return {
     id: job.id,
     title: job.title || 'Service Request',
-    customerName: job.customer?.user?.fullName || 'Customer Site',
+    customerName: job.customer?.companyName
+      ? `${job.customer.companyName} · ${job.customer.user?.fullName ?? ''}`
+      : job.customer?.user?.fullName || 'Customer Site',
     serviceType: (job.servicePillar as ServiceType) || ServiceType.Hard,
     urgency: toUrgency(job.urgency),
     location: job.facilityType || 'Site Location',
@@ -156,6 +160,15 @@ const toUrgency = (value?: string): UrgencyLevel => {
   return (normalized.charAt(0) + normalized.slice(1).toLowerCase()) as UrgencyLevel;
 };
 
+function timeAgo(iso: string): string {
+  const minutes = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
+}
+
 function getWorkerBadgeLabel(worker: WorkerCandidate) {
   return `${worker.rating.toFixed(1)} rating · ${worker.proximityKm.toFixed(1)} km away · ${worker.activeJobs} active`;
 }
@@ -175,6 +188,9 @@ export function CustomerCareView() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [workerQuery, setWorkerQuery] = useState('');
+  const [serviceFilter, setServiceFilter] = useState<'ALL' | 'HARD' | 'SOFT' | 'STRATEGIC'>('ALL');
+  const [urgencyFilter, setUrgencyFilter] = useState<'ALL' | 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'>('ALL');
+  const [sortBy, setSortBy] = useState<'NEWEST' | 'OLDEST' | 'URGENCY'>('NEWEST');
   const [isCreateOpen, setCreateOpen] = useState(false);
   const [jobCardCardId, setJobCardCardId] = useState<string | null>(null);
   const [includeUnavailable, setIncludeUnavailable] = useState(false);
@@ -288,23 +304,38 @@ export function CustomerCareView() {
 
   const grouped = useMemo(() => boardOrder.map((status) => ({ status, items: columns[status] })), [columns]);
 
-  // Filter cards across all columns by the search query
+  // Filter cards across all columns by the search box and the service / urgency filters, then sort.
   const filteredGrouped = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    if (!q) return grouped;
-    return grouped.map((col) => ({
-      ...col,
-      items: col.items.filter(
-        (card) =>
+    const urgencyRank: Record<string, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+    return grouped.map((col) => {
+      const items = col.items.filter((card) => {
+        if (serviceFilter !== 'ALL' && card.serviceType.toUpperCase() !== serviceFilter) return false;
+        if (urgencyFilter !== 'ALL' && card.urgency.toUpperCase() !== urgencyFilter) return false;
+        if (!q) return true;
+        return (
           card.title.toLowerCase().includes(q) ||
           card.customerName.toLowerCase().includes(q) ||
           card.location.toLowerCase().includes(q) ||
           card.serviceType.toLowerCase().includes(q) ||
           card.urgency.toLowerCase().includes(q) ||
+          ticketRef(card.id).toLowerCase().includes(q) ||
           (card.assignedWorker?.fullName.toLowerCase().includes(q) ?? false)
-      ),
-    }));
-  }, [grouped, searchQuery]);
+        );
+      });
+      const sorted = [...items].sort((a, b) => {
+        if (sortBy === 'OLDEST') return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        if (sortBy === 'URGENCY') {
+          return (
+            (urgencyRank[a.urgency.toUpperCase()] ?? 9) - (urgencyRank[b.urgency.toUpperCase()] ?? 9) ||
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+        }
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
+      return { ...col, items: sorted };
+    });
+  }, [grouped, searchQuery, serviceFilter, urgencyFilter, sortBy]);
 
   // The API returns workers ranked for this job (available first, then nearest and best rated).
   const sortedWorkers = workersList;
@@ -639,7 +670,7 @@ export function CustomerCareView() {
         {(() => {
           const totalCards = grouped.reduce((acc, col) => acc + col.items.length, 0);
           const filteredCards = filteredGrouped.reduce((acc, col) => acc + col.items.length, 0);
-          const isFiltering = searchQuery.trim().length > 0;
+          const isFiltering = searchQuery.trim().length > 0 || serviceFilter !== 'ALL' || urgencyFilter !== 'ALL';
           return (
             <div className="metro-search-row">
               <div className="metro-search-wrap">
@@ -675,31 +706,30 @@ export function CustomerCareView() {
                   )}
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => loadJobs(() => true)}
-                disabled={isRefreshing}
-                aria-label="Refresh dispatch board"
-                title="Refresh jobs"
-                style={styles.refreshButton}
-              >
-                <svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                  style={isRefreshing ? { animation: 'metro-spin 0.8s linear infinite' } : undefined}
-                >
-                  <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-                  <polyline points="21 3 21 9 15 9" />
-                </svg>
-                <span>{isRefreshing ? 'Refreshing…' : 'Refresh'}</span>
-              </button>
+              <RefreshButton onClick={() => loadJobs(() => true)} loading={isRefreshing} subject="dispatch board" />
+              <select aria-label="Filter by service" value={serviceFilter} onChange={(e) => setServiceFilter(e.target.value as typeof serviceFilter)} style={styles.filterSelect}>
+                <option value="ALL">All services</option>
+                <option value="HARD">Hard FM</option>
+                <option value="SOFT">Soft FM</option>
+                <option value="STRATEGIC">Strategic FM</option>
+              </select>
+              <select aria-label="Filter by urgency" value={urgencyFilter} onChange={(e) => setUrgencyFilter(e.target.value as typeof urgencyFilter)} style={styles.filterSelect}>
+                <option value="ALL">All urgencies</option>
+                <option value="CRITICAL">Critical</option>
+                <option value="HIGH">High</option>
+                <option value="MEDIUM">Medium</option>
+                <option value="LOW">Low</option>
+              </select>
+              <select aria-label="Sort cards" value={sortBy} onChange={(e) => setSortBy(e.target.value as typeof sortBy)} style={styles.filterSelect}>
+                <option value="NEWEST">Newest first</option>
+                <option value="OLDEST">Oldest first</option>
+                <option value="URGENCY">Most urgent first</option>
+              </select>
+              {(serviceFilter !== 'ALL' || urgencyFilter !== 'ALL') && (
+                <button type="button" style={styles.clearFilters} onClick={() => { setServiceFilter('ALL'); setUrgencyFilter('ALL'); }}>
+                  Clear filters
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setCreateOpen(true)}
@@ -754,7 +784,7 @@ export function CustomerCareView() {
                             >
                               <div style={styles.cardTopRow}>
                                 <span style={styles.serviceChip}>{item.serviceType}</span>
-                                <span style={styles.cardId}>{item.id}</span>
+                                <span style={styles.cardId} title={`Full ID: ${item.id}`}>#{ticketRef(item.id)} · {timeAgo(item.createdAt)}</span>
                               </div>
                               <h3 style={styles.cardTitle}>{item.title}</h3>
                               <p style={styles.cardMeta}>{item.customerName}</p>
@@ -1271,6 +1301,24 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: '0.08em',
     color: '#f38808',
   },
+  filterSelect: {
+    height: 36,
+    borderRadius: 999,
+    border: '1px solid var(--border-subtle)',
+    background: 'var(--surface)',
+    color: 'var(--text-primary)',
+    fontSize: 13,
+    padding: '0 12px',
+    cursor: 'pointer',
+  } as CSSProperties,
+  clearFilters: {
+    border: 'none',
+    background: 'transparent',
+    color: '#f38808',
+    fontWeight: 700,
+    fontSize: 13,
+    cursor: 'pointer',
+  } as CSSProperties,
   newRequestButton: {
     display: 'inline-flex',
     alignItems: 'center',

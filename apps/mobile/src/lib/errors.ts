@@ -32,3 +32,9 @@ export function getErrorMessage(error: unknown, fallback = 'Something went wrong
 export function getErrorStatus(error: unknown): number | undefined {
   return (error as any)?.response?.status;
 }
+
+/** True when the API refused because the customer has no paid plan yet. */
+export function isSubscriptionRequired(error: unknown): boolean {
+  const e = error as any;
+  return e?.response?.status === 402 && e?.response?.data?.code === 'SUBSCRIPTION_REQUIRED';
+}

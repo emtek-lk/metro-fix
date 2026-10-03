@@ -1,61 +1,148 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { ServiceRequestEntity } from '../entities';
+import { In, Repository } from 'typeorm';
+import { JobStatus, jobCardBillable, ticketRef } from '@metro-fix/core-types';
+import { ServiceRequestEntity, SubscriptionPaymentEntity } from '../entities';
 
 export interface FinancialRecordDto {
+  /** Invoice number, derived from the ticket reference. */
   id: string;
   jobId: string;
   customerName: string;
   servicePillar: string;
+  /** Formatted, e.g. "LKR 4,500.00". */
   amount: string;
-  paymentStatus: string;
+  amountLkr: number;
+  hours: number;
+  /** Invoiced = approved and closed by dispatch; Awaiting approval = work done, not yet closed. */
+  paymentStatus: 'Invoiced' | 'Awaiting approval';
   invoiceDate: string;
 }
+
+export interface FinancialSummaryDto {
+  currency: 'LKR';
+  months: { key: string; label: string; jobs: number; subscriptions: number; total: number }[];
+  byPillar: { name: string; value: number }[];
+  kpis: { invoiced: number; awaitingApproval: number; subscriptions: number; invoiceCount: number };
+}
+
+const money = (value: number) =>
+  `LKR ${value.toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const titleCase = (value: string) => value.charAt(0) + value.slice(1).toLowerCase();
+const monthKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 
 @Injectable()
 export class FinancialsService {
   constructor(
     @InjectRepository(ServiceRequestEntity)
     private readonly jobRepo: Repository<ServiceRequestEntity>,
+    @InjectRepository(SubscriptionPaymentEntity)
+    private readonly paymentRepo: Repository<SubscriptionPaymentEntity>,
   ) {}
 
-  async getFinancialRecords(): Promise<FinancialRecordDto[]> {
-    const jobs = await this.jobRepo.find({ relations: { customer: { user: true } } });
+  /** What a finished job bills: the confirmed final job card, else the estimate, else the flat quote. */
+  private billable(job: ServiceRequestEntity): { amount: number; hours: number } {
+    const section = jobCardBillable(job.jobCard);
+    if (section) return { amount: section.total, hours: section.hours };
+    return { amount: Number(job.quoteAmount ?? 0), hours: Number(job.estimatedHours ?? 0) };
+  }
 
-    if (jobs.length === 0) {
-      return [
-        { id: 'INV-9001', jobId: 'REQ-1001', customerName: 'Skyline Commercial Towers', servicePillar: 'Hard', amount: '$1,250.00', paymentStatus: 'Paid', invoiceDate: '2026-07-23' },
-        { id: 'INV-9002', jobId: 'REQ-1002', customerName: 'Tower One Management', servicePillar: 'Soft', amount: '$480.00', paymentStatus: 'Pending', invoiceDate: '2026-07-22' },
-        { id: 'INV-9003', jobId: 'REQ-1003', customerName: 'Metro Logistics LLC', servicePillar: 'Strategic', amount: '$2,100.00', paymentStatus: 'Paid', invoiceDate: '2026-07-21' },
-        { id: 'INV-9004', jobId: 'REQ-1004', customerName: 'Northpoint Residences', servicePillar: 'Hard', amount: '$350.00', paymentStatus: 'Paid', invoiceDate: '2026-07-21' },
-        { id: 'INV-9005', jobId: 'REQ-1005', customerName: 'Greenfield Mall', servicePillar: 'Strategic', amount: '$1,850.00', paymentStatus: 'Paid', invoiceDate: '2026-07-20' },
-      ];
+  private async billedJobs(): Promise<ServiceRequestEntity[]> {
+    return this.jobRepo.find({
+      where: { status: In([JobStatus.COMPLETED, JobStatus.CLOSED]) },
+      relations: { customer: { user: true } },
+      order: { updatedAt: 'DESC' },
+    });
+  }
+
+  /** One row per finished job that has a price. Nothing is invented: no jobs, no rows. */
+  async getFinancialRecords(): Promise<FinancialRecordDto[]> {
+    const jobs = await this.billedJobs();
+    return jobs
+      .map((job) => ({ job, ...this.billable(job) }))
+      .filter(({ amount }) => amount > 0)
+      .map(({ job, amount, hours }) => {
+        const ref = ticketRef(job.id);
+        const billedAt = job.closedAt ?? job.updatedAt ?? job.createdAt;
+        return {
+          id: `INV-${ref}`,
+          jobId: ref,
+          customerName: job.customer?.user?.fullName || 'Customer',
+          servicePillar: job.servicePillar,
+          amount: money(amount),
+          amountLkr: amount,
+          hours,
+          paymentStatus: job.status === JobStatus.CLOSED ? 'Invoiced' : 'Awaiting approval',
+          invoiceDate: new Date(billedAt).toISOString().split('T')[0],
+        } as FinancialRecordDto;
+      });
+  }
+
+  /** Revenue for the last six months (invoiced jobs plus subscription payments), by pillar, and headline numbers. */
+  async getSummary(now: Date = new Date()): Promise<FinancialSummaryDto> {
+    const jobs = await this.billedJobs();
+    const payments = await this.paymentRepo.find({ where: { status: 'SUCCEEDED' } });
+
+    const months: FinancialSummaryDto['months'] = [];
+    for (let back = 5; back >= 0; back -= 1) {
+      const date = new Date(now.getFullYear(), now.getMonth() - back, 1);
+      months.push({
+        key: monthKey(date),
+        label: date.toLocaleString('en-US', { month: 'short' }),
+        jobs: 0,
+        subscriptions: 0,
+        total: 0,
+      });
+    }
+    const bucket = (date: Date) => months.find((m) => m.key === monthKey(date));
+
+    const pillars = new Map<string, number>();
+    let invoiced = 0;
+    let awaiting = 0;
+    let invoiceCount = 0;
+    for (const job of jobs) {
+      const { amount } = this.billable(job);
+      if (amount <= 0) continue;
+      if (job.status === JobStatus.COMPLETED) {
+        awaiting += amount;
+        continue;
+      }
+      invoiced += amount;
+      invoiceCount += 1;
+      pillars.set(titleCase(job.servicePillar), (pillars.get(titleCase(job.servicePillar)) ?? 0) + amount);
+      const slot = bucket(new Date(job.closedAt ?? job.updatedAt ?? job.createdAt));
+      if (slot) slot.jobs += amount;
     }
 
-    return jobs.map((job, idx) => ({
-      id: `INV-900${idx + 1}`,
-      jobId: `REQ-${1000 + idx + 1}`,
-      customerName: job.customer?.user?.fullName || 'Facility Customer',
-      servicePillar: job.servicePillar || 'Hard',
-      amount: job.quoteAmount ? `$${job.quoteAmount.toFixed(2)}` : `$${(450 + idx * 150).toFixed(2)}`,
-      paymentStatus: idx % 3 === 1 ? 'Pending' : 'Paid',
-      invoiceDate: new Date(job.createdAt || Date.now()).toISOString().split('T')[0],
-    }));
+    let subscriptions = 0;
+    for (const payment of payments) {
+      subscriptions += payment.amountLkr;
+      const slot = bucket(new Date(payment.createdAt));
+      if (slot) slot.subscriptions += payment.amountLkr;
+    }
+    months.forEach((m) => {
+      m.total = m.jobs + m.subscriptions;
+    });
+    if (subscriptions > 0) pillars.set('Subscriptions', subscriptions);
+
+    // Always list the three pillars so the chart has a stable shape even before any invoices.
+    for (const name of ['Hard', 'Soft', 'Strategic']) if (!pillars.has(name)) pillars.set(name, 0);
+
+    return {
+      currency: 'LKR',
+      months,
+      byPillar: [...pillars.entries()].map(([name, value]) => ({ name, value })),
+      kpis: { invoiced, awaitingApproval: awaiting, subscriptions, invoiceCount },
+    };
   }
 
   async generateCsvReport(): Promise<string> {
     const records = await this.getFinancialRecords();
-    const headers = ['Invoice ID', 'Job ID', 'Customer Name', 'Service Pillar', 'Amount', 'Payment Status', 'Invoice Date'];
-    const rows = records.map((r) => [
-      `"${r.id}"`,
-      `"${r.jobId}"`,
-      `"${r.customerName.replace(/"/g, '""')}"`,
-      `"${r.servicePillar}"`,
-      `"${r.amount}"`,
-      `"${r.paymentStatus}"`,
-      `"${r.invoiceDate}"`,
-    ]);
+    const headers = ['Invoice ID', 'Ticket', 'Customer Name', 'Service Pillar', 'Amount (LKR)', 'Hours', 'Status', 'Date'];
+    const cell = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`;
+    const rows = records.map((r) =>
+      [r.id, r.jobId, r.customerName, r.servicePillar, r.amountLkr.toFixed(2), r.hours, r.paymentStatus, r.invoiceDate].map(cell),
+    );
     return [headers.join(','), ...rows.map((row) => row.join(','))].join('\n');
   }
 }

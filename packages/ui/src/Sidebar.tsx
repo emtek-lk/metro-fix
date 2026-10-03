@@ -45,6 +45,7 @@ export const portalSections: SidebarSection[] = [
     items: [
       { id: 'browse-services', label: 'Browse Services', icon: <SVGIcon><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /><rect x="8" y="2" width="8" height="4" rx="1" ry="1" /></SVGIcon> },
       { id: 'my-requests', label: 'My Requests', icon: <SVGIcon><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></SVGIcon> },
+      { id: 'my-subscription', label: 'Subscription', icon: <SVGIcon><rect width="20" height="14" x="2" y="5" rx="2" /><line x1="2" x2="22" y1="10" y2="10" /></SVGIcon> },
     ],
   },
 ];

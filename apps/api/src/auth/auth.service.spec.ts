@@ -1,5 +1,5 @@
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
-import { Role, FacilityType, SubscriptionTier } from '@metro-fix/core-types';
+import { Role, FacilityType } from '@metro-fix/core-types';
 import * as bcrypt from 'bcrypt';
 import { AuthService } from './auth.service';
 import { registerSchema } from './dto/register.dto';
@@ -72,7 +72,8 @@ describe('AuthService.register', () => {
     expect(manager.create.mock.calls[1][1]).toMatchObject({
       userId: 'user-1',
       facilityType: FacilityType.RESIDENTIAL,
-      subscriptionTier: SubscriptionTier.ACCESS,
+      // A new sign-up is a lead: no plan until they subscribe.
+      subscriptionTier: null,
     });
   });
 

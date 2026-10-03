@@ -1,3 +1,5 @@
+import { apiService } from '../services/api';
+import { mediaUrl } from '../lib/api';
 import { JobCardForm } from './JobCardForm';
 import { draftFromSection, draftToPayload, type JobCardDraft } from '../lib/jobCard';
 import { jobCardBillable } from '@metro-fix/core-types';
@@ -34,7 +36,6 @@ import { useReduceMotion } from '../theme/useReduceMotion';
 import { themedStyles } from '../theme/themedStyles';
 import { shortRef } from '../lib/ticket';
 import { customerNameOf, customerPhoneOf, coordinatesOf } from '../lib/jobs';
-import { apiService } from '../services/api';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 
@@ -133,15 +134,24 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
     finally { setRejectBusy(false); }
   };
 
+  // Photos go to the server as files; the proof stores only their paths, not the image data.
+  const [uploading, setUploading] = useState(0);
+  const addPhotos = async (uris: string[]) => {
+    setUploading((n) => n + uris.length);
+    const results = await Promise.allSettled(uris.map((uri) => apiService.uploadPhoto(uri)));
+    setUploading((n) => n - uris.length);
+    const stored = results.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []));
+    if (stored.length) setPhotos((prev) => [...prev, ...stored]);
+    const failed = results.length - stored.length;
+    if (failed) toast.error(`${failed} photo${failed > 1 ? 's' : ''} could not be uploaded. Check your connection and try again.`, 'Upload failed');
+  };
+
   const handleTakePhoto = async () => {
     try {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
       if (!perm.granted) return toast.error('Camera access is needed to capture proof.', 'Permission required');
-      const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.7, base64: true });
-      if (!result.canceled && result.assets?.[0]) {
-        const a = result.assets[0];
-        setPhotos(prev => [...prev, a.base64 ? `data:image/jpeg;base64,${a.base64}` : a.uri]);
-      }
+      const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.7 });
+      if (!result.canceled && result.assets?.[0]) await addPhotos([result.assets[0].uri]);
     } catch (e: any) { toast.error(e.message || 'Could not open the camera.', 'Camera error'); }
   };
 
@@ -153,14 +163,8 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
         allowsMultipleSelection: true,
         selectionLimit: 6,
         quality: 0.7,
-        base64: true,
       });
-      if (!result.canceled && result.assets?.length) {
-        setPhotos((prev) => [
-          ...prev,
-          ...result.assets.map((a) => (a.base64 ? `data:image/jpeg;base64,${a.base64}` : a.uri)),
-        ]);
-      }
+      if (!result.canceled && result.assets?.length) await addPhotos(result.assets.map((a) => a.uri));
     } catch (e: any) { toast.error(e.message || 'Could not open your photos.', 'Library error'); }
   };
 
@@ -439,9 +443,10 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
                 <Text style={m.camBtnText}>Choose from library</Text>
               </Pressable>
 
+              {uploading > 0 ? <Text style={m.subtitle}>{`Uploading ${uploading} photo${uploading > 1 ? 's' : ''}…`}</Text> : null}
               {photos.length > 0 && (
                 <ScrollView horizontal style={m.thumbRow} showsHorizontalScrollIndicator={false}>
-                  {photos.map((uri, i) => <Image key={i} source={{ uri }} style={m.thumb} />)}
+                  {photos.map((uri, i) => <Image key={`${uri}-${i}`} source={{ uri: mediaUrl(uri) }} style={m.thumb} />)}
                 </ScrollView>
               )}
 
@@ -479,7 +484,7 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
               </Pressable>
 
               <View style={m.modalActions}>
-                <Button title="Submit proof" onPress={handleProofSubmit} isLoading={submitProof.isPending} variant="primary" size="large" />
+                <Button title="Submit proof" onPress={handleProofSubmit} isLoading={submitProof.isPending} disabled={uploading > 0} variant="primary" size="large" />
                 <Button title="Cancel" onPress={() => setProofModalVisible(false)} variant="outline" size="medium" />
               </View>
             </ScrollView>

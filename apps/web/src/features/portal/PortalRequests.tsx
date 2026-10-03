@@ -2,6 +2,8 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import { JobStatus, JOB_STAGES, canTransition, type ServiceRequest } from '@metro-fix/core-types';
 import { API_BASE_URL } from '../../lib/api';
 import { WebSocketService } from '../../lib/websocket';
+import { RefreshButton } from '../../components/RefreshButton';
+import { SkeletonCards } from '@metro-fix/ui';
 
 // The stages and their order come from the shared lifecycle; only the customer-facing wording is here.
 const STAGES = JOB_STAGES;
@@ -27,6 +29,7 @@ export function PortalRequests({ refreshKey }: { refreshKey: number }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   const cancelRequest = async (job: Job) => {
     if (!window.confirm('Cancel this request?')) return;
@@ -67,7 +70,7 @@ export function PortalRequests({ refreshKey }: { refreshKey: number }) {
     return () => {
       active = false;
     };
-  }, [refreshKey]);
+  }, [refreshKey, reloadKey]);
 
   // Live status changes for this customer's own requests (the gateway only sends those).
   useEffect(() => {
@@ -88,7 +91,10 @@ export function PortalRequests({ refreshKey }: { refreshKey: number }) {
 
   return (
     <section style={styles.page} aria-label="My requests">
-      {loading && <p style={styles.muted}>Loading your requests…</p>}
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <RefreshButton onClick={() => setReloadKey((k) => k + 1)} loading={loading} subject="requests" />
+      </div>
+      {loading && jobs.length === 0 && <SkeletonCards count={3} height={120} />}
       {error && <p style={styles.error}>{error}</p>}
       {!loading && !error && jobs.length === 0 && (
         <p style={styles.muted}>No requests yet. Pick a service under “Browse Services” to get started.</p>

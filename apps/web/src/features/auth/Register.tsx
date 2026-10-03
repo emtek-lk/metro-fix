@@ -3,7 +3,8 @@ import { Role, registrationSchema, type RegistrationInput } from '@metro-fix/cor
 import { useMediaQuery } from '@metro-fix/ui';
 
 export interface RegisterProps {
-  onSubmit: (values: RegistrationInput) => void;
+  /** Resolves to an error message to show, or null when the account was created. */
+  onSubmit: (values: RegistrationInput, address: string) => Promise<string | null>;
 }
 
 const initialState: RegistrationInput = {
@@ -20,26 +21,37 @@ const initialState: RegistrationInput = {
 export function Register({ onSubmit }: RegisterProps) {
   const [form, setForm] = useState<RegistrationInput>(initialState);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [address, setAddress] = useState('');
+  const [busy, setBusy] = useState(false);
   const isCompact = useMediaQuery('(max-width: 820px)');
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const result = registrationSchema.safeParse(form);
+    const phoneDigits = (form.phoneNumber ?? '').replace(/\D/g, '').length;
 
+    const found: Record<string, string> = {};
     if (!result.success) {
-      setErrors(
-        result.error.issues.reduce<Record<string, string>>((collection, issue) => {
-          const key = issue.path.join('.') || 'form';
-          collection[key] = issue.message;
-          return collection;
-        }, {})
-      );
+      for (const issue of result.error.issues) {
+        const key = issue.path.join('.') || 'form';
+        if (!found[key]) found[key] = issue.message;
+      }
+    }
+    if (phoneDigits < 7 || phoneDigits > 15) found.phoneNumber = 'Enter a valid phone number.';
+    if (!/[A-Za-z]/.test(form.password) || !/\d/.test(form.password)) {
+      found.password = found.password ?? 'Include both letters and numbers.';
+    }
+    if (!result.success || Object.keys(found).length > 0) {
+      setErrors(found);
       return;
     }
 
     setErrors({});
-    onSubmit(result.data);
+    setBusy(true);
+    const problem = await onSubmit(result.data, address.trim());
+    setBusy(false);
+    if (problem) setErrors({ form: problem });
   };
 
   return (
@@ -87,22 +99,27 @@ export function Register({ onSubmit }: RegisterProps) {
             value={form.phoneNumber ?? ''}
             onChange={(event) => setForm((current) => ({ ...current, phoneNumber: event.target.value }))}
             style={styles.input}
-            placeholder="+1 555 0100"
+            placeholder="+94 77 123 4567"
+            autoComplete="tel"
           />
+          {errors.phoneNumber && <span style={styles.errorText}>{errors.phoneNumber}</span>}
         </div>
 
-        <div style={styles.fieldGroup}>
-          <label style={styles.label} htmlFor="register-company">
-            Company
-          </label>
-          <input
-            id="register-company"
-            value={form.companyName ?? ''}
-            onChange={(event) => setForm((current) => ({ ...current, companyName: event.target.value }))}
-            style={styles.input}
-            placeholder="MetroFix Group"
-          />
-        </div>
+      </div>
+
+      <div style={styles.fieldGroup}>
+        <label style={styles.label} htmlFor="register-address">
+          Address <span style={styles.optional}>(optional)</span>
+        </label>
+        <input
+          id="register-address"
+          autoComplete="street-address"
+          value={address}
+          onChange={(event) => setAddress(event.target.value)}
+          style={styles.input}
+          placeholder="Street, city"
+          maxLength={300}
+        />
       </div>
 
       <div style={{ ...styles.row, ...(isCompact ? styles.rowCompact : undefined) }}>
@@ -152,8 +169,10 @@ export function Register({ onSubmit }: RegisterProps) {
       </label>
       {errors.acceptTerms && <span style={styles.errorText}>{errors.acceptTerms}</span>}
 
-      <button type="submit" style={styles.submitButton}>
-        Create account
+      {errors.form && <span style={styles.errorText} role="alert">{errors.form}</span>}
+
+      <button type="submit" style={{ ...styles.submitButton, ...(busy ? { opacity: 0.7, cursor: 'wait' } : undefined) }} disabled={busy}>
+        {busy ? 'Creating account…' : 'Create account'}
       </button>
     </form>
   );
@@ -199,6 +218,10 @@ const styles: Record<string, CSSProperties> = {
     gap: '10px',
     color: 'var(--text-secondary)',
     fontSize: '0.92rem',
+  },
+  optional: {
+    fontWeight: 400,
+    color: 'var(--text-secondary)',
   },
   errorText: {
     color: '#d37105',

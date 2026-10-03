@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { Role, SubscriptionTier } from '@metro-fix/core-types';
 import { CustomerEntity, UserEntity } from '../entities';
 import { CreateCustomerDto } from './dto/create-customer.dto';
+import { UpdateCustomerDto } from './dto/update-customer.dto';
 
 @Injectable()
 export class CustomersService {
@@ -40,10 +41,10 @@ export class CustomersService {
     address: string,
   ): Promise<{ latitude: number; longitude: number }> {
     console.log(`[GeocodingService] Geocoding address: "${address}"`);
-    // Placeholder returning standard default coordinates for site location
+    // Placeholder: the centre of Colombo until a geocoding provider is connected.
     return {
-      latitude: 37.7749,
-      longitude: -122.4194,
+      latitude: 6.9271,
+      longitude: 79.8612,
     };
   }
 
@@ -83,5 +84,44 @@ export class CustomersService {
 
     const savedCustomer = await this.customerRepo.save(customer);
     return this.findOne(savedCustomer.id);
+  }
+
+  /**
+   * Admin edit of a customer's contact details, company, address, facility and plan. Changing the
+   * email changes their login, so it must stay unique. Setting a plan here records no payment (it is
+   * how support comps a plan); clearing it turns the customer back into a lead.
+   */
+  async updateCustomer(id: string, dto: UpdateCustomerDto): Promise<CustomerEntity> {
+    const customer = await this.findOne(id);
+
+    if (dto.email !== undefined && dto.email !== customer.user.email) {
+      const taken = await this.userRepo.findOne({ where: { email: dto.email } });
+      if (taken && taken.id !== customer.user.id) {
+        throw new ConflictException(`Another account already uses "${dto.email}".`);
+      }
+      customer.user.email = dto.email;
+    }
+    if (dto.fullName !== undefined) customer.user.fullName = dto.fullName;
+    if (dto.phoneNumber !== undefined) customer.user.phoneNumber = dto.phoneNumber;
+    await this.userRepo.save(customer.user);
+
+    if (dto.companyName !== undefined) customer.companyName = dto.companyName || null;
+    if (dto.address !== undefined) customer.address = dto.address || null;
+    if (dto.facilityType !== undefined) customer.facilityType = dto.facilityType;
+    if (dto.subscriptionTier !== undefined) {
+      const changed = dto.subscriptionTier !== (customer.subscriptionTier ?? null);
+      customer.subscriptionTier = dto.subscriptionTier;
+      if (dto.subscriptionTier === null) {
+        customer.billingCycle = null;
+        customer.subscribedAt = null;
+      } else {
+        customer.billingCycle = dto.billingCycle ?? customer.billingCycle ?? 'MONTHLY';
+        if (changed || !customer.subscribedAt) customer.subscribedAt = new Date();
+      }
+    } else if (dto.billingCycle !== undefined && customer.subscriptionTier) {
+      customer.billingCycle = dto.billingCycle;
+    }
+    await this.customerRepo.save(customer);
+    return this.findOne(id);
   }
 }

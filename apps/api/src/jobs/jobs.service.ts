@@ -5,6 +5,8 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  HttpException,
+  HttpStatus,
   OnModuleInit,
   OnModuleDestroy,
 } from '@nestjs/common';
@@ -22,6 +24,7 @@ import {
   type JobCard,
   type JobCardSection,
   JOB_CARD_CURRENCY,
+  SUBSCRIPTION_REQUIRED_CODE,
   computeJobCardTotals,
 } from '@metro-fix/core-types';
 import { RejectJobDto } from './dto/reject-job.dto';
@@ -165,7 +168,10 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
    * Creates a new service request job raised by Customer.
    * Emits 'job.created' event via WebSockets for real-time Kanban updates.
    */
-  async createJob(dto: CreateJobDto): Promise<ServiceRequestEntity> {
+  async createJob(
+    dto: CreateJobDto,
+    options: { requireSubscription?: boolean } = {},
+  ): Promise<ServiceRequestEntity> {
     let targetCustomerId = dto.customerId;
     let customerExists = false;
     if (targetCustomerId) {
@@ -175,6 +181,17 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
       if (customer) {
         targetCustomerId = customer.id;
         customerExists = true;
+        // Customers raising their own request need a paid plan; dispatch can raise one for anyone.
+        if (options.requireSubscription && !customer.subscriptionTier) {
+          throw new HttpException(
+            {
+              statusCode: HttpStatus.PAYMENT_REQUIRED,
+              code: SUBSCRIPTION_REQUIRED_CODE,
+              message: 'Choose a subscription plan to raise service requests.',
+            },
+            HttpStatus.PAYMENT_REQUIRED,
+          );
+        }
       }
     }
 
@@ -583,7 +600,7 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
   async closeJob(id: string): Promise<ServiceRequestEntity> {
     const job = await this.findOne(id);
     this.assertTransition(job.status, JobStatus.CLOSED);
-    return this.commit(id, { status: JobStatus.CLOSED }, { expected: job.status });
+    return this.commit(id, { status: JobStatus.CLOSED, closedAt: new Date() }, { expected: job.status });
   }
 
   /**

@@ -21,6 +21,7 @@ jest.mock('../src/hooks/useJobs', () => ({
   useWorkerJobs: () => ({ data: [], isLoading: false, isError: false }),
   useMyRequests: () => ({ data: [], isLoading: false, isError: false, refetch: jest.fn() }),
   useWorkerStats: () => ({ data: undefined }),
+  useMySubscription: () => ({ data: { tier: 'PLUS', billingCycle: 'MONTHLY', payments: [] }, isLoading: false, refetch: jest.fn() }),
   useJobDetail: () => ({ data: undefined }),
   useAcceptOffer: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useDeclineOffer: () => ({ mutateAsync: jest.fn(), isPending: false }),

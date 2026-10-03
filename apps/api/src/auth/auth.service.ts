@@ -3,7 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
-import { Role, FacilityType, SubscriptionTier } from '@metro-fix/core-types';
+import { Role, FacilityType } from '@metro-fix/core-types';
 import { UserEntity, CustomerEntity } from '../entities';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -78,7 +78,9 @@ export class AuthService {
         manager.create(CustomerEntity, {
           userId: created.id,
           facilityType: FacilityType.RESIDENTIAL,
-          subscriptionTier: SubscriptionTier.ACCESS,
+          // No plan yet: the account is a lead until they subscribe (or skip and subscribe later).
+          subscriptionTier: null,
+          address: dto.address?.trim() || null,
         }),
       );
       return created;

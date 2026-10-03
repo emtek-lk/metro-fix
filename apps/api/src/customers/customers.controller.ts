@@ -2,11 +2,13 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Param,
   Body,
   UsePipes,
 } from '@nestjs/common';
 import { CustomersService } from './customers.service';
+import { updateCustomerSchema, UpdateCustomerDto } from './dto/update-customer.dto';
 import { CustomerEntity } from '../entities';
 import {
   createCustomerSchema,
@@ -30,6 +32,14 @@ export class CustomersController {
   @Get(':id')
   async findOne(@Param('id') id: string): Promise<CustomerEntity> {
     return this.customersService.findOne(id);
+  }
+
+  /** Admin edits a customer's details, company, address, facility and plan. */
+  @Roles(Role.ADMIN)
+  @Patch(':id')
+  @UsePipes(new ZodValidationPipe(updateCustomerSchema))
+  async updateCustomer(@Param('id') id: string, @Body() dto: UpdateCustomerDto): Promise<CustomerEntity> {
+    return this.customersService.updateCustomer(id, dto);
   }
 
   @Roles(Role.ADMIN)

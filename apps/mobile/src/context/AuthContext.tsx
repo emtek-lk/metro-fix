@@ -12,6 +12,9 @@ export interface AuthContextType {
   login: (email: string, pass: string) => Promise<User>;
   /** Creates a customer account and signs it in. */
   register: (input: RegisterInput) => Promise<User>;
+  /** True right after sign-up, until the new customer picks a plan or skips. */
+  needsPlanChoice: boolean;
+  finishPlanChoice: () => void;
   logout: () => Promise<void>;
   setAuthSession: (user: User, token: string) => Promise<void>;
 }
@@ -22,6 +25,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [needsPlanChoice, setNeedsPlanChoice] = useState(false);
 
   // Restore authentication session on boot
   useEffect(() => {
@@ -73,10 +77,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const register = async (input: RegisterInput): Promise<User> => {
     const { accessToken, user: createdUser } = await apiService.register(input);
     await setAuthSession(createdUser, accessToken);
+    // Step two of sign-up: choose a plan (or skip) before landing on the app home.
+    setNeedsPlanChoice(true);
     return createdUser;
   };
 
   const logout = async () => {
+    setNeedsPlanChoice(false);
     setUser(null);
     setToken(null);
     await storage.deleteItemAsync(TOKEN_KEY);
@@ -101,6 +108,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         isAuthenticated: !!token && !!user,
         login,
         register,
+        needsPlanChoice,
+        finishPlanChoice: () => setNeedsPlanChoice(false),
         logout,
         setAuthSession,
       }}

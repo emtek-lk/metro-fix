@@ -136,3 +136,36 @@ describe('dispatch availability', () => {
     expect(workerRepo.save).toHaveBeenCalled();
   });
 });
+
+describe('WorkersService.findAll', () => {
+  it('adds each worker\'s live workload', async () => {
+    const workers = [{ id: 'w1', user: {} }, { id: 'w2', user: {} }];
+    const workerRepo = { find: jest.fn(async () => workers) };
+    const jobRepo = { find: jest.fn(async () => [{ workerId: 'w1' }, { workerId: 'w1' }, { workerId: null }]) };
+    const service = new WorkersService(workerRepo as any, jobRepo as any, {} as any);
+    const result = await service.findAll();
+    expect(result.map((w) => [w.id, w.liveActiveJobs])).toEqual([['w1', 2], ['w2', 0]]);
+  });
+});
+
+describe('WorkersService.updateWorker', () => {
+  const make = (taken: any = null) => {
+    const user: any = { id: 'u1', email: 'ruwan@demo.local', fullName: 'Ruwan Kumara', phoneNumber: '1' };
+    const worker: any = { id: 'w1', userId: 'u1', user, rating: 4.8, servicePillars: ['HARD'], isAvailable: true };
+    const workerRepo = { findOne: jest.fn(async () => worker), save: jest.fn(async (v: any) => v) };
+    const userRepo = { findOne: jest.fn(async () => taken), save: jest.fn(async (v: any) => v) };
+    return { service: new WorkersService(workerRepo as any, {} as any, userRepo as any), worker, user };
+  };
+
+  it('updates contact details, rating, services and duty status', async () => {
+    const { service, worker, user } = make();
+    await service.updateWorker('w1', { fullName: 'Ruwan K. Perera', rating: 4.2, servicePillars: ['HARD', 'SOFT'] as any, isAvailable: false });
+    expect(user.fullName).toBe('Ruwan K. Perera');
+    expect(worker).toMatchObject({ rating: 4.2, servicePillars: ['HARD', 'SOFT'], isAvailable: false });
+  });
+
+  it('keeps the email unique', async () => {
+    const { service } = make({ id: 'other', email: 'taken@demo.local' });
+    await expect(service.updateWorker('w1', { email: 'taken@demo.local' })).rejects.toThrow('already uses');
+  });
+});

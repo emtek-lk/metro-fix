@@ -76,7 +76,7 @@ metro-fix/
 | `user.entity.ts` | `users` | `id (uuid)`, `fullName`, `email (unique)`, `password (bcrypt)`, `role (Role enum)`, `phoneNumber?`, `avatarUrl?`, `pushToken?` |
 | `customer.entity.ts` | `customers` | `id (uuid)`, `userId → users.id`, `facilityType`, `subscriptionTier`, `latitude?`, `longitude?` |
 | `worker.entity.ts` | `workers` | `id (uuid)`, `userId → users.id`, `rating (1-5)`, `servicePillars (simple-array)`, `isAvailable (bit)`, `activeJobs`, `latitude?`, `longitude?`, `heading?`, `speed?` |
-| `service-request.entity.ts` | `service_requests` | `id (uuid)`, `title`, `description`, `servicePillar`, `facilityType`, `status`, `urgency`, `customerId → customers.id`, `workerId → workers.id (nullable)`, `latitude?`, `longitude?`, `quoteAmount?`, `estimatedHours?`, `quoteNotes?`, `rejectReason?`, `signature?`, `photos? (JSON text via transformer)` |
+| `service-request.entity.ts` | `service_requests` | `id (uuid)`, `title`, `description`, `servicePillar`, `facilityType`, `status`, `urgency`, `customerId → customers.id`, `workerId → workers.id (nullable)`, `latitude?`, `longitude?`, `quoteAmount?`, `estimatedHours?`, `quoteNotes?`, `rejectReason?`, `signature?`, `photos? (JSON text via transformer; paths from /uploads)`, `jobCard? (JSON)`, `closedAt?` |
 | `service-catalog.entity.ts` | `service_catalog` | `serviceName`, `pillarCategory`, `serviceGroup`, `description`, `icon`, `requiresQuote`, `basePrice? (LKR)`, `requiredSubscriptionTier`, `sortOrder`, `status` (`Active`/`Retired`/`Disabled`) |
 | `subscription-plan.entity.ts` | `subscription_plans` | `tierName`, `targetFacility`, `targetCustomer`, `monthlyFeeLkr`, `annualFeeLkr?`, `isCustomPriced`, `includedVisitsPerMonth?`, `includedLabourHoursPerMonth?`, `labourDiscountPct`, `inspectionCadence`, `callOutWaived`, `includedServices`, `activeAccounts`, `status` |
 
@@ -86,13 +86,14 @@ metro-fix/
 
 | Module | Controller Routes | Key Service Methods |
 |--------|-------------------|---------------------|
-| **AuthModule** (`src/auth/`) | `POST /auth/login` (public), `GET /auth/me` (JWT), `PATCH /auth/profile` (JWT) | `login()`, `getProfile()`, `updateProfile()` |
+| **AuthModule** (`src/auth/`) | `POST /auth/login`, `POST /auth/register` (public; creates a customer with no plan, optional address), `GET /auth/me` (JWT), `PATCH /auth/profile` (JWT) | `login()`, `register()`, `getProfile()`, `updateProfile()` |
 | **JobsModule** (`src/jobs/`) | `GET /jobs`, `GET /jobs/mine`, `GET /jobs/:id`, `POST /jobs`, `PATCH /jobs/:id/status`, `PATCH /jobs/:id/assign`, `POST /jobs/:id/quote`, `POST /jobs/:id/reject`, `POST /jobs/:id/proof`, `POST /jobs/:id/close` (all role-gated, see API.md) | `createJob()`, `findForCustomerUser()`, `updateJobStatus()`, `assignWorker()`, `submitJobQuote()`, `rejectJob()`, `submitJobProof()`, `closeJob()` |
-| **WorkersModule** (`src/workers/`) | `GET /workers`, `GET /workers/:id`, `POST /workers`, `GET /workers/me/jobs` (JWT), `POST /workers/me/location` (JWT), `GET /workers/dispatch-search?jobId=&radius=`, `POST /workers/ping` | `findAll()`, `findOne()`, `createWorker()`, `findJobsForWorkerUser()`, `updateWorkerLocation()`, `getAvailableWorkersForJob()` |
-| **CustomersModule** (`src/customers/`) | `GET /customers`, `GET /customers/:id`, `POST /customers` | CRUD for customer profiles |
+| **WorkersModule** (`src/workers/`) | `GET /workers`, `GET /workers/:id`, `POST /workers`, `PATCH /workers/:id` (ADMIN), `GET /workers/me/jobs` (JWT), `PATCH /workers/me/availability`, `POST /workers/me/location` (JWT), `GET /workers/dispatch-search?jobId=&radius=`, `POST /workers/ping` | `findAll()`, `findOne()`, `createWorker()`, `findJobsForWorkerUser()`, `updateWorkerLocation()`, `getAvailableWorkersForJob()` |
+| **CustomersModule** (`src/customers/`) | `GET /customers`, `GET /customers/:id`, `POST /customers`, `PATCH /customers/:id` (ADMIN) | `createCustomer()`, `updateCustomer()` |
 | **ServicesModule** (`src/services/`) | `GET /services`, `POST /services` | Service catalog CRUD |
-| **SubscriptionsModule** (`src/subscriptions/`) | `GET /subscriptions`, `POST /subscriptions` | Plan CRUD |
-| **FinancialsModule** (`src/financials/`) | `GET /financials`, `GET /financials/export` (ADMIN) | Derived from jobs; amounts are still partly placeholder (see STATUS.md) |
+| **SubscriptionsModule** (`src/subscriptions/`) | `GET /subscriptions`, `POST /subscriptions`, `GET /subscriptions/me`, `POST /subscriptions/checkout` | Plan CRUD; `getMine()`, `checkout()` (buy / upgrade / downgrade through the `CARD_PAYMENT_GATEWAY`; demo gateway in `src/payments/demo-card-gateway.ts`) |
+| **UploadsModule** (`src/uploads/`) | `POST /uploads` | `savePhoto()` validates by content and writes to `UPLOAD_DIR` |
+| **FinancialsModule** (`src/financials/`) | `GET /financials`, `GET /financials/summary`, `GET /financials/export` (ADMIN) | Invoices from finished jobs' job cards plus subscription payments; nothing is invented |
 
 ### 3.4 Real-Time (`src/jobs/jobs.gateway.ts`)
 

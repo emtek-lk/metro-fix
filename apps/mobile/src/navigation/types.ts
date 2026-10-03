@@ -9,6 +9,9 @@ export type RootStackParamList = {
   Main: undefined;
   JobDetail: { job: ServiceRequest };
   Tracking: { job: ServiceRequest };
+  /** The customer's plans. `onboarding` is the step right after sign-up (with Skip). */
+  Plans: { onboarding?: boolean } | undefined;
+  Checkout: { tier: string; cycle: 'MONTHLY' | 'ANNUAL'; amountLkr: number; intent: string; onboarding?: boolean };
   Gallery: undefined;
   Unsupported: undefined;
 };

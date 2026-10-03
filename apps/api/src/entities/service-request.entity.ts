@@ -138,6 +138,10 @@ export class ServiceRequestEntity {
   @Column({ type: 'datetime', nullable: true })
   cancelledAt?: Date | null;
 
+  /** When dispatch approved the ticket for billing. */
+  @Column({ type: 'datetime', nullable: true })
+  closedAt?: Date | null;
+
   /**
    * `{ latitude, longitude }` as the shared ServiceRequest type expects. The flat columns are kept
    * because the web app reads them; this just exposes the same position in the documented shape.

@@ -1,4 +1,6 @@
 import { MapPicker, type PickedLocation } from '../../components/MapPicker';
+import { RefreshButton } from '../../components/RefreshButton';
+import { SkeletonCards } from '@metro-fix/ui';
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { FacilityType, ServicePillar } from '@metro-fix/core-types';
 import { API_BASE_URL } from '../../lib/api';
@@ -25,9 +27,14 @@ type Urgency = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
 interface PortalServicesProps {
   onRequested: () => void;
+  /** Takes the customer to the Subscription page. */
+  onNeedSubscription: () => void;
 }
 
-export function PortalServices({ onRequested }: PortalServicesProps) {
+export function PortalServices({ onRequested, onNeedSubscription }: PortalServicesProps) {
+  const [subscribed, setSubscribed] = useState<boolean | null>(null);
+  const [gateOpen, setGateOpen] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [services, setServices] = useState<CatalogService[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -36,6 +43,19 @@ export function PortalServices({ onRequested }: PortalServicesProps) {
 
   useEffect(() => {
     let active = true;
+    const token = localStorage.getItem('metrofix_token');
+    fetch(`${API_BASE_URL}/subscriptions/me`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => active && setSubscribed(data ? Boolean(data.tier) : null))
+      .catch(() => active && setSubscribed(null));
+    return () => {
+      active = false;
+    };
+  }, [reloadKey]);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
     fetch(`${API_BASE_URL}/services`)
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -47,7 +67,7 @@ export function PortalServices({ onRequested }: PortalServicesProps) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [reloadKey]);
 
   const pillars = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -65,16 +85,29 @@ export function PortalServices({ onRequested }: PortalServicesProps) {
 
   return (
     <section style={styles.page} aria-label="Browse services">
-      <input
-        type="search"
-        placeholder="Search services…"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        style={styles.search}
-        aria-label="Search services"
-      />
+      {subscribed === false && (
+        <div style={styles.planBanner} role="status">
+          <span>
+            <strong>Choose a plan to raise requests.</strong> You can browse services now, but a subscription is needed to request one.
+          </span>
+          <button type="button" style={styles.planBannerBtn} onClick={onNeedSubscription}>
+            View plans
+          </button>
+        </div>
+      )}
+      <div style={styles.searchRow}>
+        <input
+          type="search"
+          placeholder="Search services…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          style={styles.search}
+          aria-label="Search services"
+        />
+        <RefreshButton onClick={() => setReloadKey((k) => k + 1)} loading={loading} subject="services" />
+      </div>
 
-      {loading && <p style={styles.muted}>Loading services…</p>}
+      {loading && services.length === 0 && <SkeletonCards count={4} height={110} />}
       {error && <p style={styles.error}>{error}</p>}
       {!loading && !error && pillars.length === 0 && <p style={styles.muted}>No services match your search.</p>}
 
@@ -90,7 +123,7 @@ export function PortalServices({ onRequested }: PortalServicesProps) {
                 key={service.id}
                 type="button"
                 style={styles.card}
-                onClick={() => setSelected(service)}
+                onClick={() => (subscribed === false ? setGateOpen(true) : setSelected(service))}
                 aria-label={`Request ${service.serviceName}`}
               >
                 <span style={styles.cardIcon} aria-hidden="true">{ICONS[service.icon ?? ''] ?? '🔧'}</span>
@@ -114,10 +147,26 @@ export function PortalServices({ onRequested }: PortalServicesProps) {
         </div>
       ))}
 
+      {gateOpen && (
+        <div style={styles.gateOverlay} role="dialog" aria-modal="true" aria-label="Subscription required">
+          <div style={styles.gateCard}>
+            <h3 style={styles.gateTitle}>Subscription required</h3>
+            <p style={styles.gateCopy}>
+              Requests are available on a paid plan. Pick one in a minute and come straight back.
+            </p>
+            <div style={styles.gateActions}>
+              <button type="button" style={styles.gateSecondary} onClick={() => setGateOpen(false)}>Not now</button>
+              <button type="button" style={styles.gatePrimary} onClick={onNeedSubscription}>View plans</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {selected && (
         <RequestModal
           service={selected}
           onClose={() => setSelected(null)}
+          onNeedSubscription={onNeedSubscription}
           onCreated={() => {
             setSelected(null);
             onRequested();
@@ -130,11 +179,13 @@ export function PortalServices({ onRequested }: PortalServicesProps) {
 
 interface RequestModalProps {
   service: CatalogService;
+  onNeedSubscription: () => void;
   onClose: () => void;
   onCreated: () => void;
 }
 
-function RequestModal({ service, onClose, onCreated }: RequestModalProps) {
+function RequestModal({ service, onClose, onCreated, onNeedSubscription }: RequestModalProps) {
+  const [needsPlan, setNeedsPlan] = useState(false);
   const modalRef = useModalAccessibility(true, onClose);
   const [details, setDetails] = useState('');
   const [address, setAddress] = useState('');
@@ -168,6 +219,10 @@ function RequestModal({ service, onClose, onCreated }: RequestModalProps) {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
+        if (res.status === 402 && body?.code === 'SUBSCRIPTION_REQUIRED') {
+          setNeedsPlan(true);
+          throw new Error(body.message);
+        }
         throw new Error(body?.message || `Request failed (HTTP ${res.status}).`);
       }
       onCreated();
@@ -192,6 +247,11 @@ function RequestModal({ service, onClose, onCreated }: RequestModalProps) {
         <h2 id="portal-request-title" style={styles.modalTitle}>Request: {service.serviceName}</h2>
         <p style={styles.modalSub}>{service.description}</p>
         {error && <p style={styles.error}>{error}</p>}
+        {needsPlan && (
+          <button type="button" style={styles.submitBtn} onClick={onNeedSubscription}>
+            View plans
+          </button>
+        )}
 
         <label style={styles.label} htmlFor="req-details">What needs attention? *</label>
         <textarea id="req-details" rows={3} value={details} onChange={(e) => setDetails(e.target.value)} style={styles.input} />
@@ -243,7 +303,17 @@ function RequestModal({ service, onClose, onCreated }: RequestModalProps) {
 
 const styles: Record<string, CSSProperties> = {
   page: { display: 'flex', flexDirection: 'column', gap: 20, padding: '4px 4px 32px' },
-  search: { padding: '10px 14px', borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--surface)', color: 'var(--text-primary)', maxWidth: 420 },
+  searchRow: { display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' },
+  search: { padding: '10px 14px', borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--surface)', color: 'var(--text-primary)', width: 'min(420px, 100%)' },
+  planBanner: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '12px 16px', borderRadius: 14, border: '1px solid rgba(243, 136, 8, 0.6)', background: 'rgba(243, 136, 8, 0.1)', color: 'var(--text-primary)', fontSize: '0.9rem' },
+  planBannerBtn: { border: '1px solid #d37105', background: 'linear-gradient(135deg, #f38808, #d37105)', color: '#fff', padding: '8px 16px', borderRadius: 10, fontWeight: 700, cursor: 'pointer' },
+  gateOverlay: { position: 'fixed', inset: 0, background: 'rgba(4, 10, 11, 0.62)', display: 'grid', placeItems: 'center', padding: 24, zIndex: 99999 },
+  gateCard: { width: 'min(420px, 100%)', borderRadius: 20, background: 'var(--surface)', border: '1px solid var(--border-subtle)', padding: 22, boxShadow: '0 30px 72px rgba(0,0,0,0.35)' },
+  gateTitle: { margin: '0 0 8px', color: 'var(--text-primary)' },
+  gateCopy: { margin: '0 0 16px', color: 'var(--text-secondary)', fontSize: '0.92rem', lineHeight: 1.5 },
+  gateActions: { display: 'flex', justifyContent: 'flex-end', gap: 10 },
+  gateSecondary: { border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', padding: '9px 14px', borderRadius: 10, fontWeight: 600, cursor: 'pointer' },
+  gatePrimary: { border: '1px solid #d37105', background: 'linear-gradient(135deg, #f38808, #d37105)', color: '#fff', padding: '9px 16px', borderRadius: 10, fontWeight: 700, cursor: 'pointer' },
   muted: { color: 'var(--text-muted)' },
   error: { color: '#c62828', fontWeight: 600 },
   pillarBlock: { display: 'flex', flexDirection: 'column', gap: 10 },

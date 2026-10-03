@@ -543,3 +543,41 @@ table tbody tr:hover {
   border-color: #f38808 !important;
   box-shadow: 0 0 0 2px rgba(243, 136, 8, 0.35);
 }
+
+/* Loading placeholders: a soft shimmer, still when the user prefers reduced motion. */
+.metro-skeleton {
+  display: block;
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--surface-strong) 25%, var(--border-subtle) 50%, var(--surface-strong) 75%);
+  background-size: 200% 100%;
+  animation: metro-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes metro-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .metro-skeleton { animation: none; }
+}
+
+/* Map pin used by the location picker (an orange drop, drawn in CSS). */
+.metro-pin {
+  position: relative;
+  width: 26px;
+  height: 26px;
+  border-radius: 50% 50% 50% 0;
+  background: #f38808;
+  border: 3px solid #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  transform: rotate(-45deg);
+}
+.metro-pin::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #fff;
+}

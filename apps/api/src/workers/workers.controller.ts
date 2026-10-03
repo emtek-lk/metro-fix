@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { WorkersService, DispatchSearchResult, WorkerStats } from './workers.service';
 import { CreateWorkerDto } from './dto/create-worker.dto';
+import { updateWorkerSchema, UpdateWorkerDto } from './dto/update-worker.dto';
 import { WorkerEntity, UserEntity } from '../entities';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { registerPushTokenSchema, RegisterPushTokenDto } from './dto/register-push-token.dto';
@@ -32,7 +33,7 @@ export class WorkersController {
 
   @Roles(Role.ADMIN, Role.CUSTOMER_CARE)
   @Get()
-  async findAll(): Promise<WorkerEntity[]> {
+  async findAll() {
     return this.workersService.findAll();
   }
 
@@ -93,6 +94,14 @@ export class WorkersController {
     @Query('includeUnavailable') includeUnavailable?: string,
   ): Promise<DispatchSearchResult[]> {
     return this.workersService.getAvailableWorkersForJob(jobId, radius, includeUnavailable === 'true');
+  }
+
+  /** Admin edits a worker's details, rating, services and duty status. */
+  @Roles(Role.ADMIN)
+  @Patch(':id')
+  @UsePipes(new ZodValidationPipe(updateWorkerSchema))
+  async updateWorker(@Param('id') id: string, @Body() dto: UpdateWorkerDto): Promise<WorkerEntity> {
+    return this.workersService.updateWorker(id, dto);
   }
 
   @Roles(Role.ADMIN, Role.CUSTOMER_CARE)

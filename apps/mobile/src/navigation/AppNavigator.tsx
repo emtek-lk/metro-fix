@@ -1,12 +1,14 @@
 import React from 'react';
 import { createNativeStackNavigator, type NativeStackNavigationOptions } from '@react-navigation/native-stack';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Role } from '@metro-fix/core-types';
+import { Role, type SubscriptionTier } from '@metro-fix/core-types';
 import { useAuth } from '../context/AuthContext';
 import { MobileLoginScreen } from '../components/MobileLoginScreen';
 import { RegisterScreen } from '../components/RegisterScreen';
 import { JobDetail } from '../components/JobDetail';
 import { CustomerTrackingView } from '../components/CustomerTrackingView';
+import { SubscriptionScreen } from '../components/SubscriptionScreen';
+import { CheckoutScreen } from '../components/CheckoutScreen';
 import { UiGalleryScreen } from '../components/UiGalleryScreen';
 import { UnsupportedRoleScreen } from '../components/UnsupportedRoleScreen';
 import { LoadingState } from '../components/ui/LoadingState';
@@ -82,6 +84,50 @@ function TrackingRoute({ navigation, route }: Props<'Tracking'>) {
   );
 }
 
+function PlansRoute({ navigation, route }: Props<'Plans'>) {
+  const { finishPlanChoice } = useAuth();
+  const onboarding = Boolean(route.params?.onboarding);
+  return (
+    <ScreenShell>
+      <SubscriptionScreen
+        onboarding={onboarding}
+        onBack={() => navigation.goBack()}
+        onSkip={finishPlanChoice}
+        onChoose={(plan, cycle, intent) =>
+          navigation.navigate('Checkout', {
+            tier: plan.tierName,
+            cycle,
+            amountLkr: (cycle === 'ANNUAL' ? plan.annualFeeLkr : plan.monthlyFeeLkr) ?? 0,
+            intent,
+            onboarding,
+          })
+        }
+      />
+    </ScreenShell>
+  );
+}
+
+function CheckoutRoute({ navigation, route }: Props<'Checkout'>) {
+  const { finishPlanChoice } = useAuth();
+  const { tier, cycle, amountLkr, intent, onboarding } = route.params;
+  return (
+    <ScreenShell>
+      <CheckoutScreen
+        tier={tier as SubscriptionTier}
+        cycle={cycle}
+        amountLkr={amountLkr}
+        intent={intent}
+        onBack={() => navigation.goBack()}
+        onPaid={() => {
+          // After sign-up, paying lands on the app home; otherwise return to the plans page.
+          if (onboarding) finishPlanChoice();
+          else navigation.popTo('Plans');
+        }}
+      />
+    </ScreenShell>
+  );
+}
+
 function GalleryRoute({ navigation }: Props<'Gallery'>) {
   return (
     <ScreenShell>
@@ -105,7 +151,7 @@ function UnsupportedRoute() {
  * account's screens or state.
  */
 export function AppNavigator() {
-  const { user, token, isLoading, isAuthenticated } = useAuth();
+  const { user, token, isLoading, isAuthenticated, needsPlanChoice } = useAuth();
 
   // While signed in, keep the app live: connect the socket and refresh data as jobs change.
   useRealtimeSync(isAuthenticated ? token : null);
@@ -138,11 +184,23 @@ export function AppNavigator() {
     );
   }
 
+  // Right after sign-up: choose a plan or skip, then on to the app home.
+  if (user.role === Role.CUSTOMER && needsPlanChoice) {
+    return (
+      <Stack.Navigator key={`onboarding-${user.id}`} screenOptions={screenOptions}>
+        <Stack.Screen name="Plans" component={PlansRoute} initialParams={{ onboarding: true }} />
+        <Stack.Screen name="Checkout" component={CheckoutRoute} />
+      </Stack.Navigator>
+    );
+  }
+
   if (user.role === Role.CUSTOMER) {
     return (
       <Stack.Navigator key={`customer-${user.id}`} screenOptions={screenOptions}>
         <Stack.Screen name="Main" component={CustomerMain} />
         <Stack.Screen name="Tracking" component={TrackingRoute} />
+        <Stack.Screen name="Plans" component={PlansRoute} />
+        <Stack.Screen name="Checkout" component={CheckoutRoute} />
         {__DEV__ ? <Stack.Screen name="Gallery" component={GalleryRoute} /> : null}
       </Stack.Navigator>
     );

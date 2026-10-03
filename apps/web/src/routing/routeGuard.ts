@@ -36,6 +36,7 @@ const routeAcl: Record<string, Role[]> = {
   // ── Customer Portal ──
   '/portal/services': [Role.CUSTOMER],
   '/portal/requests': [Role.CUSTOMER],
+  '/portal/subscription': [Role.CUSTOMER],
 };
 
 /**
@@ -101,6 +102,7 @@ const knownPaths = new Set([
   '/admin',
   '/portal/services',
   '/portal/requests',
+  '/portal/subscription',
   '/login',
   '/',
 ]);

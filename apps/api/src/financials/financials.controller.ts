@@ -14,6 +14,12 @@ export class FinancialsController {
     return this.financialsService.getFinancialRecords();
   }
 
+  /** Six-month revenue, revenue by pillar and the headline numbers for the dashboard. */
+  @Get('summary')
+  async getSummary() {
+    return this.financialsService.getSummary();
+  }
+
   @Get('export')
   async exportCsv(@Res() res: Response) {
     const csvContent = await this.financialsService.generateCsvReport();

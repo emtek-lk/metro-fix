@@ -19,37 +19,38 @@ interface PlaceResult {
 
 // Colombo, the default centre when nothing is picked yet.
 const DEFAULT_CENTER: PickedLocation = { latitude: 6.9271, longitude: 79.8612 };
-const LEAFLET_VERSION = '1.9.4';
-
+/**
+ * Leaflet ships with the app (an npm dependency), loaded on first use so it costs nothing on other
+ * pages. Only the map tiles and address search still come from OpenStreetMap.
+ */
 let leafletPromise: Promise<any> | null = null;
-
-/** Loads Leaflet (maps by OpenStreetMap) once, on first use, so it costs nothing on other pages. */
 function loadLeaflet(): Promise<any> {
-  const w = window as any;
-  if (w.L) return Promise.resolve(w.L);
-  if (leafletPromise) return leafletPromise;
-  leafletPromise = new Promise((resolve, reject) => {
-    const css = document.createElement('link');
-    css.rel = 'stylesheet';
-    css.href = `https://unpkg.com/leaflet@${LEAFLET_VERSION}/dist/leaflet.css`;
-    document.head.appendChild(css);
-    const script = document.createElement('script');
-    script.src = `https://unpkg.com/leaflet@${LEAFLET_VERSION}/dist/leaflet.js`;
-    script.onload = () => resolve((window as any).L);
-    script.onerror = () => {
-      leafletPromise = null;
-      reject(new Error('The map could not be loaded. Check the internet connection.'));
-    };
-    document.body.appendChild(script);
-  });
+  if (!leafletPromise) {
+    leafletPromise = Promise.all([import('leaflet'), import('leaflet/dist/leaflet.css')])
+      .then(([module]) => (module as any).default ?? module)
+      .catch(() => {
+        leafletPromise = null;
+        throw new Error('The map could not be loaded. Check the internet connection.');
+      });
+  }
   return leafletPromise;
 }
+
+/** An orange pin drawn in CSS, so no marker image files have to be bundled. */
+const pinIcon = (L: any) =>
+  L.divIcon({
+    className: '',
+    html: '<div class="metro-pin"></div>',
+    iconSize: [26, 26],
+    iconAnchor: [13, 26],
+  });
 
 /** Uber-style location picker: tap the map or drag the pin, search an address, or use your location. */
 export function MapPicker({ value, onChange, height = 280 }: MapPickerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
+  const leafletRef = useRef<any>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
@@ -61,10 +62,10 @@ export function MapPicker({ value, onChange, height = 280 }: MapPickerProps) {
 
   const place = useCallback((latitude: number, longitude: number, label?: string, pan = false) => {
     const map = mapRef.current;
-    const L = (window as any).L;
-    if (!map || !L) return;
+    if (!map || !leafletRef.current) return;
+    const L = leafletRef.current;
     if (!markerRef.current) {
-      markerRef.current = L.marker([latitude, longitude], { draggable: true }).addTo(map);
+      markerRef.current = L.marker([latitude, longitude], { draggable: true, icon: pinIcon(L) }).addTo(map);
       markerRef.current.on('dragend', () => {
         const at = markerRef.current.getLatLng();
         onChangeRef.current({ latitude: at.lat, longitude: at.lng });
@@ -81,6 +82,7 @@ export function MapPicker({ value, onChange, height = 280 }: MapPickerProps) {
     loadLeaflet()
       .then((L) => {
         if (cancelled || !containerRef.current || mapRef.current) return;
+        leafletRef.current = L;
         const start = value ?? DEFAULT_CENTER;
         const map = L.map(containerRef.current).setView([start.latitude, start.longitude], value ? 16 : 12);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {

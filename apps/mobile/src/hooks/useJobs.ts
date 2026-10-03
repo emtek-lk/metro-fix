@@ -1,7 +1,8 @@
 import type { JobCardPayload } from '../lib/jobCard';
 import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { apiClient } from '../lib/api';
-import { apiService, type WorkerStats } from '../services/api';
+import { apiService, type WorkerStats, type SubscriptionPlan } from '../services/api';
+import type { CustomerSubscription, CheckoutInput } from '@metro-fix/core-types';
 import { JobStatus, ServiceRequest } from '@metro-fix/core-types';
 
 /**
@@ -58,6 +59,33 @@ export function useSetAvailability() {
       if (context?.previous) queryClient.setQueryData(['workerStats'], context.previous);
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['workerStats'] }),
+  });
+}
+
+/** The plans on offer. */
+export function usePlans() {
+  return useQuery<SubscriptionPlan[], Error>({
+    queryKey: ['plans'],
+    queryFn: () => apiService.fetchPlans(),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/** The signed-in customer's plan; `tier` is null until they subscribe. */
+export function useMySubscription(enabled = true) {
+  return useQuery<CustomerSubscription, Error>({
+    queryKey: ['mySubscription'],
+    queryFn: () => apiService.fetchMySubscription(),
+    enabled,
+  });
+}
+
+/** Pays for a plan (demo card) and refreshes the customer's subscription. */
+export function useCheckout() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CheckoutInput) => apiService.checkout(input),
+    onSuccess: (data) => queryClient.setQueryData(['mySubscription'], data),
   });
 }
 

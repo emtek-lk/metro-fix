@@ -1,3 +1,4 @@
+import { getErrorMessage, isSubscriptionRequired } from '../lib/errors';
 import { LocationMapPicker } from './LocationMapPicker';
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Pressable, StyleSheet, Animated, ActivityIndicator, Platform } from 'react-native';
@@ -23,6 +24,8 @@ import { haptics } from '../lib/haptics';
 interface CustomerBookingWizardProps {
   customerId: string;
   onBookingComplete: (job: ServiceRequest) => void;
+  /** The API refused because the customer has no plan: take them to the plans. */
+  onNeedSubscription?: () => void;
 }
 
 const PILLAR_OPTIONS: {
@@ -68,6 +71,7 @@ const parseCoords = (latitude: string, longitude: string) => {
 export const CustomerBookingWizard: React.FC<CustomerBookingWizardProps> = ({
   customerId,
   onBookingComplete,
+  onNeedSubscription,
 }) => {
   const insets = useSafeAreaInsets();
   const toast = useToast();
@@ -160,7 +164,12 @@ export const CustomerBookingWizard: React.FC<CustomerBookingWizardProps> = ({
       haptics.success();
       setSubmitted(createdJob);
     } catch (error: any) {
-      toast.error(error?.message || 'Failed to submit service request', 'Submission failed');
+      if (isSubscriptionRequired(error)) {
+        toast.error(getErrorMessage(error), 'Subscription required');
+        onNeedSubscription?.();
+      } else {
+        toast.error(getErrorMessage(error, 'Failed to submit service request'), 'Submission failed');
+      }
     } finally {
       setIsSubmitting(false);
     }

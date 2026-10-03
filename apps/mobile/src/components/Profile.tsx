@@ -1,5 +1,5 @@
 import React from 'react';
-import { Animated, View, StyleSheet, Switch } from 'react-native';
+import { Animated, RefreshControl, View, StyleSheet, Switch } from 'react-native';
 import { Text } from './ui/AppText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Card } from './ui/Card';
@@ -11,7 +11,9 @@ import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { spacing, radius, layout, tabBarClearance } from '../theme/layout';
 import { useAuth } from '../context/AuthContext';
-import { useWorkerStats, useSetAvailability } from '../hooks/useJobs';
+import { useWorkerStats, useSetAvailability, useMySubscription } from '../hooks/useJobs';
+import { tierLabel } from '../lib/plans';
+import { usePullRefresh } from '../hooks/usePullRefresh';
 import { useToast } from './ui/Toast';
 import { useTheme, type ThemePreference } from '../theme/ThemeProvider';
 import { Role } from '@metro-fix/core-types';
@@ -35,18 +37,25 @@ const settingsRows = (pillars: string): { icon: FeatherIconName; label: string; 
 export interface ProfileScreenProps {
   /** Development builds only: opens the UI gallery. */
   onOpenGallery?: () => void;
+  /** Customers: opens the plans page to view or change their subscription. */
+  onOpenSubscription?: () => void;
 }
 
-export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onOpenGallery }) => {
+export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onOpenGallery, onOpenSubscription }) => {
   const insets = useSafeAreaInsets();
   const { scrollY, onScroll } = useCollapsingHeader();
   const { user, logout } = useAuth();
   const { preference, setPreference } = useTheme();
   const isWorker = user?.role === Role.WORKER;
+  const isCustomer = user?.role === Role.CUSTOMER;
+  const subscription = useMySubscription(isCustomer);
   // The worker's real rating, completed and active jobs (GET /workers/me/stats).
   const statsQuery = useWorkerStats(isWorker);
   const stats = statsQuery.data;
   const setAvailability = useSetAvailability();
+  const { refreshing, onRefresh } = usePullRefresh(() =>
+    Promise.all([isWorker ? statsQuery.refetch() : null, isCustomer ? subscription.refetch() : null]),
+  );
   const toast = useToast();
   const statValue = (value: number | string | undefined) =>
     value === undefined ? NOT_AVAILABLE : String(value);
@@ -62,8 +71,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onOpenGallery }) =
           styles.scrollContent,
           { paddingBottom: tabBarClearance(insets) },
         ]}
-        bounces={false}
         showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brand} colors={[colors.brand]} />}
       >
         <ScreenHeader eyebrow="Account" title="Profile" />
 
@@ -156,6 +165,32 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onOpenGallery }) =
 
           </>
         )}
+
+        {isCustomer && onOpenSubscription ? (
+          <>
+            <Text style={styles.sectionHeading}>Subscription</Text>
+            <Card variant="elevated" borderRadius={radius.lg} padding={spacing.lg}>
+              <View style={styles.planRow}>
+                <View style={styles.planText}>
+                  <Text style={styles.planTitle}>
+                    {subscription.data?.tier ? `${tierLabel(subscription.data.tier)} plan` : 'No plan yet'}
+                  </Text>
+                  <Text style={styles.planDesc}>
+                    {subscription.data?.tier
+                      ? `Billed ${subscription.data.billingCycle === 'ANNUAL' ? 'annually' : 'monthly'}. Upgrade or downgrade any time.`
+                      : 'You need a plan to raise service requests.'}
+                  </Text>
+                </View>
+                <Button
+                  title={subscription.data?.tier ? 'Manage' : 'Choose plan'}
+                  onPress={onOpenSubscription}
+                  variant={subscription.data?.tier ? 'secondary' : 'primary'}
+                  size="small"
+                />
+              </View>
+            </Card>
+          </>
+        ) : null}
 
         {/* Appearance */}
         <Text style={styles.sectionHeading}>Appearance</Text>
@@ -267,6 +302,10 @@ const styles = themedStyles(() => StyleSheet.create({
   },
 
   // ── Stats ──
+  planRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.lg },
+  planText: { flex: 1 },
+  planTitle: { ...typography.label, fontWeight: '800', color: colors.text },
+  planDesc: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
   dutyRow: {
     flexDirection: 'row',
     alignItems: 'center',
