@@ -18,6 +18,7 @@ import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { spacing, radius, layout } from '../theme/layout';
 import { elevation } from '../theme/elevation';
+import { themedStyles } from '../theme/themedStyles';
 
 export interface MobileLoginScreenProps {
   onLoginSuccess?: (user: User, token: string) => void;
@@ -32,9 +33,9 @@ export interface MobileLoginScreenProps {
  */
 const DEV_ACCOUNTS: { label: string; email: string; password: string }[] = __DEV__
   ? [
-      { label: 'Amina', email: 'amina@metro-fix.com', password: 'Password123!' },
-      { label: 'Omar', email: 'omar@metro-fix.com', password: 'Password123!' },
-      { label: 'Admin', email: 'admin@metro-fix.com', password: 'Password123!' },
+      { label: 'Worker 1', email: 'worker1@demo.local', password: 'Demo123!' },
+      { label: 'Worker 2', email: 'worker2@demo.local', password: 'Demo123!' },
+      { label: 'Customer', email: 'eleanor@skylinetowers.com', password: 'Demo123!' },
     ]
   : [];
 
@@ -168,10 +169,10 @@ export function MobileLoginScreen({ onLoginSuccess }: MobileLoginScreenProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: 'transparent',
   },
   container: {
     flex: 1,
@@ -295,4 +296,4 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.textSecondary,
   },
-});
+}));

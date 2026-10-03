@@ -113,12 +113,8 @@ export class SeedService implements OnApplicationBootstrap {
       worker2 = await this.workerRepository.save(this.workerRepository.create(worker2Data as Partial<WorkerEntity>));
     }
 
-    const jobCount = await this.jobRepository.count();
-    if (jobCount > 0) {
-      this.logger.log('Data already seeded. Skipping seed process.');
-      return;
-    }
-
+    // Demo customers, worker profiles and the service catalog are create-if-missing, so they
+    // exist on any database. Only the sample jobs below are skipped once jobs exist.
     const customersData = [
       {
         user: { fullName: 'Eleanor Vance', email: 'eleanor@skylinetowers.com', role: Role.CUSTOMER, password },
@@ -189,6 +185,12 @@ export class SeedService implements OnApplicationBootstrap {
        if (!catalog) {
            await this.catalogRepository.save(this.catalogRepository.create(data as Partial<ServiceCatalogEntity>));
        }
+    }
+
+    const jobCount = await this.jobRepository.count();
+    if (jobCount > 0) {
+      this.logger.log('Data already seeded. Skipping seed process.');
+      return;
     }
 
     const jobsData = [

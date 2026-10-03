@@ -39,3 +39,17 @@ export type { LoadingStateProps } from './LoadingState';
 
 export { SkeletonCard } from './SkeletonCard';
 export type { SkeletonCardProps } from './SkeletonCard';
+
+export { SegmentedControl } from './SegmentedControl';
+export type { SegmentedControlProps, SegmentOption } from './SegmentedControl';
+
+export { GlassSurface } from './GlassSurface';
+export type { GlassSurfaceProps } from './GlassSurface';
+
+export { AppBackground } from './AppBackground';
+
+export { GlassHeader, useCollapsingHeader, GLASS_HEADER_HEIGHT } from './GlassHeader';
+export type { GlassHeaderProps } from './GlassHeader';
+
+export { StageStepper } from './StageStepper';
+export type { StageStepperProps } from './StageStepper';

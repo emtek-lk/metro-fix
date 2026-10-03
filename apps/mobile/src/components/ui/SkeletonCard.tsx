@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { View, Animated, StyleSheet, Easing, StyleProp, ViewStyle } from 'react-native';
 import { colors } from '../../theme/colors';
 import { spacing, radius } from '../../theme/layout';
+import { themedStyles } from '../../theme/themedStyles';
 
 interface SkeletonBarProps {
   width: ViewStyle['width'];
@@ -68,7 +69,7 @@ export const SkeletonCard: React.FC<SkeletonCardProps> = ({ style }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -91,4 +92,4 @@ const styles = StyleSheet.create({
   bar: {
     backgroundColor: colors.surfaceRaised,
   },
-});
+}));

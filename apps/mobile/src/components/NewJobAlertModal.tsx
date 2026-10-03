@@ -1,17 +1,19 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Modal, View, Text, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { JobStatus, ServiceRequest } from '@metro-fix/core-types';
 import { apiService } from '../services/api';
+import { haptics } from '../lib/haptics';
 
 import { Button } from './ui/Button';
 import { Icon } from './ui/Icon';
 import { MetaChip } from './ui/MetaChip';
+import { GlassSurface } from './ui/GlassSurface';
 import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { spacing, radius, layout } from '../theme/layout';
-import { elevation } from '../theme/elevation';
 import { PILLAR_ICON, FACILITY_ICON } from '../theme/status';
+import { themedStyles } from '../theme/themedStyles';
 
 interface NewJobAlertModalProps {
   visible: boolean;
@@ -35,6 +37,11 @@ export const NewJobAlertModal: React.FC<NewJobAlertModalProps> = ({
     null,
   );
 
+  // A new dispatch is time-sensitive, so nudge the worker when it appears.
+  useEffect(() => {
+    if (visible && job) haptics.warning();
+  }, [visible, job]);
+
   if (!job) return null;
 
   const handleAccept = async () => {
@@ -45,6 +52,7 @@ export const NewJobAlertModal: React.FC<NewJobAlertModalProps> = ({
         JobStatus.ASSIGNED,
         workerId,
       );
+      haptics.success();
       onAccept(updated);
     } catch (error) {
       console.error('Failed to accept job:', error);
@@ -69,7 +77,11 @@ export const NewJobAlertModal: React.FC<NewJobAlertModalProps> = ({
   return (
     <Modal visible={visible} animationType="slide" transparent>
       <View style={styles.overlay}>
-        <View style={[styles.card, { paddingBottom: spacing.xxl + insets.bottom }]}>
+        <GlassSurface
+          borderRadius={radius.xxl + 4}
+          style={[styles.card, { marginBottom: insets.bottom + spacing.sm }]}
+        >
+          <View style={styles.cardInner}>
           <View style={styles.handle} />
 
           <View style={styles.badgeRow}>
@@ -134,25 +146,26 @@ export const NewJobAlertModal: React.FC<NewJobAlertModalProps> = ({
               size="large"
             />
           </View>
-        </View>
+          </View>
+        </GlassSurface>
       </View>
     </Modal>
   );
 };
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: colors.overlay,
     justifyContent: 'flex-end',
   },
   card: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.xxl + 4,
-    borderTopRightRadius: radius.xxl + 4,
+    marginHorizontal: spacing.sm,
+  },
+  cardInner: {
     paddingHorizontal: layout.screenPadding,
     paddingTop: spacing.md,
-    ...elevation.e3,
+    paddingBottom: spacing.xxl,
   },
   handle: {
     width: 40,
@@ -250,4 +263,4 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     marginTop: spacing.xxl,
   },
-});
+}));

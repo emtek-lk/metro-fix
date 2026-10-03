@@ -4,6 +4,7 @@ import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { spacing, radius } from '../../theme/layout';
 import { Icon, type FeatherIconName } from './Icon';
+import { themedStyles } from '../../theme/themedStyles';
 
 export interface MetaChipProps {
   icon: FeatherIconName;
@@ -31,7 +32,7 @@ export const MetaChip: React.FC<MetaChipProps> = ({
   </View>
 );
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -47,4 +48,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.textSecondary,
   },
-});
+}));

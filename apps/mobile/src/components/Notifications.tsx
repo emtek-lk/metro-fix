@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { Animated, View, Text, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Card } from './ui/Card';
 import { Button } from './ui/Button';
@@ -8,6 +8,8 @@ import { ScreenHeader } from './ui/ScreenHeader';
 import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { spacing, radius, layout, tabBarClearance } from '../theme/layout';
+import { themedStyles } from '../theme/themedStyles';
+import { GlassHeader, useCollapsingHeader } from './ui/GlassHeader';
 
 interface NotificationsScreenProps {
   onSimulateAlert: () => void;
@@ -15,6 +17,7 @@ interface NotificationsScreenProps {
 
 export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ onSimulateAlert }) => {
   const insets = useSafeAreaInsets();
+  const { scrollY, onScroll } = useCollapsingHeader();
 
   const sampleNotifications: {
     id: string;
@@ -56,7 +59,9 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ onSimu
 
   return (
     <View style={styles.container}>
-      <ScrollView
+      <Animated.ScrollView
+        onScroll={onScroll}
+        scrollEventThrottle={16}
         contentContainerStyle={[
           styles.scrollContent,
           { paddingBottom: tabBarClearance(insets) },
@@ -113,15 +118,16 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ onSimu
             </Card>
           ))}
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
+      <GlassHeader title="Dispatch Alerts" scrollY={scrollY} />
     </View>
   );
 };
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: 'transparent',
   },
   scrollContent: {
     paddingHorizontal: layout.screenPadding,
@@ -203,4 +209,4 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: spacing.sm,
   },
-});
+}));

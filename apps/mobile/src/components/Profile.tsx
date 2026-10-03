@@ -1,13 +1,25 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { Animated, View, Text, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Card } from './ui/Card';
+import { ScreenHeader } from './ui/ScreenHeader';
 import { Button } from './ui/Button';
+import { SegmentedControl } from './ui/SegmentedControl';
 import { Icon, type FeatherIconName } from './ui/Icon';
 import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { spacing, radius, layout, tabBarClearance } from '../theme/layout';
 import { useAuth } from '../context/AuthContext';
+import { useTheme, type ThemePreference } from '../theme/ThemeProvider';
+import { Role } from '@metro-fix/core-types';
+import { themedStyles } from '../theme/themedStyles';
+import { GlassHeader, useCollapsingHeader } from './ui/GlassHeader';
+
+const APPEARANCE_OPTIONS: { id: ThemePreference; label: string }[] = [
+  { id: 'system', label: 'System' },
+  { id: 'light', label: 'Light' },
+  { id: 'dark', label: 'Dark' },
+];
 
 const SETTINGS_ROWS: { icon: FeatherIconName; label: string; value: string }[] = [
   { icon: 'radio', label: 'Telemetry GPS Auto-Sync', value: 'ACTIVE' },
@@ -17,11 +29,17 @@ const SETTINGS_ROWS: { icon: FeatherIconName; label: string; value: string }[] =
 
 export const ProfileScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
+  const { scrollY, onScroll } = useCollapsingHeader();
   const { user, logout } = useAuth();
+  const { preference, setPreference } = useTheme();
+  const isWorker = user?.role === Role.WORKER;
+  const roleLabel = (user?.role || 'USER').replace(/_/g, ' ');
 
   return (
     <View style={styles.container}>
-      <ScrollView
+      <Animated.ScrollView
+        onScroll={onScroll}
+        scrollEventThrottle={16}
         contentContainerStyle={[
           styles.scrollContent,
           { paddingBottom: tabBarClearance(insets) },
@@ -29,64 +47,85 @@ export const ProfileScreen: React.FC = () => {
         bounces={false}
         showsVerticalScrollIndicator={false}
       >
+        <ScreenHeader eyebrow="Account" title="Profile" />
+
         {/* Profile Card */}
         <Card variant="elevated" borderRadius={radius.xxl} padding={spacing.xxl} style={styles.profileCard}>
           <View style={styles.avatarContainer}>
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>
-                {user?.fullName?.charAt(0).toUpperCase() || 'W'}
+                {user?.fullName?.charAt(0).toUpperCase() || 'U'}
               </Text>
             </View>
             <View style={styles.onlineBadge} />
           </View>
 
-          <Text style={styles.userName}>{user?.fullName || 'Field Technician'}</Text>
-          <Text style={styles.userEmail}>{user?.email || 'worker@metro-fix.com'}</Text>
+          <Text style={styles.userName}>{user?.fullName || 'METRO-FIX user'}</Text>
+          <Text style={styles.userEmail}>{user?.email || ''}</Text>
 
           <View style={styles.roleTag}>
-            <Text style={styles.roleTagText}>{user?.role || 'WORKER'} ACCOUNT</Text>
+            <Text style={styles.roleTagText}>{roleLabel} ACCOUNT</Text>
           </View>
 
-          {/* Rating & Stats */}
-          <View style={styles.statsRow}>
-            <View style={styles.statBox}>
-              <View style={styles.statValueRow}>
-                <Icon name="star" size={14} color={colors.brand} />
-                <Text style={styles.statValue}>4.9</Text>
+          {isWorker && (
+            <>
+            <View style={styles.statsRow}>
+              <View style={styles.statBox}>
+                <View style={styles.statValueRow}>
+                  <Icon name="star" size={14} color={colors.brand} />
+                  <Text style={styles.statValue}>4.9</Text>
+                </View>
+                <Text style={styles.statLabel}>Internal Rating</Text>
               </View>
-              <Text style={styles.statLabel}>Internal Rating</Text>
+              <View style={styles.statDivider} />
+              <View style={styles.statBox}>
+                <Text style={styles.statValue}>142</Text>
+                <Text style={styles.statLabel}>Completed Jobs</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statBox}>
+                <Text style={styles.statValue}>99%</Text>
+                <Text style={styles.statLabel}>On-Time Rate</Text>
+              </View>
             </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>142</Text>
-              <Text style={styles.statLabel}>Completed Jobs</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>99%</Text>
-              <Text style={styles.statLabel}>On-Time Rate</Text>
-            </View>
-          </View>
+            </>
+          )}
         </Card>
 
-        {/* Dispatch Settings */}
-        <Text style={styles.sectionHeading}>Dispatch & system settings</Text>
+        {isWorker && (
+          <>
+          {/* Dispatch Settings */}
+          <Text style={styles.sectionHeading}>Dispatch & system settings</Text>
 
-        <Card variant="elevated" borderRadius={radius.lg} padding={spacing.xs}>
-          {SETTINGS_ROWS.map((row, index) => (
-            <View key={row.label}>
-              {index > 0 ? <View style={styles.divider} /> : null}
-              <View style={styles.settingRow}>
-                <View style={styles.settingLabelGroup}>
-                  <Icon name={row.icon} size={16} color={colors.textSecondary} />
-                  <Text style={styles.settingLabel} numberOfLines={1}>
-                    {row.label}
-                  </Text>
+          <Card variant="elevated" borderRadius={radius.lg} padding={spacing.xs}>
+            {SETTINGS_ROWS.map((row, index) => (
+              <View key={row.label}>
+                {index > 0 ? <View style={styles.divider} /> : null}
+                <View style={styles.settingRow}>
+                  <View style={styles.settingLabelGroup}>
+                    <Icon name={row.icon} size={16} color={colors.textSecondary} />
+                    <Text style={styles.settingLabel} numberOfLines={1}>
+                      {row.label}
+                    </Text>
+                  </View>
+                  <Text style={styles.settingValue}>{row.value}</Text>
                 </View>
-                <Text style={styles.settingValue}>{row.value}</Text>
               </View>
-            </View>
-          ))}
+            ))}
+          </Card>
+
+          </>
+        )}
+
+        {/* Appearance */}
+        <Text style={styles.sectionHeading}>Appearance</Text>
+        <Card variant="elevated" borderRadius={radius.lg} padding={spacing.md}>
+          <SegmentedControl
+            options={APPEARANCE_OPTIONS}
+            value={preference}
+            onChange={setPreference}
+            accessibilityLabel="Theme"
+          />
         </Card>
 
         {/* Logout Button */}
@@ -98,15 +137,16 @@ export const ProfileScreen: React.FC = () => {
           icon={<Icon name="log-out" size={17} color={colors.dangerText} />}
           style={styles.logoutBtn}
         />
-      </ScrollView>
+      </Animated.ScrollView>
+      <GlassHeader title="Profile" scrollY={scrollY} />
     </View>
   );
 };
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: 'transparent',
   },
   scrollContent: {
     paddingHorizontal: layout.screenPadding,
@@ -210,6 +250,7 @@ const styles = StyleSheet.create({
   sectionHeading: {
     ...typography.overline,
     color: colors.textSecondary,
+    marginTop: spacing.xl,
     marginBottom: spacing.md,
   },
   settingRow: {
@@ -248,4 +289,4 @@ const styles = StyleSheet.create({
   logoutBtn: {
     marginTop: spacing.xxl,
   },
-});
+}));

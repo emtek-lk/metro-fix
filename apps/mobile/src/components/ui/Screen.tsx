@@ -3,6 +3,7 @@ import { View, StyleSheet, StyleProp, ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../theme/colors';
 import { layout, tabBarClearance } from '../../theme/layout';
+import { themedStyles } from '../../theme/themedStyles';
 
 export interface ScreenProps {
   children: React.ReactNode;
@@ -42,9 +43,9 @@ export const Screen: React.FC<ScreenProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.bg,
   },
-});
+}));

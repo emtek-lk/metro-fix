@@ -15,6 +15,8 @@ import { Icon } from './ui/Icon';
 import { Input } from './ui/Input';
 import { StatusPill } from './ui/StatusPill';
 import { MetaChip } from './ui/MetaChip';
+import { GlassSurface } from './ui/GlassSurface';
+import { StageStepper } from './ui/StageStepper';
 import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { spacing, radius, layout } from '../theme/layout';
@@ -23,6 +25,8 @@ import { PILLAR_ICON, FACILITY_ICON } from '../theme/status';
 import { useJobDetail, useUpdateJobStatus, useSubmitQuote, useSubmitProof } from '../hooks/useJobs';
 import { startWorkerBackgroundTracking, stopWorkerBackgroundTracking } from '../services/location';
 import { openNativeNavigation } from '../services/linking';
+import { haptics } from '../lib/haptics';
+import { themedStyles } from '../theme/themedStyles';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 
@@ -73,8 +77,9 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
         await stopWorkerBackgroundTracking();
       }
       const updated = await updateStatus.mutateAsync({ jobId: currentJob.id, status: cfg.next, workerId });
+      haptics.success();
       onJobUpdated?.(updated);
-    } catch (e: any) { Alert.alert('Error', e.message || 'Could not update status.'); }
+    } catch (e: any) { haptics.error(); Alert.alert('Error', e.message || 'Could not update status.'); }
   };
 
   const handleQuote = async () => {
@@ -83,9 +88,10 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
     if (isNaN(hrs) || hrs < 0) return Alert.alert('Invalid', 'Enter valid hours.');
     try {
       const updated = await submitQuote.mutateAsync({ jobId: currentJob.id, estimatedCost: cost, estimatedHours: hrs, notes: quoteNotes });
+      haptics.success();
       onJobUpdated?.(updated);
       Alert.alert('Quote Submitted', 'Work transitioned to IN PROGRESS.');
-    } catch (e: any) { Alert.alert('Error', e.message || 'Failed to submit quote.'); }
+    } catch (e: any) { haptics.error(); Alert.alert('Error', e.message || 'Failed to submit quote.'); }
   };
 
   const handleTakePhoto = async () => {
@@ -106,10 +112,11 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
     }
     try {
       const updated = await submitProof.mutateAsync({ jobId: currentJob.id, signature: signatureB64, photos });
+      haptics.success();
       onJobUpdated?.(updated);
       setProofModalVisible(false);
       Alert.alert('Proof Submitted', 'Ticket COMPLETED.');
-    } catch (e: any) { Alert.alert('Error', e.message || 'Failed to submit proof.'); }
+    } catch (e: any) { haptics.error(); Alert.alert('Error', e.message || 'Failed to submit proof.'); }
   };
 
   const lc = lifecycle(currentJob.status);
@@ -130,8 +137,9 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
             <View style={s.navRow}>
               <IconButton
                 onPress={onBack}
-                icon={<Icon name="chevron-left" size={22} color={colors.textInverse} />}
-                backgroundColor={colors.white}
+                accessibilityLabel="Back"
+                icon={<Icon name="chevron-left" size={22} color={colors.photoControlIcon} />}
+                backgroundColor={colors.photoControl}
                 size={44}
               />
               <IconButton
@@ -139,8 +147,9 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
                   if (!currentJob.location) return Alert.alert('No Coordinates');
                   openNativeNavigation({ latitude: currentJob.location.latitude, longitude: currentJob.location.longitude, label: currentJob.title });
                 }}
-                icon={<Icon name="map-pin" size={19} color={colors.textInverse} />}
-                backgroundColor={colors.white}
+                accessibilityLabel="Open in maps"
+                icon={<Icon name="map-pin" size={19} color={colors.photoControlIcon} />}
+                backgroundColor={colors.photoControl}
                 size={44}
               />
             </View>
@@ -161,6 +170,9 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
             </View>
           </View>
           <Text style={s.jobTitle}>{currentJob.title}</Text>
+          <View style={s.stepperWrap}>
+            <StageStepper status={currentJob.status} />
+          </View>
 
           <Card variant="elevated" borderRadius={radius.xl} padding={spacing.lg + 2} style={s.cardGap}>
             <Text style={s.heading}>Customer & address</Text>
@@ -213,18 +225,22 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
         </View>
       </ScrollView>
 
-      {/* Bottom CTA */}
-      <View style={[s.bottomBar, { bottom: layout.tabBarInset + insets.bottom }]}>
-        {lc && (
-          <Button title={`${lc.text} →`} onPress={handleLifecycle} isLoading={updateStatus.isPending} variant="primary" size="large" />
-        )}
-        {currentJob.status === JobStatus.IN_PROGRESS && (
-          <Button title="Complete Job →" onPress={() => setProofModalVisible(true)} variant="primary" size="large" />
-        )}
-        {currentJob.status === JobStatus.COMPLETED && (
-          <Button title="Ticket Completed" onPress={onBack} variant="secondary" size="large" />
-        )}
-      </View>
+      {/* Bottom CTA, floating on glass */}
+      {(lc || currentJob.status === JobStatus.IN_PROGRESS || currentJob.status === JobStatus.COMPLETED) && (
+        <View style={[s.bottomBar, { bottom: layout.tabBarInset + insets.bottom }]}>
+          <GlassSurface borderRadius={radius.xxl} style={s.bottomGlass}>
+            {lc && (
+              <Button title={`${lc.text} →`} onPress={handleLifecycle} isLoading={updateStatus.isPending} variant="primary" size="large" />
+            )}
+            {currentJob.status === JobStatus.IN_PROGRESS && (
+              <Button title="Complete Job →" onPress={() => setProofModalVisible(true)} variant="primary" size="large" />
+            )}
+            {currentJob.status === JobStatus.COMPLETED && (
+              <Button title="Ticket Completed" onPress={onBack} variant="secondary" size="large" />
+            )}
+          </GlassSurface>
+        </View>
+      )}
 
       {/* Proof of Work Bottom-Sheet Modal */}
       <Modal visible={proofModalVisible} animationType="slide" transparent>
@@ -277,8 +293,8 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
   );
 };
 
-const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
+const s = themedStyles(() => StyleSheet.create({
+  container: { flex: 1, backgroundColor: 'transparent' },
   scroll: {},
   hero: { height: 260, width: '100%' },
   heroOverlay: {
@@ -334,15 +350,17 @@ const s = StyleSheet.create({
   formFields: { gap: spacing.lg, marginTop: spacing.lg },
   formSubmit: { marginTop: spacing.xl },
 
+  stepperWrap: { marginBottom: spacing.lg },
+  bottomGlass: { padding: spacing.sm },
   bottomBar: {
     position: 'absolute',
     left: layout.screenPadding,
     right: layout.screenPadding,
     zIndex: 999,
   },
-});
+}));
 
-const m = StyleSheet.create({
+const m = themedStyles(() => StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: colors.surface,
@@ -389,4 +407,4 @@ const m = StyleSheet.create({
     marginVertical: spacing.md,
   },
   modalActions: { gap: spacing.md, marginTop: spacing.lg },
-});
+}));

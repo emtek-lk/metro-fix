@@ -21,12 +21,12 @@ export interface StatusPresentation {
 }
 
 /**
- * The single lookup: every one of the 7 lifecycle stages defines exactly one
+ * The single lookup (built on demand so colours follow the active theme): every one of the 7 lifecycle stages defines exactly one
  * colour and one label. `satisfies Record<JobStatus, …>` makes an omitted stage
  * a compile-time error, so this map can never silently fall through to raw
  * enum text.
  */
-const STATUS_PRESENTATION = {
+const buildStatusPresentation = () => ({
   [JobStatus.REQUESTED]: {
     label: 'Requested',
     color: colors.textMuted, // #64748B — unchanged (was the default fallback)
@@ -62,22 +62,23 @@ const STATUS_PRESENTATION = {
     color: colors.success, // #10B981 — unchanged
     icon: 'check-circle',
   },
-} satisfies Record<JobStatus, StatusPresentation>;
+} satisfies Record<JobStatus, StatusPresentation>);
 
 /**
  * Used only when a value outside the lifecycle reaches the UI. It renders
  * neutral human text — never the raw enum string.
  */
-const FALLBACK: StatusPresentation = {
+const buildFallback = (): StatusPresentation => ({
   label: 'Unknown',
   color: colors.textMuted,
   icon: 'help-circle',
-};
+});
 
 /** Look up display metadata for a lifecycle stage. Never throws. */
 export function getStatusPresentation(status?: JobStatus | string | null): StatusPresentation {
-  if (!status) return FALLBACK;
-  return (STATUS_PRESENTATION as Record<string, StatusPresentation>)[status] ?? FALLBACK;
+  // Built per call so the colours follow the active theme.
+  if (!status) return buildFallback();
+  return (buildStatusPresentation() as Record<string, StatusPresentation>)[status] ?? buildFallback();
 }
 
 /** Human label for a lifecycle stage. Never returns raw enum text. */

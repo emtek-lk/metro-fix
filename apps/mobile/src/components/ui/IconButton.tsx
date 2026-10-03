@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, ViewStyle, StyleProp, Text } from 'react-native'
 import { colors } from '../../theme/colors';
 import { layout } from '../../theme/layout';
 import { elevation } from '../../theme/elevation';
+import { themedStyles } from '../../theme/themedStyles';
 
 export interface IconButtonProps {
   onPress: () => void;
@@ -13,6 +14,7 @@ export interface IconButtonProps {
   color?: string;
   style?: StyleProp<ViewStyle>;
   disabled?: boolean;
+  accessibilityLabel?: string;
 }
 
 export const IconButton: React.FC<IconButtonProps> = ({
@@ -24,6 +26,7 @@ export const IconButton: React.FC<IconButtonProps> = ({
   color = colors.text,
   style,
   disabled = false,
+  accessibilityLabel,
 }) => {
   // Never render below the minimum accessible tap target, even if a smaller
   // visual size is requested.
@@ -46,6 +49,7 @@ export const IconButton: React.FC<IconButtonProps> = ({
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
       accessibilityState={{ disabled }}
     >
       {icon ? (
@@ -57,7 +61,7 @@ export const IconButton: React.FC<IconButtonProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   circle: {
     justifyContent: 'center',
     alignItems: 'center',
@@ -75,4 +79,4 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
   },
-});
+}));

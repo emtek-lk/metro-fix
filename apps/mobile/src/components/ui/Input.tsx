@@ -12,6 +12,7 @@ import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { spacing, radius, layout } from '../../theme/layout';
 import { Icon, type FeatherIconName } from './Icon';
+import { themedStyles } from '../../theme/themedStyles';
 
 export interface InputProps extends Omit<TextInputProps, 'style'> {
   label?: string;
@@ -92,7 +93,7 @@ export const Input: React.FC<InputProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   container: {
     gap: spacing.sm,
   },
@@ -142,4 +143,4 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textMuted,
   },
-});
+}));

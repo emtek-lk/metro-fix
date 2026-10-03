@@ -6,6 +6,7 @@ import { typography } from '../../theme/typography';
 import { spacing, radius } from '../../theme/layout';
 import { colors } from '../../theme/colors';
 import { Icon } from './Icon';
+import { themedStyles } from '../../theme/themedStyles';
 
 export interface StatusPillProps {
   status: JobStatus | string;
@@ -53,7 +54,7 @@ export const StatusPill: React.FC<StatusPillProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -77,4 +78,4 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 14,
   },
-});
+}));

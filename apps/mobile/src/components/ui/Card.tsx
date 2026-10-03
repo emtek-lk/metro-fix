@@ -3,6 +3,7 @@ import { View, StyleSheet, ViewStyle, StyleProp } from 'react-native';
 import { colors } from '../../theme/colors';
 import { radius, spacing } from '../../theme/layout';
 import { elevation } from '../../theme/elevation';
+import { themedStyles } from '../../theme/themedStyles';
 
 export interface CardProps {
   children: React.ReactNode;
@@ -34,7 +35,7 @@ export const Card: React.FC<CardProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   baseCard: {
     backgroundColor: colors.surface,
     overflow: 'hidden',
@@ -50,4 +51,4 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
     ...elevation.e0,
   },
-});
+}));

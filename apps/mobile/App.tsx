@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
-import { StatusBar, StyleSheet, View, Text, Pressable } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { JobStatus, ServiceRequest, ServicePillar, FacilityType } from '@metro-fix/core-types';
+import { JobStatus, ServiceRequest, ServicePillar, FacilityType, Role } from '@metro-fix/core-types';
 
 import { AuthProvider, useAuth } from './src/context/AuthContext';
-import { ActiveJobDashboard } from './src/components/ActiveJobDashboard';
 import { NewJobAlertModal } from './src/components/NewJobAlertModal';
 import { CustomerBookingWizard } from './src/components/CustomerBookingWizard';
 import { CustomerTrackingView } from './src/components/CustomerTrackingView';
@@ -15,13 +14,14 @@ import { JobHistoryScreen } from './src/components/JobHistory';
 import { NotificationsScreen } from './src/components/Notifications';
 import { ProfileScreen } from './src/components/Profile';
 import { MobileLoginScreen } from './src/components/MobileLoginScreen';
-import { FloatingTabBar } from './src/components/ui/FloatingTabBar';
-import { Icon } from './src/components/ui/Icon';
+import { FloatingTabBar, type TabItem } from './src/components/ui/FloatingTabBar';
 import { LoadingState } from './src/components/ui/LoadingState';
+import { AppBackground } from './src/components/ui/AppBackground';
+import { UnsupportedRoleScreen } from './src/components/UnsupportedRoleScreen';
 import { apiService } from './src/services/api';
 import { colors } from './src/theme/colors';
-import { typography } from './src/theme/typography';
-import { spacing, radius, layout } from './src/theme/layout';
+import { ThemeProvider, ThemeBoundary, ThemedStatusBar } from './src/theme/ThemeProvider';
+import { themedStyles } from './src/theme/themedStyles';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -43,14 +43,20 @@ const SAMPLE_JOB_INPUT = {
   location: { latitude: 37.7749, longitude: -122.4194 },
 };
 
-const ROLE_MODES = [
-  { id: 'worker' as const, label: 'Worker Roster', icon: 'tool' as const },
-  { id: 'customer' as const, label: 'Customer View', icon: 'user' as const },
+const WORKER_TABS: TabItem[] = [
+  { id: 'jobs', label: 'Roster', icon: 'home' },
+  { id: 'history', label: 'History', icon: 'clipboard' },
+  { id: 'alerts', label: 'Alerts', icon: 'bell' },
+  { id: 'profile', label: 'Profile', icon: 'user' },
+];
+
+const CUSTOMER_TABS: TabItem[] = [
+  { id: 'book', label: 'Request', icon: 'plus-circle' },
+  { id: 'profile', label: 'Profile', icon: 'user' },
 ];
 
 function MainApp() {
-  const { user: currentUser, isLoading: isAuthLoading, isAuthenticated, logout } = useAuth();
-  const [appRoleMode, setAppRoleMode] = useState<'customer' | 'worker'>('worker');
+  const { user: currentUser, isLoading: isAuthLoading, isAuthenticated } = useAuth();
   const [activeTab, setActiveTab] = useState<string>('jobs');
 
   // Customer Portal State
@@ -74,6 +80,22 @@ function MainApp() {
   if (!isAuthenticated || !currentUser) {
     return <MobileLoginScreen />;
   }
+
+  // Each account sees only its own app: workers get the roster, customers get booking.
+  // Admin / customer-care accounts work from the web dashboard.
+  const isWorker = currentUser.role === Role.WORKER;
+  const isCustomer = currentUser.role === Role.CUSTOMER;
+  if (!isWorker && !isCustomer) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <UnsupportedRoleScreen role={currentUser.role} />
+      </SafeAreaView>
+    );
+  }
+
+  const tabs = isWorker ? WORKER_TABS : CUSTOMER_TABS;
+  // A tab left over from another role (e.g. after switching accounts) falls back to the first.
+  const currentTab = tabs.some((tab) => tab.id === activeTab) ? activeTab : tabs[0].id;
 
   // Handlers
   const handleBookingComplete = (newJob: ServiceRequest) => {
@@ -109,123 +131,70 @@ function MainApp() {
     setIncomingJob(null);
   };
 
+  const renderWorkerContent = () => {
+    if (selectedJobForDetail) {
+      return (
+        <JobDetail
+          job={selectedJobForDetail}
+          workerId={currentUser.id}
+          onBack={() => setSelectedJobForDetail(null)}
+          onJobUpdated={(updated) => {
+            setSelectedJobForDetail(updated);
+          }}
+        />
+      );
+    }
+    if (currentTab === 'history') return <JobHistoryScreen />;
+    if (currentTab === 'alerts') return <NotificationsScreen onSimulateAlert={handleSimulateAlert} />;
+    if (currentTab === 'profile') return <ProfileScreen />;
+    return (
+      <WorkerDashboard
+        workerId={currentUser.id}
+        workerName={currentUser.fullName}
+        onSelectJob={(job) => setSelectedJobForDetail(job)}
+        onOpenAlerts={() => setActiveTab('alerts')}
+      />
+    );
+  };
+
+  const renderCustomerContent = () => {
+    if (currentTab === 'profile') return <ProfileScreen />;
+    if (customerActiveJob) {
+      return (
+        <CustomerTrackingView
+          job={customerActiveJob}
+          onNewBooking={() => setCustomerActiveJob(null)}
+        />
+      );
+    }
+    return (
+      <CustomerBookingWizard
+        customerId={currentUser.id || MOCK_CUSTOMER_ID}
+        onBookingComplete={handleBookingComplete}
+      />
+    );
+  };
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       <View style={styles.container}>
-        {/* Top User Session Header */}
-        <View style={styles.userHeader}>
-          <View style={styles.userInfo}>
-            <View style={styles.userAvatar}>
-              <Text style={styles.userAvatarText}>
-                {currentUser.fullName?.charAt(0).toUpperCase() || 'U'}
-              </Text>
-            </View>
-            <View style={styles.userText}>
-              <Text style={styles.userName} numberOfLines={1}>
-                {currentUser.fullName}
-              </Text>
-              <Text style={styles.userRoleBadge} numberOfLines={1}>
-                {currentUser.role} PORTAL
-              </Text>
-            </View>
-          </View>
+        {isWorker ? renderWorkerContent() : renderCustomerContent()}
 
-          <Pressable
-            style={({ pressed }) => [styles.logoutButton, pressed && styles.logoutButtonPressed]}
-            onPress={logout}
-            accessibilityRole="button"
-            accessibilityLabel="Sign out"
-          >
-            <Icon name="log-out" size={15} color={colors.dangerText} />
-            <Text style={styles.logoutButtonText}>Sign Out</Text>
-          </Pressable>
-        </View>
-
-        {/* Top Role Mode Switcher Bar */}
-        <View style={styles.roleBar}>
-          {ROLE_MODES.map((mode) => {
-            const isActive = appRoleMode === mode.id;
-            return (
-              <Pressable
-                key={mode.id}
-                style={({ pressed }) => [
-                  styles.roleTab,
-                  isActive && styles.roleTabActive,
-                  pressed && !isActive && styles.roleTabPressed,
-                ]}
-                onPress={() => setAppRoleMode(mode.id)}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: isActive }}
-                accessibilityLabel={mode.label}
-              >
-                <Icon
-                  name={mode.icon}
-                  size={15}
-                  color={isActive ? colors.white : colors.textSecondary}
-                />
-                <Text style={[styles.roleTabText, isActive && styles.roleTabTextActive]}>
-                  {mode.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        {/* Render Active View */}
-        {appRoleMode === 'customer' ? (
-          customerActiveJob ? (
-            <CustomerTrackingView
-              job={customerActiveJob}
-              onNewBooking={() => setCustomerActiveJob(null)}
-            />
-          ) : (
-            <CustomerBookingWizard
-              customerId={currentUser.id || MOCK_CUSTOMER_ID}
-              onBookingComplete={handleBookingComplete}
-            />
-          )
-        ) : selectedJobForDetail ? (
-          <JobDetail
-            job={selectedJobForDetail}
+        {/* Global Dispatch Alert Modal (workers) */}
+        {isWorker && (
+          <NewJobAlertModal
+            visible={alertVisible}
+            job={incomingJob}
+            distanceKm={2.4}
             workerId={currentUser.id}
-            onBack={() => setSelectedJobForDetail(null)}
-            onJobUpdated={(updated) => {
-              setSelectedJobForDetail(updated);
-            }}
-          />
-        ) : activeTab === 'history' ? (
-          <JobHistoryScreen />
-        ) : activeTab === 'alerts' ? (
-          <NotificationsScreen onSimulateAlert={handleSimulateAlert} />
-        ) : activeTab === 'profile' ? (
-          <ProfileScreen />
-        ) : (
-          <WorkerDashboard
-            workerId={currentUser.id}
-            workerName={currentUser.fullName}
-            onSelectJob={(job) => setSelectedJobForDetail(job)}
-            onSimulateDispatchAlert={handleSimulateAlert}
+            onAccept={handleAcceptAlert}
+            onReject={handleRejectAlert}
           />
         )}
 
-        {/* Global Dispatch Alert Modal */}
-        <NewJobAlertModal
-          visible={alertVisible}
-          job={incomingJob}
-          distanceKm={2.4}
-          workerId={currentUser.id}
-          onAccept={handleAcceptAlert}
-          onReject={handleRejectAlert}
-        />
-
         {/* Floating Pill Bottom Navigation Bar */}
-        {!selectedJobForDetail && (
-          <FloatingTabBar
-            activeTab={activeTab}
-            onTabPress={(tabId) => {
-              setActiveTab(tabId);
-            }}
-          />
+        {!(isWorker && selectedJobForDetail) && (
+          <FloatingTabBar activeTab={currentTab} onTabPress={setActiveTab} tabs={tabs} />
         )}
       </View>
     </SafeAreaView>
@@ -236,123 +205,34 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <SafeAreaProvider>
-        <StatusBar barStyle="light-content" backgroundColor={colors.bg} />
-        <AuthProvider>
-          <MainApp />
-        </AuthProvider>
+        <ThemeProvider>
+          <ThemedStatusBar />
+          <AuthProvider>
+            {/* Remounts the UI when the theme changes; auth and the query cache stay above it. */}
+            <ThemeBoundary>
+              <View style={styles.root}>
+                <AppBackground />
+                <MainApp />
+              </View>
+            </ThemeBoundary>
+          </AuthProvider>
+        </ThemeProvider>
       </SafeAreaProvider>
     </QueryClientProvider>
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: {
+const styles = themedStyles(() => StyleSheet.create({
+  root: {
     flex: 1,
     backgroundColor: colors.bg,
+  },
+  safeArea: {
+    flex: 1,
+    backgroundColor: 'transparent',
   },
   container: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: 'transparent',
   },
-
-  // ── Session header ──
-  userHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    paddingHorizontal: layout.screenPadding,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.bg,
-  },
-  userInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    flex: 1,
-    minWidth: 0,
-  },
-  userAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.pill,
-    backgroundColor: colors.brand,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  userAvatarText: {
-    ...typography.h3,
-    color: colors.white,
-    fontWeight: '800',
-  },
-  userText: {
-    flex: 1,
-    minWidth: 0,
-  },
-  userName: {
-    ...typography.bodyStrong,
-    color: colors.text,
-  },
-  userRoleBadge: {
-    ...typography.overline,
-    color: colors.brand,
-    marginTop: 1,
-  },
-  logoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs + 2,
-    minHeight: 36,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.pill,
-    backgroundColor: colors.dangerSubtle,
-    borderWidth: 1,
-    borderColor: colors.danger,
-  },
-  logoutButtonPressed: {
-    backgroundColor: colors.dangerPressed,
-  },
-  logoutButtonText: {
-    ...typography.caption,
-    fontWeight: '700',
-    color: colors.dangerText,
-  },
-
-  // ── Role switcher (segmented control) ──
-  roleBar: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    marginHorizontal: layout.screenPadding,
-    marginBottom: spacing.md,
-    padding: spacing.xs,
-    backgroundColor: colors.surface,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  roleTab: {
-    flex: 1,
-    flexDirection: 'row',
-    gap: spacing.sm,
-    minHeight: 38,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  roleTabPressed: {
-    backgroundColor: colors.surfaceRaised,
-  },
-  roleTabActive: {
-    backgroundColor: colors.brand,
-  },
-  roleTabText: {
-    ...typography.caption,
-    fontWeight: '700',
-    color: colors.textSecondary,
-  },
-  roleTabTextActive: {
-    color: colors.white,
-  },
-});
+}));

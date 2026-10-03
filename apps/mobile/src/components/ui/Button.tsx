@@ -12,6 +12,8 @@ import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { spacing, radius, layout } from '../../theme/layout';
 import { elevation } from '../../theme/elevation';
+import { themedStyles } from '../../theme/themedStyles';
+import { haptics } from '../../lib/haptics';
 
 export interface ButtonProps {
   title: string;
@@ -48,7 +50,10 @@ export const Button: React.FC<ButtonProps> = ({
         isDisabled && styles.disabledButton,
         style,
       ]}
-      onPress={onPress}
+      onPress={() => {
+        haptics.tap();
+        onPress();
+      }}
       disabled={isDisabled}
       accessibilityRole="button"
       accessibilityState={{ disabled: isDisabled, busy: isLoading }}
@@ -74,7 +79,7 @@ export const Button: React.FC<ButtonProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   baseButton: {
     borderRadius: radius.pill,
     flexDirection: 'row',
@@ -93,9 +98,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
     textAlign: 'center',
   },
-});
+}));
 
-const variantStyles = StyleSheet.create({
+const variantStyles = themedStyles(() => StyleSheet.create({
   primary: {
     backgroundColor: colors.brand,
   },
@@ -116,23 +121,23 @@ const variantStyles = StyleSheet.create({
     borderColor: colors.danger,
     ...elevation.e0,
   },
-});
+}));
 
-const pressedStyles = StyleSheet.create({
+const pressedStyles = themedStyles(() => StyleSheet.create({
   primary: { backgroundColor: colors.brandPressed },
   secondary: { backgroundColor: colors.surfaceRaised },
   outline: { backgroundColor: colors.brandSubtle },
   danger: { backgroundColor: colors.dangerPressed },
-});
+}));
 
-const variantTextStyles = StyleSheet.create({
+const variantTextStyles = themedStyles(() => StyleSheet.create({
   primary: { color: colors.white },
   secondary: { color: colors.text },
   outline: { color: colors.brand },
   danger: { color: colors.dangerText },
-});
+}));
 
-const sizeStyles = StyleSheet.create({
+const sizeStyles = themedStyles(() => StyleSheet.create({
   small: {
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.lg,
@@ -146,10 +151,10 @@ const sizeStyles = StyleSheet.create({
     paddingHorizontal: spacing.xxxl,
     width: '100%',
   },
-});
+}));
 
-const sizeTextStyles = StyleSheet.create({
+const sizeTextStyles = themedStyles(() => StyleSheet.create({
   small: { fontSize: 13 },
   medium: { fontSize: 15 },
   large: { fontSize: 16 },
-});
+}));

@@ -1,47 +1,24 @@
 /**
  * METRO-FIX mobile — colour tokens.
  *
- * Single slate/orange system. No raw hex literals should appear in screens;
- * import from here instead. The legacy teal palette (#81b1b3, #4aad83,
- * #2b435f, #1c2d40) and the second orange (#f38808) are intentionally absent.
+ * `colors` resolves against the active theme every time a token is read, so existing
+ * `colors.bg` style code keeps working in both light and dark. Because it is read lazily, never
+ * capture a token in a module-level constant — read it inside a function, or inside
+ * `themedStyles(() => …)`.
  */
-export const colors = {
-  // ── Surfaces ──
-  bg: '#0F172A',
-  surface: '#1E293B',
-  surfaceRaised: '#243449',
-  border: '#334155',
-  borderStrong: '#475569',
+import { palettes, type ThemeColors } from './palettes';
+import { getColorScheme } from './themeState';
 
-  // ── Text ──
-  text: '#F8FAFC',
-  textSecondary: '#94A3B8',
-  textMuted: '#64748B',
-  textInverse: '#0F172A',
+export type { ThemeColors } from './palettes';
 
-  // ── Brand ──
-  brand: '#F97316',
-  brandPressed: '#EA6A0C',
-  brandSubtle: 'rgba(249, 115, 22, 0.15)',
+export const colors: ThemeColors = new Proxy({} as ThemeColors, {
+  get: (_target, token: string) => palettes[getColorScheme()][token as keyof ThemeColors],
+  has: (_target, token: string) => token in palettes.dark,
+  ownKeys: () => Reflect.ownKeys(palettes.dark),
+  getOwnPropertyDescriptor: (_target, token: string) =>
+    token in palettes.dark
+      ? { enumerable: true, configurable: true, value: palettes[getColorScheme()][token as keyof ThemeColors] }
+      : undefined,
+});
 
-  // ── Semantic ──
-  success: '#10B981',
-  danger: '#EF4444',
-  info: '#3B82F6',
-  warning: '#F59E0B',
-
-  successSubtle: 'rgba(16, 185, 129, 0.15)',
-  dangerSubtle: 'rgba(239, 68, 68, 0.15)',
-  /** Lighter red for text/icons on a dark or dangerSubtle background. */
-  dangerText: '#FCA5A5',
-  /** Pressed fill for danger-variant controls. */
-  dangerPressed: 'rgba(239, 68, 68, 0.26)',
-
-  // ── Utility ──
-  overlay: 'rgba(2, 6, 23, 0.72)',
-  /** Darkening layer over photography, to keep overlaid text legible. */
-  scrim: 'rgba(15, 23, 42, 0.45)',
-  white: '#FFFFFF',
-} as const;
-
-export type ColorToken = keyof typeof colors;
+export type ColorToken = keyof ThemeColors;

@@ -1,9 +1,9 @@
 import React from 'react';
 import {
+  Animated,
   View,
   Text,
   StyleSheet,
-  FlatList,
   Pressable,
   RefreshControl,
 } from 'react-native';
@@ -15,6 +15,8 @@ import { Button } from './ui/Button';
 import { IconButton } from './ui/IconButton';
 import { Icon } from './ui/Icon';
 import { ScreenHeader } from './ui/ScreenHeader';
+import { GlassHeader, useCollapsingHeader } from './ui/GlassHeader';
+import { StageStepper } from './ui/StageStepper';
 import { StatusPill } from './ui/StatusPill';
 import { MetaChip } from './ui/MetaChip';
 import { EmptyState } from './ui/EmptyState';
@@ -23,26 +25,28 @@ import { SkeletonCard } from './ui/SkeletonCard';
 import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { spacing, radius, layout, tabBarClearance } from '../theme/layout';
-import { PILLAR_ICON, FACILITY_ICON } from '../theme/status';
+import { PILLAR_ICON, FACILITY_ICON, getStatusColor } from '../theme/status';
 import { useWorkerJobs } from '../hooks/useJobs';
+import { themedStyles } from '../theme/themedStyles';
 
 export interface WorkerDashboardProps {
   workerId: string;
   workerName: string;
   onSelectJob: (job: ServiceRequest) => void;
-  onSimulateDispatchAlert: () => void;
+  onOpenAlerts: () => void;
 }
 
 export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({
   workerId,
   workerName,
   onSelectJob,
-  onSimulateDispatchAlert,
+  onOpenAlerts,
 }) => {
   const insets = useSafeAreaInsets();
 
   // 1. Fetch real jobs data using useWorkerJobs React Query hook
   const { data: jobs = [], isLoading, isError, error, isRefetching, refetch } = useWorkerJobs();
+  const { scrollY, onScroll } = useCollapsingHeader();
 
   // 2. Render each assigned job inside our Soft UI Card primitive
   const renderJobItem = ({ item }: { item: ServiceRequest }) => {
@@ -53,7 +57,12 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({
         accessibilityRole="button"
         accessibilityLabel={`Open job ${item.title}`}
       >
-        <Card variant="elevated" borderRadius={radius.xl} padding={spacing.xl}>
+        <Card
+          variant="elevated"
+          borderRadius={radius.xl}
+          padding={spacing.xl}
+          style={[styles.statusStripe, { borderLeftColor: getStatusColor(item.status) }]}
+        >
           {/* Card Header: Job ID & Status Badge */}
           <View style={styles.cardHeader}>
             <Text style={styles.ticketId}>TICKET #{item.id.slice(-6).toUpperCase()}</Text>
@@ -67,6 +76,11 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({
           <Text style={styles.jobDesc} numberOfLines={2}>
             {item.description}
           </Text>
+
+          {/* Progress through the 7 job stages */}
+          <View style={styles.stepper}>
+            <StageStepper status={item.status} compact />
+          </View>
 
           {/* Service Pillar & Facility Type */}
           <View style={styles.metaRow}>
@@ -110,22 +124,29 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({
     );
   };
 
+  const alertsButton = (
+    <IconButton
+      onPress={onOpenAlerts}
+      accessibilityLabel="Open alerts"
+      icon={<Icon name="bell" size={19} color={colors.brand} />}
+      backgroundColor={colors.surface}
+      size={44}
+    />
+  );
+
+  const largeTitle = (
+    <ScreenHeader
+      eyebrow="Assigned roster & workload"
+      title="Field Dashboard"
+      style={styles.largeTitle}
+      right={alertsButton}
+    />
+  );
+
   return (
     <View style={styles.container}>
-      {/* Header section */}
-      <ScreenHeader
-        eyebrow="Assigned roster & workload"
-        title="Field Dashboard"
-        style={styles.header}
-        right={
-          <IconButton
-            onPress={onSimulateDispatchAlert}
-            icon={<Icon name="bell" size={19} color={colors.brand} />}
-            backgroundColor={colors.surface}
-            size={44}
-          />
-        }
-      />
+      {/* Static title while there is no list to scroll (loading / error) */}
+      {isLoading || isError ? <View style={styles.header}>{largeTitle}</View> : null}
 
       {/* 3. Handle Loading State */}
       {isLoading ? (
@@ -146,8 +167,11 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({
         />
       ) : (
         /* 5. FlatList Rendering & Pull-To-Refresh */
-        <FlatList
+        <Animated.FlatList
           data={jobs}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
+          ListHeaderComponent={largeTitle}
           keyExtractor={(item) => item.id}
           renderItem={renderJobItem}
           contentContainerStyle={[
@@ -172,20 +196,34 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({
           }
         />
       )}
+
+      {/* Compact glass bar that takes over once the large title scrolls away */}
+      <GlassHeader title="Field Dashboard" scrollY={scrollY} right={alertsButton} />
     </View>
   );
 };
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: 'transparent',
   },
   header: {
     paddingHorizontal: layout.screenPadding,
     paddingTop: spacing.xs,
     borderBottomWidth: 1,
     borderBottomColor: colors.surface,
+  },
+  largeTitle: {
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.xs,
+  },
+  statusStripe: {
+    borderLeftWidth: 4,
+  },
+  stepper: {
+    marginTop: spacing.lg,
+    marginBottom: spacing.lg,
   },
   skeletonWrap: {
     padding: layout.screenPadding,
@@ -271,4 +309,4 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: colors.brand,
   },
-});
+}));

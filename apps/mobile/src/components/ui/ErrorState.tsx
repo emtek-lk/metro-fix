@@ -4,6 +4,7 @@ import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { spacing, radius } from '../../theme/layout';
 import { Icon, type FeatherIconName } from './Icon';
+import { themedStyles } from '../../theme/themedStyles';
 
 export interface ErrorStateProps {
   title?: string;
@@ -34,7 +35,7 @@ export const ErrorState: React.FC<ErrorStateProps> = ({
   </View>
 );
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   container: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -67,4 +68,4 @@ const styles = StyleSheet.create({
   action: {
     marginTop: spacing.xl,
   },
-});
+}));

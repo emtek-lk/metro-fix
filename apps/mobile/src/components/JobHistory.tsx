@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, FlatList } from 'react-native';
+import { Animated, View, Text, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { JobStatus, ServiceRequest } from '@metro-fix/core-types';
 
@@ -15,10 +15,13 @@ import { typography } from '../theme/typography';
 import { spacing, radius, layout, tabBarClearance } from '../theme/layout';
 import { PILLAR_ICON } from '../theme/status';
 import { useWorkerJobs } from '../hooks/useJobs';
+import { themedStyles } from '../theme/themedStyles';
+import { GlassHeader, useCollapsingHeader } from './ui/GlassHeader';
 
 export const JobHistoryScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { data: jobs, isLoading } = useWorkerJobs();
+  const { scrollY, onScroll } = useCollapsingHeader();
 
   const historyJobs = Array.isArray(jobs)
     ? jobs.filter(
@@ -26,14 +29,20 @@ export const JobHistoryScreen: React.FC = () => {
       )
     : [];
 
+  const largeTitle = (
+    <ScreenHeader
+      eyebrow="Service dispatch records"
+      title="Job History"
+      subtitle="Completed and active service tickets"
+      style={styles.largeTitle}
+    />
+  );
+  const hasList = !isLoading && historyJobs.length > 0;
+
   return (
     <View style={styles.container}>
-      <ScreenHeader
-        eyebrow="Service dispatch records"
-        title="Job History"
-        subtitle="Completed and active service tickets"
-        style={styles.header}
-      />
+      {/* Static title while there is no list to scroll (loading / empty) */}
+      {hasList ? null : <View style={styles.header}>{largeTitle}</View>}
 
       {isLoading ? (
         <View style={styles.skeletonWrap}>
@@ -48,8 +57,11 @@ export const JobHistoryScreen: React.FC = () => {
           description="Completed tickets will accumulate here."
         />
       ) : (
-        <FlatList
+        <Animated.FlatList
           data={historyJobs}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
+          ListHeaderComponent={largeTitle}
           keyExtractor={(item) => item.id}
           contentContainerStyle={[
             styles.listContent,
@@ -87,20 +99,26 @@ export const JobHistoryScreen: React.FC = () => {
           )}
         />
       )}
+
+      <GlassHeader title="Job History" scrollY={scrollY} />
     </View>
   );
 };
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: 'transparent',
   },
   header: {
     paddingHorizontal: layout.screenPadding,
     paddingTop: spacing.xs,
     borderBottomWidth: 1,
     borderBottomColor: colors.surface,
+  },
+  largeTitle: {
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.xs,
   },
   skeletonWrap: {
     padding: layout.screenPadding,
@@ -149,4 +167,4 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textMuted,
   },
-});
+}));

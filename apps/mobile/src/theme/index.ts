@@ -1,5 +1,8 @@
 export { colors } from './colors';
-export type { ColorToken } from './colors';
+export type { ColorToken, ThemeColors } from './colors';
+export { themedStyles } from './themedStyles';
+export { ThemeProvider, ThemeBoundary, ThemedStatusBar, useTheme } from './ThemeProvider';
+export type { ThemePreference } from './ThemeProvider';
 
 export { typography } from './typography';
 export type { TypographyToken } from './typography';

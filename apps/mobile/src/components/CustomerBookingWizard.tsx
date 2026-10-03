@@ -4,7 +4,7 @@ import {
   Text,
   Pressable,
   StyleSheet,
-  ScrollView,
+  Animated,
   ActivityIndicator,
   Alert,
 } from 'react-native';
@@ -20,6 +20,8 @@ import { ScreenHeader } from './ui/ScreenHeader';
 import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { spacing, radius, layout, tabBarClearance } from '../theme/layout';
+import { themedStyles } from '../theme/themedStyles';
+import { GlassHeader, useCollapsingHeader } from './ui/GlassHeader';
 
 interface CustomerBookingWizardProps {
   customerId: string;
@@ -59,6 +61,7 @@ export const CustomerBookingWizard: React.FC<CustomerBookingWizardProps> = ({
   onBookingComplete,
 }) => {
   const insets = useSafeAreaInsets();
+  const { scrollY, onScroll } = useCollapsingHeader();
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
   // Form State
@@ -144,256 +147,264 @@ export const CustomerBookingWizard: React.FC<CustomerBookingWizardProps> = ({
   };
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={[styles.content, { paddingBottom: tabBarClearance(insets) }]}
-      showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
-    >
-      {/* Header */}
-      <ScreenHeader
-        eyebrow="Metro-Fix customer portal"
-        title="Book Maintenance Service"
-      />
+    <View style={styles.container}>
+      <Animated.ScrollView
+        style={styles.scrollFill}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        contentContainerStyle={[styles.content, { paddingBottom: tabBarClearance(insets) }]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Header */}
+        <ScreenHeader
+          eyebrow="Metro-Fix customer portal"
+          title="Book Maintenance Service"
+        />
 
-      {/* Multi-step Progress Indicator */}
-      <View style={styles.stepIndicatorRow}>
-        {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((n) => (
-          <React.Fragment key={n}>
-            {n > 1 && <View style={[styles.stepLine, step >= n && styles.stepLineActive]} />}
-            <View style={[styles.stepDot, step >= n && styles.stepDotActive]}>
-              {step > n ? (
-                <Icon name="check" size={14} color={colors.white} />
-              ) : (
-                <Text style={[styles.stepDotNum, step >= n && styles.stepDotNumActive]}>{n}</Text>
-              )}
-            </View>
-          </React.Fragment>
-        ))}
-      </View>
-
-      {/* STEP 1: SERVICE CATEGORY PILLAR */}
-      {step === 1 && (
-        <View style={styles.stepCard}>
-          <Text style={styles.stepTitle}>Select Service Category</Text>
-          <Text style={styles.stepSubtitle}>
-            Choose the FM pillar matching your facility maintenance requirement.
-          </Text>
-
-          <View style={styles.pillarList}>
-            {PILLAR_OPTIONS.map((option) => {
-              const selected = servicePillar === option.value;
-              return (
-                <Pressable
-                  key={option.value}
-                  style={({ pressed }) => [
-                    styles.pillarCard,
-                    selected && styles.pillarCardSelected,
-                    pressed && !selected && styles.pillarCardPressed,
-                  ]}
-                  onPress={() => setServicePillar(option.value)}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected }}
-                >
-                  <View style={[styles.pillarIconBox, selected && styles.pillarIconBoxSelected]}>
-                    <Icon
-                      name={option.icon}
-                      size={20}
-                      color={selected ? colors.white : colors.textSecondary}
-                    />
-                  </View>
-                  <View style={styles.pillarInfo}>
-                    <Text style={styles.pillarTitle}>{option.title}</Text>
-                    <Text style={styles.pillarDesc}>{option.desc}</Text>
-                  </View>
-                  {selected ? <Icon name="check-circle" size={19} color={colors.brand} /> : null}
-                </Pressable>
-              );
-            })}
-          </View>
-
-          <Button
-            title="Continue to Location"
-            onPress={handleNextStep1}
-            variant="primary"
-            size="large"
-            style={styles.primaryAction}
-          />
-        </View>
-      )}
-
-      {/* STEP 2: LOCATION & FACILITY */}
-      {step === 2 && (
-        <View style={styles.stepCard}>
-          <Text style={styles.stepTitle}>Location & Facility</Text>
-          <Text style={styles.stepSubtitle}>
-            Specify facility type and confirm GPS site location coordinates.
-          </Text>
-
-          <Text style={styles.inputLabel}>Facility type</Text>
-          <View style={styles.facilityRow}>
-            {[
-              FacilityType.RESIDENTIAL,
-              FacilityType.COMMERCIAL,
-              FacilityType.INDUSTRIAL,
-            ].map((type) => {
-              const selected = facilityType === type;
-              return (
-                <Pressable
-                  key={type}
-                  style={({ pressed }) => [
-                    styles.facilityChip,
-                    selected && styles.facilityChipSelected,
-                    pressed && !selected && styles.facilityChipPressed,
-                  ]}
-                  onPress={() => setFacilityType(type)}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected }}
-                >
-                  <Text
-                    style={[
-                      styles.facilityChipText,
-                      selected && styles.facilityChipTextSelected,
-                    ]}
-                  >
-                    {type}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-
-          <View style={styles.gpsBox}>
-            <View style={styles.gpsHeader}>
-              <Text style={styles.inputLabel}>Site GPS coordinates</Text>
-              <Pressable
-                onPress={fetchGpsLocation}
-                disabled={loadingGps}
-                style={styles.gpsRefreshBtn}
-                accessibilityRole="button"
-                accessibilityLabel="Detect GPS"
-              >
-                {loadingGps ? (
-                  <ActivityIndicator size="small" color={colors.brand} />
+        {/* Multi-step Progress Indicator */}
+        <View style={styles.stepIndicatorRow}>
+          {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((n) => (
+            <React.Fragment key={n}>
+              {n > 1 && <View style={[styles.stepLine, step >= n && styles.stepLineActive]} />}
+              <View style={[styles.stepDot, step >= n && styles.stepDotActive]}>
+                {step > n ? (
+                  <Icon name="check" size={14} color={colors.white} />
                 ) : (
-                  <>
-                    <Icon name="crosshair" size={14} color={colors.brand} />
-                    <Text style={styles.gpsRefreshText}>Detect GPS</Text>
-                  </>
+                  <Text style={[styles.stepDotNum, step >= n && styles.stepDotNumActive]}>{n}</Text>
                 )}
-              </Pressable>
-            </View>
-
-            <View style={styles.coordInputsRow}>
-              <Input
-                label="Latitude"
-                containerStyle={styles.coordInputCol}
-                value={latitude}
-                onChangeText={setLatitude}
-                keyboardType="numeric"
-                placeholder="37.7749"
-              />
-              <Input
-                label="Longitude"
-                containerStyle={styles.coordInputCol}
-                value={longitude}
-                onChangeText={setLongitude}
-                keyboardType="numeric"
-                placeholder="-122.4194"
-              />
-            </View>
-          </View>
-
-          <View style={styles.navRow}>
-            <Button title="Back" onPress={() => setStep(1)} variant="secondary" size="medium" />
-            <Button
-              title="Continue to Details"
-              onPress={handleNextStep2}
-              variant="primary"
-              size="medium"
-              style={styles.navPrimary}
-            />
-          </View>
+              </View>
+            </React.Fragment>
+          ))}
         </View>
-      )}
 
-      {/* STEP 3: DETAILS & URGENCY */}
-      {step === 3 && (
-        <View style={styles.stepCard}>
-          <Text style={styles.stepTitle}>Job Details & Urgency</Text>
-          <Text style={styles.stepSubtitle}>
-            Describe the issue to help Customer Care dispatch the right technician.
-          </Text>
+        {/* STEP 1: SERVICE CATEGORY PILLAR */}
+        {step === 1 && (
+          <View style={styles.stepCard}>
+            <Text style={styles.stepTitle}>Select Service Category</Text>
+            <Text style={styles.stepSubtitle}>
+              Choose the FM pillar matching your facility maintenance requirement.
+            </Text>
 
-          <View style={styles.fields}>
-            <Input
-              label="Issue title"
-              value={title}
-              onChangeText={setTitle}
-              placeholder="e.g. Roof HVAC Unit Pressure Fault"
-            />
-
-            <Input
-              label="Detailed description"
-              value={description}
-              onChangeText={setDescription}
-              multiline
-              numberOfLines={4}
-              placeholder="Describe symptoms, noise, or scope of maintenance needed…"
-            />
-          </View>
-
-          <Text style={[styles.inputLabel, styles.urgencyLabel]}>Dispatch urgency level</Text>
-          <View style={styles.urgencyGrid}>
-            {(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const).map((level) => {
-              const selected = urgency === level;
-              return (
-                <Pressable
-                  key={level}
-                  style={({ pressed }) => [
-                    styles.urgencyChip,
-                    selected && styles.urgencyChipSelected,
-                    pressed && !selected && styles.facilityChipPressed,
-                  ]}
-                  onPress={() => setUrgency(level)}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected }}
-                >
-                  <Text
-                    style={[
-                      styles.urgencyChipText,
-                      selected && styles.urgencyChipTextSelected,
+            <View style={styles.pillarList}>
+              {PILLAR_OPTIONS.map((option) => {
+                const selected = servicePillar === option.value;
+                return (
+                  <Pressable
+                    key={option.value}
+                    style={({ pressed }) => [
+                      styles.pillarCard,
+                      selected && styles.pillarCardSelected,
+                      pressed && !selected && styles.pillarCardPressed,
                     ]}
+                    onPress={() => setServicePillar(option.value)}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected }}
                   >
-                    {level}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+                    <View style={[styles.pillarIconBox, selected && styles.pillarIconBoxSelected]}>
+                      <Icon
+                        name={option.icon}
+                        size={20}
+                        color={selected ? colors.white : colors.textSecondary}
+                      />
+                    </View>
+                    <View style={styles.pillarInfo}>
+                      <Text style={styles.pillarTitle}>{option.title}</Text>
+                      <Text style={styles.pillarDesc}>{option.desc}</Text>
+                    </View>
+                    {selected ? <Icon name="check-circle" size={19} color={colors.brand} /> : null}
+                  </Pressable>
+                );
+              })}
+            </View>
 
-          <View style={styles.navRow}>
-            <Button title="Back" onPress={() => setStep(2)} variant="secondary" size="medium" />
             <Button
-              title="Submit Request"
-              onPress={handleSubmit}
-              isLoading={isSubmitting}
-              disabled={isSubmitting}
+              title="Continue to Location"
+              onPress={handleNextStep1}
               variant="primary"
-              size="medium"
-              style={styles.navPrimary}
+              size="large"
+              style={styles.primaryAction}
             />
           </View>
-        </View>
-      )}
-    </ScrollView>
+        )}
+
+        {/* STEP 2: LOCATION & FACILITY */}
+        {step === 2 && (
+          <View style={styles.stepCard}>
+            <Text style={styles.stepTitle}>Location & Facility</Text>
+            <Text style={styles.stepSubtitle}>
+              Specify facility type and confirm GPS site location coordinates.
+            </Text>
+
+            <Text style={styles.inputLabel}>Facility type</Text>
+            <View style={styles.facilityRow}>
+              {[
+                FacilityType.RESIDENTIAL,
+                FacilityType.COMMERCIAL,
+                FacilityType.INDUSTRIAL,
+              ].map((type) => {
+                const selected = facilityType === type;
+                return (
+                  <Pressable
+                    key={type}
+                    style={({ pressed }) => [
+                      styles.facilityChip,
+                      selected && styles.facilityChipSelected,
+                      pressed && !selected && styles.facilityChipPressed,
+                    ]}
+                    onPress={() => setFacilityType(type)}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected }}
+                  >
+                    <Text
+                      style={[
+                        styles.facilityChipText,
+                        selected && styles.facilityChipTextSelected,
+                      ]}
+                    >
+                      {type}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <View style={styles.gpsBox}>
+              <View style={styles.gpsHeader}>
+                <Text style={styles.inputLabel}>Site GPS coordinates</Text>
+                <Pressable
+                  onPress={fetchGpsLocation}
+                  disabled={loadingGps}
+                  style={styles.gpsRefreshBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel="Detect GPS"
+                >
+                  {loadingGps ? (
+                    <ActivityIndicator size="small" color={colors.brand} />
+                  ) : (
+                    <>
+                      <Icon name="crosshair" size={14} color={colors.brand} />
+                      <Text style={styles.gpsRefreshText}>Detect GPS</Text>
+                    </>
+                  )}
+                </Pressable>
+              </View>
+
+              <View style={styles.coordInputsRow}>
+                <Input
+                  label="Latitude"
+                  containerStyle={styles.coordInputCol}
+                  value={latitude}
+                  onChangeText={setLatitude}
+                  keyboardType="numeric"
+                  placeholder="37.7749"
+                />
+                <Input
+                  label="Longitude"
+                  containerStyle={styles.coordInputCol}
+                  value={longitude}
+                  onChangeText={setLongitude}
+                  keyboardType="numeric"
+                  placeholder="-122.4194"
+                />
+              </View>
+            </View>
+
+            <View style={styles.navRow}>
+              <Button title="Back" onPress={() => setStep(1)} variant="secondary" size="medium" />
+              <Button
+                title="Continue to Details"
+                onPress={handleNextStep2}
+                variant="primary"
+                size="medium"
+                style={styles.navPrimary}
+              />
+            </View>
+          </View>
+        )}
+
+        {/* STEP 3: DETAILS & URGENCY */}
+        {step === 3 && (
+          <View style={styles.stepCard}>
+            <Text style={styles.stepTitle}>Job Details & Urgency</Text>
+            <Text style={styles.stepSubtitle}>
+              Describe the issue to help Customer Care dispatch the right technician.
+            </Text>
+
+            <View style={styles.fields}>
+              <Input
+                label="Issue title"
+                value={title}
+                onChangeText={setTitle}
+                placeholder="e.g. Roof HVAC Unit Pressure Fault"
+              />
+
+              <Input
+                label="Detailed description"
+                value={description}
+                onChangeText={setDescription}
+                multiline
+                numberOfLines={4}
+                placeholder="Describe symptoms, noise, or scope of maintenance needed…"
+              />
+            </View>
+
+            <Text style={[styles.inputLabel, styles.urgencyLabel]}>Dispatch urgency level</Text>
+            <View style={styles.urgencyGrid}>
+              {(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const).map((level) => {
+                const selected = urgency === level;
+                return (
+                  <Pressable
+                    key={level}
+                    style={({ pressed }) => [
+                      styles.urgencyChip,
+                      selected && styles.urgencyChipSelected,
+                      pressed && !selected && styles.facilityChipPressed,
+                    ]}
+                    onPress={() => setUrgency(level)}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected }}
+                  >
+                    <Text
+                      style={[
+                        styles.urgencyChipText,
+                        selected && styles.urgencyChipTextSelected,
+                      ]}
+                    >
+                      {level}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <View style={styles.navRow}>
+              <Button title="Back" onPress={() => setStep(2)} variant="secondary" size="medium" />
+              <Button
+                title="Submit Request"
+                onPress={handleSubmit}
+                isLoading={isSubmitting}
+                disabled={isSubmitting}
+                variant="primary"
+                size="medium"
+                style={styles.navPrimary}
+              />
+            </View>
+          </View>
+        )}
+      </Animated.ScrollView>
+    <GlassHeader title="Book Service" scrollY={scrollY} />
+    </View>
   );
 };
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
+  scrollFill: {
+    flex: 1,
+  },
   container: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: 'transparent',
   },
   content: {
     paddingHorizontal: layout.screenPadding,
@@ -627,4 +638,4 @@ const styles = StyleSheet.create({
   navPrimary: {
     flex: 1,
   },
-});
+}));

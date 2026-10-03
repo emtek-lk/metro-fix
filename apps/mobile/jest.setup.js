@@ -36,3 +36,26 @@ jest.mock('expo-image-picker', () => ({
 jest.mock('@expo/vector-icons/Feather', () => 'Feather');
 jest.mock('react-native-webview', () => ({ WebView: 'WebView' }));
 jest.mock('react-native-signature-canvas', () => 'SignatureCanvas');
+
+// Without initial metrics SafeAreaProvider renders no children under Jest.
+jest.mock('react-native-safe-area-context', () =>
+  require('react-native-safe-area-context/jest/mock').default,
+);
+
+// Native view modules (glass, blur, gradient) have no JS implementation under Jest.
+jest.mock('expo-glass-effect', () => ({
+  GlassView: 'GlassView',
+  GlassContainer: 'GlassContainer',
+  isLiquidGlassAvailable: jest.fn(() => false),
+  isGlassEffectAPIAvailable: jest.fn(() => false),
+}));
+jest.mock('expo-blur', () => ({ BlurView: 'BlurView' }));
+jest.mock('expo-linear-gradient', () => ({ LinearGradient: 'LinearGradient' }));
+
+jest.mock('expo-haptics', () => ({
+  impactAsync: jest.fn(async () => undefined),
+  selectionAsync: jest.fn(async () => undefined),
+  notificationAsync: jest.fn(async () => undefined),
+  ImpactFeedbackStyle: { Light: 'light', Medium: 'medium', Heavy: 'heavy' },
+  NotificationFeedbackType: { Success: 'success', Warning: 'warning', Error: 'error' },
+}));

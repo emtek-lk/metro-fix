@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { JobStatus, ServiceRequest } from '@metro-fix/core-types';
 import { realtimeSocket } from '../services/websocket';
@@ -11,6 +11,8 @@ import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { spacing, radius, layout, tabBarClearance } from '../theme/layout';
 import { getStatusPresentation } from '../theme/status';
+import { themedStyles } from '../theme/themedStyles';
+import { GlassHeader, useCollapsingHeader } from './ui/GlassHeader';
 
 interface CustomerTrackingViewProps {
   job: ServiceRequest;
@@ -37,6 +39,7 @@ export const CustomerTrackingView: React.FC<CustomerTrackingViewProps> = ({
   onNewBooking,
 }) => {
   const insets = useSafeAreaInsets();
+  const { scrollY, onScroll } = useCollapsingHeader();
   const [currentJob, setCurrentJob] = useState<ServiceRequest>(initialJob);
 
   useEffect(() => {
@@ -58,125 +61,133 @@ export const CustomerTrackingView: React.FC<CustomerTrackingViewProps> = ({
   const current = getStatusPresentation(currentJob.status);
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={[styles.content, { paddingBottom: tabBarClearance(insets) }]}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* Header */}
-      <ScreenHeader
-        eyebrow="Live service tracking"
-        title={currentJob.title}
-        subtitle={`Ticket #${currentJob.id.slice(-6).toUpperCase()}`}
-        right={
-          <View style={styles.liveBadge}>
-            <View style={styles.liveDot} />
-            <Text style={styles.liveBadgeText}>Live</Text>
-          </View>
-        }
-      />
+    <View style={styles.container}>
+      <Animated.ScrollView
+        style={styles.scrollFill}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        contentContainerStyle={[styles.content, { paddingBottom: tabBarClearance(insets) }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <ScreenHeader
+          eyebrow="Live service tracking"
+          title={currentJob.title}
+          subtitle={`Ticket #${currentJob.id.slice(-6).toUpperCase()}`}
+          right={
+            <View style={styles.liveBadge}>
+              <View style={styles.liveDot} />
+              <Text style={styles.liveBadgeText}>Live</Text>
+            </View>
+          }
+        />
 
-      {/* Current Stage Hero */}
-      <View style={[styles.heroCard, { borderColor: current.color }]}>
-        <Text style={styles.heroStatusLabel}>Current stage</Text>
-        <View style={styles.heroStatusRow}>
-          <View style={[styles.heroIconBox, { backgroundColor: current.color }]}>
-            <Icon name={current.icon} size={20} color={colors.white} />
+        {/* Current Stage Hero */}
+        <View style={[styles.heroCard, { borderColor: current.color }]}>
+          <Text style={styles.heroStatusLabel}>Current stage</Text>
+          <View style={styles.heroStatusRow}>
+            <View style={[styles.heroIconBox, { backgroundColor: current.color }]}>
+              <Icon name={current.icon} size={20} color={colors.white} />
+            </View>
+            <Text style={styles.heroStatusValue}>{current.label}</Text>
           </View>
-          <Text style={styles.heroStatusValue}>{current.label}</Text>
+          <Text style={styles.heroDesc}>{currentJob.description}</Text>
         </View>
-        <Text style={styles.heroDesc}>{currentJob.description}</Text>
-      </View>
 
-      {/* Lifecycle Tracker */}
-      <View style={styles.trackerCard}>
-        <Text style={styles.trackerTitle}>Service lifecycle progress</Text>
+        {/* Lifecycle Tracker */}
+        <View style={styles.trackerCard}>
+          <Text style={styles.trackerTitle}>Service lifecycle progress</Text>
 
-        <View style={styles.stageList}>
-          {LIFECYCLE_STAGES.map((status, index) => {
-            const stage = getStatusPresentation(status);
-            const isComplete = index < currentStageIndex;
-            const isCurrent = index === currentStageIndex;
-            const isDone = isComplete || isCurrent;
-            const isLast = index === LIFECYCLE_STAGES.length - 1;
+          <View style={styles.stageList}>
+            {LIFECYCLE_STAGES.map((status, index) => {
+              const stage = getStatusPresentation(status);
+              const isComplete = index < currentStageIndex;
+              const isCurrent = index === currentStageIndex;
+              const isDone = isComplete || isCurrent;
+              const isLast = index === LIFECYCLE_STAGES.length - 1;
 
-            return (
-              <View key={status} style={styles.stageRow}>
-                <View style={styles.stageIconCol}>
-                  <View
-                    style={[
-                      styles.stageIcon,
-                      isDone && { backgroundColor: stage.color, borderColor: stage.color },
-                    ]}
-                  >
-                    <Icon
-                      name={isComplete ? 'check' : stage.icon}
-                      size={14}
-                      color={isDone ? colors.white : colors.textMuted}
-                    />
-                  </View>
-                  {!isLast && (
+              return (
+                <View key={status} style={styles.stageRow}>
+                  <View style={styles.stageIconCol}>
                     <View
-                      style={[styles.stageConnector, isComplete && { backgroundColor: stage.color }]}
-                    />
-                  )}
-                </View>
+                      style={[
+                        styles.stageIcon,
+                        isDone && { backgroundColor: stage.color, borderColor: stage.color },
+                      ]}
+                    >
+                      <Icon
+                        name={isComplete ? 'check' : stage.icon}
+                        size={14}
+                        color={isDone ? colors.white : colors.textMuted}
+                      />
+                    </View>
+                    {!isLast && (
+                      <View
+                        style={[styles.stageConnector, isComplete && { backgroundColor: stage.color }]}
+                      />
+                    )}
+                  </View>
 
-                <View style={styles.stageContentCol}>
-                  <Text style={[styles.stageLabel, isDone && styles.stageLabelActive]}>
-                    {stage.label}
-                  </Text>
-                  {isCurrent && <Text style={styles.activeTag}>In progress at site</Text>}
+                  <View style={styles.stageContentCol}>
+                    <Text style={[styles.stageLabel, isDone && styles.stageLabelActive]}>
+                      {stage.label}
+                    </Text>
+                    {isCurrent && <Text style={styles.activeTag}>In progress at site</Text>}
+                  </View>
                 </View>
-              </View>
-            );
-          })}
+              );
+            })}
+          </View>
         </View>
-      </View>
 
-      {/* Assigned Technician Card */}
-      {currentJob.workerId ? (
-        <View style={styles.workerCard}>
-          <Text style={styles.workerCardTitle}>Assigned service technician</Text>
-          <View style={styles.workerRow}>
-            <View style={styles.avatarBox}>
-              <Icon name="user" size={22} color={colors.brand} />
-            </View>
-            <View style={styles.workerInfo}>
-              <Text style={styles.workerName}>Alex Rivers (Field Tech #88)</Text>
-              <View style={styles.workerMetaRow}>
-                <Icon name="star" size={12} color={colors.brand} />
-                <Text style={styles.workerMeta}>4.9 Rating • Hard & Soft FM Certified</Text>
+        {/* Assigned Technician Card */}
+        {currentJob.workerId ? (
+          <View style={styles.workerCard}>
+            <Text style={styles.workerCardTitle}>Assigned service technician</Text>
+            <View style={styles.workerRow}>
+              <View style={styles.avatarBox}>
+                <Icon name="user" size={22} color={colors.brand} />
+              </View>
+              <View style={styles.workerInfo}>
+                <Text style={styles.workerName}>Alex Rivers (Field Tech #88)</Text>
+                <View style={styles.workerMetaRow}>
+                  <Icon name="star" size={12} color={colors.brand} />
+                  <Text style={styles.workerMeta}>4.9 Rating • Hard & Soft FM Certified</Text>
+                </View>
               </View>
             </View>
           </View>
-        </View>
-      ) : (
-        <View style={styles.dispatchingBox}>
-          <Icon name="radio" size={17} color={colors.info} />
-          <Text style={styles.dispatchingText}>
-            Customer Care is currently selecting the nearest certified technician for your site location.
-          </Text>
-        </View>
-      )}
+        ) : (
+          <View style={styles.dispatchingBox}>
+            <Icon name="radio" size={17} color={colors.info} />
+            <Text style={styles.dispatchingText}>
+              Customer Care is currently selecting the nearest certified technician for your site location.
+            </Text>
+          </View>
+        )}
 
-      {/* Action Footer */}
-      <Button
-        title="Book Another Service"
-        onPress={onNewBooking}
-        variant="outline"
-        size="large"
-        icon={<Icon name="plus" size={17} color={colors.brand} />}
-        style={styles.newBookingBtn}
-      />
-    </ScrollView>
+        {/* Action Footer */}
+        <Button
+          title="Book Another Service"
+          onPress={onNewBooking}
+          variant="outline"
+          size="large"
+          icon={<Icon name="plus" size={17} color={colors.brand} />}
+          style={styles.newBookingBtn}
+        />
+      </Animated.ScrollView>
+    <GlassHeader title="Live Tracking" scrollY={scrollY} />
+    </View>
   );
 };
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
+  scrollFill: {
+    flex: 1,
+  },
   container: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: 'transparent',
   },
   content: {
     paddingHorizontal: layout.screenPadding,
@@ -373,4 +384,4 @@ const styles = StyleSheet.create({
   newBookingBtn: {
     marginTop: spacing.xs,
   },
-});
+}));

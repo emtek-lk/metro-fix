@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, StyleProp, ViewStyle } from 'react-native';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { spacing } from '../../theme/layout';
+import { themedStyles } from '../../theme/themedStyles';
 
 export interface ScreenHeaderProps {
   title: string;
@@ -41,7 +42,7 @@ export const ScreenHeader: React.FC<ScreenHeaderProps> = ({
   </View>
 );
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -71,4 +72,4 @@ const styles = StyleSheet.create({
   rightSlot: {
     flexShrink: 0,
   },
-});
+}));

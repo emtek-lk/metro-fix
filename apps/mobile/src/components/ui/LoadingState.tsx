@@ -3,6 +3,7 @@ import { View, Text, ActivityIndicator, StyleSheet, StyleProp, ViewStyle } from 
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { spacing } from '../../theme/layout';
+import { themedStyles } from '../../theme/themedStyles';
 
 export interface LoadingStateProps {
   message?: string;
@@ -21,7 +22,7 @@ export const LoadingState: React.FC<LoadingStateProps> = ({
   </View>
 );
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   container: {
     flex: 1,
     alignItems: 'center',
@@ -34,4 +35,4 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     textAlign: 'center',
   },
-});
+}));
