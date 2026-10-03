@@ -581,3 +581,8 @@ table tbody tr:hover {
   border-radius: 50%;
   background: #fff;
 }
+
+/* Settings navigation: no stuck outline after a click, a clear ring for keyboard users. */
+.metro-settings-nav { outline: none; }
+.metro-settings-nav:hover { color: var(--text-primary) !important; }
+.metro-settings-nav:focus-visible { outline: 2px solid #f38808; outline-offset: 2px; }

@@ -533,6 +533,164 @@ export function ticketRef(id: string | null | undefined, length = 6): string {
   return hash.toString(36).toUpperCase().padStart(length, '0').slice(-length);
 }
 
+// ==========================================
+// Application settings (edited by admins under Settings)
+// ==========================================
+
+export interface AppSettings {
+  company: {
+    name: string;
+    supportEmail: string;
+    supportPhone: string;
+    address: string;
+    /** IANA time zone, e.g. "Asia/Colombo". */
+    timezone: string;
+    /** Printed on invoices and exports. */
+    taxRegistrationNo: string;
+  };
+  dispatch: {
+    /** How long a worker has to answer an offer before it returns to the queue. */
+    offerTimeoutHours: number;
+    /** Accepted unfinished jobs a worker can hold before dispatch treats them as at capacity. */
+    maxActiveJobs: number;
+    /** Dispatch score = rating x ratingWeight - distanceKm x proximityWeight. */
+    proximityWeight: number;
+    ratingWeight: number;
+    /** Search radius for the worker picker when none is given (0 = no limit). */
+    defaultRadiusKm: number;
+  };
+  billing: {
+    invoicePrefix: string;
+    /** Tax added to a job card when the worker does not set one, in percent (e.g. 18 for VAT). */
+    defaultTaxRatePct: number;
+    /** Pre-filled hourly rate for labour lines on a new job card, in LKR. */
+    defaultLabourRateLkr: number;
+    paymentTermsDays: number;
+  };
+  requests: {
+    /** Customers need a paid plan before they can raise a request. */
+    requirePlanToRequest: boolean;
+    /** Customers may cancel their own requests before work starts. */
+    allowCustomerCancellation: boolean;
+  };
+  security: {
+    passwordMinLength: number;
+    /** Wrong passwords before an account is locked (0 turns lockout off). */
+    maxFailedLogins: number;
+    lockoutMinutes: number;
+  };
+}
+
+export type AppSettingsPatch = { [K in keyof AppSettings]?: Partial<AppSettings[K]> };
+
+export const DEFAULT_APP_SETTINGS: AppSettings = {
+  company: {
+    name: 'METRO-FIX',
+    supportEmail: 'support@metro-fix.com',
+    supportPhone: '',
+    address: '',
+    timezone: 'Asia/Colombo',
+    taxRegistrationNo: '',
+  },
+  dispatch: {
+    offerTimeoutHours: OFFER_TIMEOUT_SECONDS / 3600,
+    maxActiveJobs: 5,
+    proximityWeight: 1,
+    ratingWeight: 20,
+    defaultRadiusKm: 50,
+  },
+  billing: { invoicePrefix: 'INV-', defaultTaxRatePct: 0, defaultLabourRateLkr: 2500, paymentTermsDays: 14 },
+  requests: { requirePlanToRequest: true, allowCustomerCancellation: true },
+  security: { passwordMinLength: 8, maxFailedLogins: 5, lockoutMinutes: 15 },
+};
+
+/** The slice of settings every signed-in app may read (and the login screen, before sign-in, a smaller part). */
+export interface PublicAppSettings {
+  companyName: string;
+  supportEmail: string;
+  supportPhone: string;
+  passwordMinLength: number;
+}
+
+export interface SignedInAppSettings extends PublicAppSettings {
+  currency: 'LKR';
+  offerTimeoutHours: number;
+  defaultTaxRatePct: number;
+  defaultLabourRateLkr: number;
+  allowCustomerCancellation: boolean;
+  requirePlanToRequest: boolean;
+}
+
+export const SETTINGS_TIMEZONES = [
+  'Asia/Colombo',
+  'Asia/Kolkata',
+  'Asia/Dubai',
+  'Asia/Singapore',
+  'Europe/London',
+  'UTC',
+] as const;
+
+/** Applies a partial settings object over a base, section by section. Unknown keys are ignored. */
+export function mergeAppSettings(base: AppSettings, patch: AppSettingsPatch | null | undefined): AppSettings {
+  const next = JSON.parse(JSON.stringify(base)) as AppSettings;
+  if (!patch) return next;
+  for (const section of Object.keys(next) as (keyof AppSettings)[]) {
+    const incoming = patch[section] as Record<string, unknown> | undefined;
+    if (!incoming) continue;
+    for (const key of Object.keys(next[section])) {
+      if (incoming[key] !== undefined) (next[section] as Record<string, unknown>)[key] = incoming[key];
+    }
+  }
+  return next;
+}
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+/** Problems with a full settings object, keyed by "section.field". Empty means valid. */
+export function validateAppSettings(s: AppSettings): Record<string, string> {
+  const errors: Record<string, string> = {};
+  const num = (path: string, value: unknown, min: number, max: number, label: string, integer = false) => {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max || (integer && !Number.isInteger(value))) {
+      errors[path] = `${label} must be ${integer ? 'a whole number ' : 'a number '}from ${min} to ${max}.`;
+    }
+  };
+  if (!s.company.name.trim()) errors['company.name'] = 'Enter the company name.';
+  if (s.company.name.length > 120) errors['company.name'] = 'Keep the company name under 120 characters.';
+  if (!EMAIL_PATTERN.test(s.company.supportEmail)) errors['company.supportEmail'] = 'Enter a valid support email.';
+  if (s.company.supportPhone && (s.company.supportPhone.match(/\d/g) ?? []).length < 7) {
+    errors['company.supportPhone'] = 'Enter a valid support phone number.';
+  }
+  if (s.company.address.length > 300) errors['company.address'] = 'Keep the address under 300 characters.';
+  if (!(SETTINGS_TIMEZONES as readonly string[]).includes(s.company.timezone)) errors['company.timezone'] = 'Pick a supported time zone.';
+  if (s.company.taxRegistrationNo.length > 40) errors['company.taxRegistrationNo'] = 'Keep the registration number under 40 characters.';
+
+  num('dispatch.offerTimeoutHours', s.dispatch.offerTimeoutHours, 0.25, 72, 'The offer window');
+  num('dispatch.maxActiveJobs', s.dispatch.maxActiveJobs, 1, 50, 'Max active jobs', true);
+  num('dispatch.proximityWeight', s.dispatch.proximityWeight, 0, 100, 'Proximity weight');
+  num('dispatch.ratingWeight', s.dispatch.ratingWeight, 0, 100, 'Rating weight');
+  if (!errors['dispatch.proximityWeight'] && !errors['dispatch.ratingWeight'] && s.dispatch.proximityWeight + s.dispatch.ratingWeight === 0) {
+    errors['dispatch.ratingWeight'] = 'At least one weight must be above zero.';
+  }
+  num('dispatch.defaultRadiusKm', s.dispatch.defaultRadiusKm, 0, 500, 'The search radius');
+
+  if (!/^[A-Za-z0-9-]{0,12}$/.test(s.billing.invoicePrefix)) errors['billing.invoicePrefix'] = 'Use up to 12 letters, digits or dashes.';
+  num('billing.defaultTaxRatePct', s.billing.defaultTaxRatePct, 0, 100, 'The tax rate');
+  num('billing.defaultLabourRateLkr', s.billing.defaultLabourRateLkr, 0, 1000000, 'The labour rate');
+  num('billing.paymentTermsDays', s.billing.paymentTermsDays, 0, 365, 'Payment terms', true);
+
+  num('security.passwordMinLength', s.security.passwordMinLength, 6, 64, 'Minimum password length', true);
+  num('security.maxFailedLogins', s.security.maxFailedLogins, 0, 20, 'Failed sign-ins before lockout', true);
+  num('security.lockoutMinutes', s.security.lockoutMinutes, 1, 1440, 'Lockout time', true);
+  return errors;
+}
+
+/** Why a password is not acceptable under the current policy, or null if it is. */
+export function passwordPolicyProblem(password: string, minLength: number): string | null {
+  if (password.length < minLength) return `Use at least ${minLength} characters.`;
+  if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) return 'Include both letters and numbers.';
+  return null;
+}
+
 // Job Quote DTO (worker estimate submission)
 export const submitJobQuoteSchema = z.object({
   estimatedCost: z.number().nonnegative('Cost must be 0 or greater'),
@@ -556,7 +714,9 @@ export type SubmitJobProofDto = z.infer<typeof submitJobProofSchema>;
 
 export const loginSchema = z.object({
   email: z.string().trim().email('Enter a valid email address.'),
-  password: z.string().min(8, 'Password must be at least 8 characters long.'),
+  // Sign-in only needs *a* password: the length rule applies when one is set (Settings > Security), and
+  // checking it here would lock out people whose password predates a change to that rule.
+  password: z.string().min(1, 'Enter your password.'),
 });
 
 export const registrationSchema = z

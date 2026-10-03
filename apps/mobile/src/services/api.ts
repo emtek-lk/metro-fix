@@ -3,6 +3,7 @@ import {
   JobStatus,
   type CustomerSubscription,
   type CheckoutInput,
+  type SignedInAppSettings,
   ServiceRequest,
   ServicePillar,
   FacilityType,
@@ -244,6 +245,15 @@ export class MobileApiService {
       timeout: 60000,
     });
     return res.data.url as string;
+  }
+
+  /**
+   * Company contact, quoting defaults and request rules from Settings.
+   * GET /settings/app
+   */
+  async fetchAppSettings(): Promise<SignedInAppSettings> {
+    const res = await apiClient.get('/settings/app');
+    return res.data;
   }
 
   /**

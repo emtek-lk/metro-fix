@@ -287,6 +287,23 @@ Sends push notification to all available workers (FCM).
 
 ---
 
+### 8b. Settings, accounts and audit
+
+| Method | Route | Auth | Description |
+|--------|-------|------|-------------|
+| `GET` | `/settings/public` | Public | `{companyName, supportEmail, supportPhone, passwordMinLength}` for the sign-in and sign-up screens |
+| `GET` | `/settings/app` | JWT | The above plus `currency, offerTimeoutHours, defaultTaxRatePct, defaultLabourRateLkr, allowCustomerCancellation, requirePlanToRequest` |
+| `GET` / `PATCH` | `/settings` | ADMIN | All settings / a partial change (`{section: {field: value}}`). Validated with the shared rules in core-types (400 with `errors` per `section.field`); every change is audited with old and new values |
+| `GET` | `/audit-log?limit=&action=` | ADMIN | Newest first: settings changes, staff and account administration, lockouts, password changes, exports |
+| `GET` / `POST` | `/admin/users` | ADMIN | List / create Admin and Customer Care accounts (temporary password, checked against the password policy) |
+| `PATCH` | `/admin/users/:id` | ADMIN | `fullName, phoneNumber, role (staff only), isActive`. Cannot deactivate or demote yourself or the last active admin |
+| `POST` | `/admin/users/:id/reset-password` / `/unlock` | ADMIN | Set a new password (also unlocks) / clear a lockout |
+| `GET` | `/admin/system` | ADMIN | Environment, uptime, database status, counts |
+| `GET` | `/admin/export/:entity` | ADMIN | CSV of `customers`, `workers` or `jobs` (cells that look like spreadsheet formulas are neutralised); audited |
+| `POST` | `/auth/change-password` | JWT | `{currentPassword, newPassword}`; the new one must pass the policy |
+
+Settings sections: `company`, `dispatch` (offerTimeoutHours, maxActiveJobs, ratingWeight, proximityWeight, defaultRadiusKm), `billing` (invoicePrefix, defaultTaxRatePct, defaultLabourRateLkr, paymentTermsDays), `requests` (requirePlanToRequest, allowCustomerCancellation), `security` (passwordMinLength, maxFailedLogins, lockoutMinutes). Sign-in: wrong passwords are counted, the account locks for `lockoutMinutes` at `maxFailedLogins` (0 disables), a locked account is refused even with the right password, and a deactivated account cannot sign in or keep an existing session. `OFFER_TIMEOUT_SECONDS` and `MAX_ACTIVE_JOBS` environment variables, if set, override the matching settings.
+
 ### 8a. Admin edits
 
 | Method | Route | Auth | Body (all optional, only what is sent changes) |

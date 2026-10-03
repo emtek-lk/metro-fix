@@ -1,5 +1,6 @@
 import { apiService } from '../services/api';
 import { mediaUrl } from '../lib/api';
+import { useAppSettings } from '../hooks/useAppSettings';
 import { JobCardForm } from './JobCardForm';
 import { draftFromSection, draftToPayload, type JobCardDraft } from '../lib/jobCard';
 import { jobCardBillable } from '@metro-fix/core-types';
@@ -53,6 +54,7 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
   const reduceMotion = useReduceMotion();
   const { data: liveJob } = useJobDetail(initialJob.id);
   const currentJob = liveJob || initialJob;
+  const appSettings = useAppSettings();
 
   const updateStatus = useUpdateJobStatus();
   const submitQuote = useSubmitQuote();
@@ -60,11 +62,12 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
 
   const [gpsStatus, setGpsStatus] = useState('Standby');
   // The job card: filled in as the quote at inspection, confirmed or corrected at completion.
-  const [quoteCard, setQuoteCard] = useState<JobCardDraft>(() => draftFromSection(currentJob.jobCard?.estimate));
+  const [quoteCard, setQuoteCard] = useState<JobCardDraft>(() => draftFromSection(currentJob.jobCard?.estimate, appSettings.defaultLabourRateLkr));
   const [finalCard, setFinalCard] = useState<JobCardDraft>(() =>
     draftFromSection(jobCardBillable(currentJob.jobCard)),
   );
-  const cardTaxRate = currentJob.jobCard?.taxRate ?? 0;
+  // A new quote starts at the company's default tax rate (Settings > Billing); an existing card keeps its own.
+  const cardTaxRate = currentJob.jobCard?.taxRate ?? appSettings.defaultTaxRatePct;
   const cardCurrency = currentJob.jobCard?.currency ?? 'LKR';
 
   // Reject (unserviceable / out of scope) state
@@ -345,7 +348,7 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
                   <Text style={s.formDesc}>Itemise labour and materials. Dispatch and the customer see this as your estimate.</Text>
                 </View>
               </View>
-              <JobCardForm draft={quoteCard} onChange={setQuoteCard} taxRate={cardTaxRate} currency={cardCurrency} />
+              <JobCardForm draft={quoteCard} onChange={setQuoteCard} taxRate={cardTaxRate} currency={cardCurrency} labourRate={appSettings.defaultLabourRateLkr} />
               <Button title="Submit quote" onPress={handleQuote} isLoading={submitQuote.isPending} variant="primary" size="large" style={s.formSubmit} />
             </Card>
           )}
@@ -422,7 +425,7 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
                 <Text style={m.title}>Job card</Text>
               </View>
               <Text style={m.subtitle}>Correct anything that changed on site. This becomes the basis for the invoice.</Text>
-              <JobCardForm draft={finalCard} onChange={setFinalCard} taxRate={cardTaxRate} currency={cardCurrency} />
+              <JobCardForm draft={finalCard} onChange={setFinalCard} taxRate={cardTaxRate} currency={cardCurrency} labourRate={appSettings.defaultLabourRateLkr} />
 
               <Pressable
                 style={({ pressed }) => [m.camBtn, pressed && m.camBtnPressed]}

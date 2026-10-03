@@ -9,6 +9,8 @@ import {
   Role,
   JOB_TRANSITIONS,
   OFFER_TIMEOUT_SECONDS,
+  DEFAULT_APP_SETTINGS,
+  mergeAppSettings,
   type JobOfferRecord,
 } from '@metro-fix/core-types';
 import { JobsService, type Actor } from './jobs.service';
@@ -32,7 +34,7 @@ interface Initial {
 }
 
 /** An in-memory stand-in for the repositories and gateway, enough to exercise the service rules. */
-function build(initial: Initial) {
+function build(initial: Initial, settingsOverride?: Record<string, Record<string, unknown>>) {
   const workers = [
     { id: W1, userId: 'user-w1', rating: 5 },
     { id: W2, userId: 'user-w2', rating: 4 },
@@ -90,11 +92,15 @@ function build(initial: Initial) {
     emitJobCreated: jest.fn(),
     emitJobOffered: jest.fn(),
   };
+  const settings = settingsOverride
+    ? { get: jest.fn(async () => mergeAppSettings(DEFAULT_APP_SETTINGS, settingsOverride as any)) }
+    : undefined;
   const service = new JobsService(
     jobRepo as any,
     workerRepo as any,
     customerRepo as any,
     gateway as any,
+    settings as any,
   );
   return { service, jobRepo, customerRepo, gateway, job, loseNextRace: () => (loseNextRace = true) };
 }
@@ -610,5 +616,38 @@ describe('subscription gate on raising a request', () => {
     await expect(service.createJob(dto, { requireSubscription: true })).resolves.toBeDefined();
     customerRepo.findOne.mockResolvedValue({ id: 'cust-1', userId: 'user-c1', subscriptionTier: null });
     await expect(service.createJob(dto)).resolves.toBeDefined();
+  });
+});
+
+describe('rules from Settings', () => {
+  it('uses the offer window set under Dispatch', async () => {
+    const { service, job } = build({ status: JobStatus.REQUESTED }, { dispatch: { offerTimeoutHours: 2 } });
+    await service.offerWorker(JOB_ID, W1);
+    const seconds = (new Date(job.offerExpiresAt).getTime() - Date.now()) / 1000;
+    expect(seconds).toBeGreaterThan(2 * 3600 - 5);
+    expect(seconds).toBeLessThan(2 * 3600 + 5);
+  });
+
+  it('lets customers raise requests without a plan when that rule is switched off', async () => {
+    const dto: any = { title: 'Leaky tap', description: 'Drips all day', servicePillar: 'HARD', facilityType: 'RESIDENTIAL', customerId: 'cust-1', location: { latitude: 6.9, longitude: 79.8 } };
+    const off = build({ status: JobStatus.REQUESTED }, { requests: { requirePlanToRequest: false } });
+    off.customerRepo.findOne.mockResolvedValue({ id: 'cust-1', userId: 'user-c1', subscriptionTier: null });
+    await expect(off.service.createJob(dto, { requireSubscription: true })).resolves.toBeDefined();
+    const on = build({ status: JobStatus.REQUESTED }, {});
+    on.customerRepo.findOne.mockResolvedValue({ id: 'cust-1', userId: 'user-c1', subscriptionTier: null });
+    await expect(on.service.createJob(dto, { requireSubscription: true })).rejects.toMatchObject({ status: 402 });
+  });
+
+  it('stops customers cancelling when that is switched off, but not dispatch', async () => {
+    const { service } = build({ status: JobStatus.REQUESTED }, { requests: { allowCustomerCancellation: false } });
+    await expect(service.cancelJob(JOB_ID, {}, customer)).rejects.toThrow('contacting support');
+    await expect(service.cancelJob(JOB_ID, {}, staff)).resolves.toBeDefined();
+  });
+
+  it('adds the default tax rate to a quote that does not set one', async () => {
+    const { service, job } = build({ status: JobStatus.INSPECTION, workerId: W1 }, { billing: { defaultTaxRatePct: 18 } });
+    await service.submitJobQuote(JOB_ID, { estimatedCost: 1000, estimatedHours: 1, notes: '' } as any, worker1);
+    expect(job.jobCard).toMatchObject({ taxRate: 18 });
+    expect(job.jobCard.estimate.total).toBe(1180);
   });
 });

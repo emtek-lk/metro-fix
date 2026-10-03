@@ -6,6 +6,7 @@ import { Login } from './Login';
 import { Register } from './Register';
 import { OnboardingPlans } from '../subscriptions/OnboardingPlans';
 import { API_BASE_URL } from '../../lib/api';
+import { useAppSettings } from '../../lib/settings';
 
 export interface AuthShellProps {
   onAuthenticated: (user: User, token: string, targetPath: string) => void;
@@ -15,6 +16,7 @@ type AuthMode = 'login' | 'register';
 
 export function AuthShell({ onAuthenticated }: AuthShellProps) {
   const [mode, setMode] = useState<AuthMode>('login');
+  const app = useAppSettings();
   const [onboarding, setOnboarding] = useState<{ user: User; token: string } | null>(null);
   const isCompact = useMediaQuery('(max-width: 960px)');
 
@@ -146,7 +148,7 @@ export function AuthShell({ onAuthenticated }: AuthShellProps) {
             </div>
 
             <footer style={{ ...styles.footerRow, ...(isCompact ? styles.footerRowCompact : undefined) }}>
-              <a href="mailto:support@metro-fix.com" style={styles.footerLink}>
+              <a href={`mailto:${app.supportEmail}`} style={styles.footerLink}>
                 Trouble with your account?
               </a>
 
@@ -218,7 +220,9 @@ const styles: Record<string, CSSProperties> = {
     justifyContent: 'center',
     boxSizing: 'border-box',
     boxShadow: '0 30px 70px rgba(6, 19, 20, 0.34)',
-    border: '1px solid rgba(255, 255, 255, 0.08)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     background:
       'radial-gradient(circle at 20% 20%, rgba(243, 136, 8, 0.16), transparent 26%), radial-gradient(circle at 80% 22%, rgba(255, 214, 117, 0.08), transparent 24%), linear-gradient(160deg, #16373f 0%, #10282f 40%, #0f2328 100%)',
   },
@@ -276,7 +280,9 @@ const styles: Record<string, CSSProperties> = {
     display: 'grid',
     placeItems: 'center',
     background: '#ffffff',
-    border: '1px solid rgba(255, 255, 255, 0.72)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(255, 255, 255, 0.72)',
     boxShadow: '0 18px 42px rgba(0, 0, 0, 0.26)',
     backdropFilter: 'blur(12px)',
   },
@@ -336,7 +342,9 @@ const styles: Record<string, CSSProperties> = {
     gap: '18px',
     overflow: 'hidden',
     boxSizing: 'border-box',
-    border: '1px solid rgba(16, 36, 38, 0.08)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(16, 36, 38, 0.08)',
     background: 'linear-gradient(180deg, var(--surface-elevated) 0%, var(--surface) 100%)',
     boxShadow: '0 26px 65px rgba(10, 19, 20, 0.22)',
   },
@@ -360,12 +368,16 @@ const styles: Record<string, CSSProperties> = {
     padding: '6px',
     borderRadius: '18px',
     background: 'var(--surface-strong)',
-    border: '1px solid var(--border-subtle)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-subtle)',
     boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.18)',
   },
   tabButton: {
     minWidth: '152px',
-    border: '1px solid transparent',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'transparent',
     background: 'transparent',
     color: 'var(--text-secondary)',
     borderRadius: '13px',
@@ -389,7 +401,9 @@ const styles: Record<string, CSSProperties> = {
   helpButton: {
     height: '36px',
     borderRadius: '12px',
-    border: '1px solid var(--border-subtle)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-subtle)',
     background: 'var(--surface-strong)',
     color: 'var(--text-primary)',
     padding: '0 14px',
@@ -414,7 +428,9 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: '26px',
     padding: 'clamp(18px, 2vw, 24px)',
     background: 'linear-gradient(180deg, var(--surface-elevated) 0%, var(--surface) 100%)',
-    border: '1px solid var(--border-subtle)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-subtle)',
     boxShadow: '0 18px 42px rgba(14, 20, 21, 0.08)',
     overflowY: 'auto',
     scrollbarWidth: 'none',
@@ -448,7 +464,9 @@ const styles: Record<string, CSSProperties> = {
     padding: '14px 16px',
     borderRadius: '18px',
     background: 'var(--surface-strong)',
-    border: '1px solid var(--border-subtle)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-subtle)',
     boxShadow: '0 16px 30px rgba(14, 20, 21, 0.08)',
   },
   demoTitle: {

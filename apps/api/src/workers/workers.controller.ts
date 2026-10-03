@@ -90,7 +90,7 @@ export class WorkersController {
   @Get('dispatch-search')
   async getAvailableWorkersForJob(
     @Query('jobId') jobId: string,
-    @Query('radius', new DefaultValuePipe(50000), ParseIntPipe) radius: number,
+    @Query('radius', new ParseIntPipe({ optional: true })) radius?: number,
     @Query('includeUnavailable') includeUnavailable?: string,
   ): Promise<DispatchSearchResult[]> {
     return this.workersService.getAvailableWorkersForJob(jobId, radius, includeUnavailable === 'true');

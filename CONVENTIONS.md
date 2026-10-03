@@ -234,3 +234,9 @@ npm run dev   # Uses turbo to start all apps
 - **Reference data lives in `apps/api/src/common/seed-data.ts`.** Change plans or the catalog there, not in two seed files.
 - **Schema changes rely on TypeORM `synchronize`** (no migrations yet). Changing a column's type on a table with data can fail or drop data; ask before altering shared dev databases.
 - **socket.io everywhere:** the web client must use `socket.io-client` and send `auth.token`; a raw `WebSocket` cannot talk to the gateway.
+
+## Inline styles: do not mix the `border` shorthand with `borderColor`
+
+In React inline styles, a base style with `border: '1px solid transparent'` plus a variant that sets `borderColor` (selected / active / error) leaves the border stuck in the variant's colour, or in the text colour, after the variant is removed: React clears `borderColor` on the way out, and the shorthand's colour is gone with it. Every option that was ever selected then keeps a dark or coloured border until the page reloads.
+
+Write borders as `borderWidth`, `borderStyle` and `borderColor` whenever any variant overrides the colour, so the base colour is always restored. (Fixed this way in Settings, plans, checkout, the worker picker, the dispatch cards and the add / edit forms.)

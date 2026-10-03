@@ -260,7 +260,9 @@ const styles: Record<string, CSSProperties> = {
     padding: '24px',
     width: '100%',
     maxWidth: '520px',
-    border: '1px solid rgba(255, 255, 255, 0.15)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(255, 255, 255, 0.15)',
     boxShadow: '0 24px 48px rgba(0, 0, 0, 0.6)',
   },
   header: {
@@ -320,7 +322,9 @@ const styles: Record<string, CSSProperties> = {
   input: {
     padding: '10px 12px',
     borderRadius: '10px',
-    border: '1px solid rgba(255, 255, 255, 0.2)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(255, 255, 255, 0.2)',
     background: 'rgba(0, 0, 0, 0.25)',
     color: '#ffffff',
     boxSizing: 'border-box',
@@ -330,7 +334,9 @@ const styles: Record<string, CSSProperties> = {
   select: {
     padding: '10px 12px',
     borderRadius: '10px',
-    border: '1px solid rgba(255, 255, 255, 0.2)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(255, 255, 255, 0.2)',
     background: '#1e3247',
     color: '#ffffff',
     boxSizing: 'border-box',
@@ -353,7 +359,9 @@ const styles: Record<string, CSSProperties> = {
   },
   cancelBtn: {
     background: 'transparent',
-    border: '1px solid rgba(255, 255, 255, 0.2)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(255, 255, 255, 0.2)',
     color: '#ffffff',
     padding: '10px 16px',
     borderRadius: '10px',

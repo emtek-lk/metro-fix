@@ -4,7 +4,6 @@ import {
   JobStatus,
   ServiceType,
   JOB_STATUSES_IN_ORDER,
-  describeOfferTimeout,
   formatCountdown,
   canTransition,
   ticketRef,
@@ -16,6 +15,7 @@ import { API_BASE_URL } from '../../lib/api';
 import { WebSocketService } from '../../lib/websocket';
 import { CreateRequestModal } from './CreateRequestModal';
 import { RefreshButton } from '../../components/RefreshButton';
+import { describeHours, useAppSettings } from '../../lib/settings';
 import { JobCardModal } from './JobCardModal';
 
 // Column order and the rules for moving between columns come from the shared lifecycle in
@@ -174,6 +174,7 @@ function getWorkerBadgeLabel(worker: WorkerCandidate) {
 }
 
 export function CustomerCareView() {
+  const appSettings = useAppSettings();
   const [columns, setColumns] = useState<Record<JobStatus, DispatchCard[]>>(emptyColumns);
   const [workersList, setWorkersList] = useState<WorkerCandidate[]>([]);
   const [isDispatchModalOpen, setDispatchModalOpen] = useState(false);
@@ -489,7 +490,7 @@ export function CustomerCareView() {
       const workerName = offered.assignedWorker?.fullName || fallbackName;
 
       moveCard(selectedCardId, offered.status, () => offered, 0);
-      showToast(`Offer sent to ${workerName}. They have ${describeOfferTimeout()} to accept.`, 'success');
+      showToast(`Offer sent to ${workerName}. They have ${describeHours(appSettings.offerTimeoutHours)} to accept.`, 'success');
       closeDispatchModal();
     } catch (err: any) {
       // Keep the modal open and the card where it is: a failed offer must not look like a success.
@@ -1030,7 +1031,7 @@ export function CustomerCareView() {
               <div style={styles.dispatchPreview}>
                 <div style={styles.dispatchLaneTitle}>Dispatch summary</div>
                 <div style={styles.dispatchDropZone}>
-                  The selected worker has {describeOfferTimeout()} to accept. If they decline or do not answer, the job returns to the queue.
+                  The selected worker has {describeHours(appSettings.offerTimeoutHours)} to accept. If they decline or do not answer, the job returns to the queue.
                 </div>
                 <button type="button" style={styles.primaryButton} onClick={confirmDispatch} disabled={!selectedWorkerId}>
                   Send offer
@@ -1069,7 +1070,9 @@ const styles: Record<string, CSSProperties> = {
     gap: '10px',
     padding: '10px 14px',
     borderRadius: '14px',
-    border: '1px solid var(--border-subtle)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-subtle)',
     background: 'var(--surface-strong)',
     boxShadow: '0 2px 8px rgba(14, 20, 21, 0.04)',
   },
@@ -1108,7 +1111,9 @@ const styles: Record<string, CSSProperties> = {
     padding: '6px 12px',
     borderRadius: '10px',
     background: 'rgba(243, 136, 8, 0.08)',
-    border: '1px solid rgba(243, 136, 8, 0.2)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(243, 136, 8, 0.2)',
     color: '#f38808',
   },
   kicker: {
@@ -1119,7 +1124,9 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 700,
   },
   primaryButton: {
-    border: '1px solid #d37105',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#d37105',
     background: 'linear-gradient(135deg, #f38808, #d37105)',
     color: '#ffffff',
     padding: '12px 16px',
@@ -1167,7 +1174,9 @@ const styles: Record<string, CSSProperties> = {
     padding: '14px',
     borderRadius: '22px',
     background: 'var(--surface-strong)',
-    border: '1px solid var(--border-subtle)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-subtle)',
     boxSizing: 'border-box',
     boxShadow: '0 12px 28px rgba(14, 20, 21, 0.06)',
   },
@@ -1216,7 +1225,9 @@ const styles: Record<string, CSSProperties> = {
     background: 'var(--surface)',
     color: 'var(--text-primary)',
     boxShadow: 'var(--shadow-elevated)',
-    border: '1px solid var(--border-subtle)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-subtle)',
     cursor: 'grab',
     boxSizing: 'border-box',
     flexShrink: 0,
@@ -1304,7 +1315,9 @@ const styles: Record<string, CSSProperties> = {
   filterSelect: {
     height: 36,
     borderRadius: 999,
-    border: '1px solid var(--border-subtle)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-subtle)',
     background: 'var(--surface)',
     color: 'var(--text-primary)',
     fontSize: 13,
@@ -1325,7 +1338,9 @@ const styles: Record<string, CSSProperties> = {
     height: 36,
     padding: '0 14px',
     borderRadius: 999,
-    border: '1px solid #d37105',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#d37105',
     background: 'linear-gradient(135deg, #f38808, #d37105)',
     color: '#ffffff',
     fontSize: 13,
@@ -1339,7 +1354,9 @@ const styles: Record<string, CSSProperties> = {
     height: 36,
     padding: '0 14px',
     borderRadius: 999,
-    border: '1px solid rgba(243, 136, 8, 0.55)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(243, 136, 8, 0.55)',
     background: 'transparent',
     color: '#f38808',
     fontSize: 13,
@@ -1393,7 +1410,9 @@ const styles: Record<string, CSSProperties> = {
     marginTop: '10px',
   },
   secondaryActionButton: {
-    border: '1px solid #f38808',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#f38808',
     background: 'transparent',
     color: '#f38808',
     padding: '8px 10px',
@@ -1403,7 +1422,9 @@ const styles: Record<string, CSSProperties> = {
     cursor: 'pointer',
   },
   rejectButton: {
-    border: '1px solid #d37105',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#d37105',
     background: '#d37105',
     color: '#ffffff',
     padding: '8px 10px',
@@ -1433,7 +1454,9 @@ const styles: Record<string, CSSProperties> = {
     width: 'min(680px, 100%)',
     borderRadius: '24px',
     background: 'var(--surface)',
-    border: '1px solid var(--border-subtle)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-subtle)',
     padding: '20px',
     boxSizing: 'border-box',
     maxHeight: '85vh',
@@ -1454,7 +1477,9 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 700,
   },
   closeButton: {
-    border: '1px solid var(--border-subtle)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-subtle)',
     background: 'var(--surface-strong)',
     color: '#f38808',
     borderRadius: '10px',
@@ -1479,7 +1504,9 @@ const styles: Record<string, CSSProperties> = {
     background: 'var(--surface-strong)',
     borderRadius: '14px',
     padding: '14px',
-    border: '1px solid var(--border-subtle)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-subtle)',
   },
   workerToggle: {
     display: 'flex',
@@ -1492,7 +1519,9 @@ const styles: Record<string, CSSProperties> = {
   },
   workerUnavailable: {
     borderRadius: '999px',
-    border: '1px solid rgba(255, 138, 128, 0.6)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(255, 138, 128, 0.6)',
     color: '#ff8a80',
     padding: '1px 8px',
     fontSize: '0.7rem',
@@ -1511,7 +1540,9 @@ const styles: Record<string, CSSProperties> = {
   workerRow: {
     width: '100%',
     textAlign: 'left',
-    border: '1px solid var(--border-subtle)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-subtle)',
     background: 'var(--surface)',
     color: 'var(--text-primary)',
     borderRadius: '12px',
@@ -1552,7 +1583,9 @@ const styles: Record<string, CSSProperties> = {
     background: 'var(--surface-strong)',
     borderRadius: '14px',
     padding: '14px',
-    border: '1px solid var(--border-subtle)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-subtle)',
     display: 'flex',
     flexDirection: 'column',
     gap: '12px',
@@ -1561,7 +1594,9 @@ const styles: Record<string, CSSProperties> = {
     marginTop: '12px',
     borderRadius: '14px',
     padding: '12px 14px',
-    border: '1px solid var(--border-subtle)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-subtle)',
     background: 'rgba(43, 67, 95, 0.08)',
   },
   dispatchContextLabel: {
@@ -1607,7 +1642,9 @@ const styles: Record<string, CSSProperties> = {
   spinner: {
     width: '14px',
     height: '14px',
-    border: '2px solid rgba(255, 255, 255, 0.3)',
+    borderWidth: '2px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(255, 255, 255, 0.3)',
     borderTopColor: '#f38808',
     borderRadius: '50%',
     animation: 'spin 0.8s linear infinite',
@@ -1629,7 +1666,9 @@ const styles: Record<string, CSSProperties> = {
     padding: '12px 20px',
     borderRadius: '8px',
     color: '#ffffff',
-    border: '1px solid #f38808',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#f38808',
     boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
     fontSize: '0.9rem',
     fontWeight: 600,

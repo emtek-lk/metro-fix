@@ -71,7 +71,7 @@ describe('FinancialsService', () => {
 
   it('exports numbers, not currency strings, in the CSV', async () => {
     const csv = await build([job({ jobCard: card(1234.5) })]).generateCsvReport();
-    expect(csv.split('\n')[0]).toContain('Amount (LKR)');
+    expect(csv.split('\n').some((line) => line.includes('Amount (LKR)'))).toBe(true);
     expect(csv).toContain('"1234.50"');
   });
 });

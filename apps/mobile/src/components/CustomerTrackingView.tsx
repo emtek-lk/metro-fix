@@ -15,6 +15,7 @@ import { Icon } from './ui/Icon';
 import { IconButton } from './ui/IconButton';
 import { ScreenHeader } from './ui/ScreenHeader';
 import { useToast } from './ui/Toast';
+import { useAppSettings } from '../hooks/useAppSettings';
 import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { spacing, radius, layout, tabBarClearance } from '../theme/layout';
@@ -55,7 +56,9 @@ export const CustomerTrackingView: React.FC<CustomerTrackingViewProps> = ({
   const technician = workerNameOf(currentJob);
   const technicianPhone = currentJob.worker?.user?.phoneNumber?.trim() || null;
   const message = trackingMessage(currentJob.status, technician);
-  const canCancel = canTransition(currentJob.status, JobStatus.CANCELLED);
+  const appSettings = useAppSettings();
+  // Dispatch can switch customer cancellation off (Settings > Requests & plans); they then contact support.
+  const canCancel = appSettings.allowCustomerCancellation && canTransition(currentJob.status, JobStatus.CANCELLED);
   const isLive = !isTerminalStatus(currentJob.status);
   const hasTechnician =
     !!currentJob.workerId &&

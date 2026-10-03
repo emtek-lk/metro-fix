@@ -18,6 +18,7 @@ import { spacing, radius, layout } from '../theme/layout';
 import { themedStyles } from '../theme/themedStyles';
 import { useMySubscription, usePlans } from '../hooks/useJobs';
 import { getErrorMessage } from '../lib/errors';
+import { useAppSettings } from '../hooks/useAppSettings';
 import { formatLkr, planIntent, priceFor, tierLabel, type PlanIntent } from '../lib/plans';
 import type { SubscriptionPlan } from '../services/api';
 
@@ -81,6 +82,7 @@ export const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({ onboardi
   const { scrollY, onScroll } = useCollapsingHeader();
   const plansQuery = usePlans();
   const mine = useMySubscription();
+  const app = useAppSettings();
   const [cycle, setCycle] = useState<BillingCycle>('MONTHLY');
   const [compare, setCompare] = useState(false);
 
@@ -179,7 +181,7 @@ export const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({ onboardi
                     title="Contact us for a quote"
                     variant="outline"
                     size="medium"
-                    onPress={() => Linking.openURL('mailto:support@metro-fix.com?subject=Business%20plan%20quote')}
+                    onPress={() => Linking.openURL(`mailto:${app.supportEmail}?subject=Business%20plan%20quote`)}
                   />
                 ) : (
                   <Button

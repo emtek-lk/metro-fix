@@ -10,6 +10,7 @@ import { realtimeSocket } from '../services/websocket';
 import { statusChangeAlert } from '../lib/trackingCopy';
 import { haptics } from '../lib/haptics';
 import { useMyRequests, useMySubscription } from '../hooks/useJobs';
+import { useAppSettings } from '../hooks/useAppSettings';
 import { getErrorMessage } from '../lib/errors';
 import { SubscriptionGate } from '../components/SubscriptionGate';
 import { LoadingState } from '../components/ui/LoadingState';
@@ -38,6 +39,7 @@ export function CustomerMain({ navigation }: Props) {
   const myRequests = useMyRequests();
   // Raising a request needs a paid plan; until they have one the Request tab explains and links to the plans.
   const subscription = useMySubscription();
+  const appSettings = useAppSettings();
   // Changing the key gives the next booking a fresh, empty wizard.
   const [bookingKey, setBookingKey] = useState(0);
 
@@ -86,7 +88,7 @@ export function CustomerMain({ navigation }: Props) {
     book: () =>
       subscription.isLoading ? (
         <LoadingState message="Checking your plan…" />
-      ) : subscription.data && !subscription.data.tier ? (
+      ) : subscription.data && !subscription.data.tier && appSettings.requirePlanToRequest ? (
         <SubscriptionGate onViewPlans={() => navigation.navigate('Plans')} />
       ) : (
         <CustomerBookingWizard

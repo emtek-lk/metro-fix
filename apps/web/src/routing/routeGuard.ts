@@ -103,6 +103,7 @@ const knownPaths = new Set([
   '/portal/services',
   '/portal/requests',
   '/portal/subscription',
+  '/settings',
   '/login',
   '/',
 ]);

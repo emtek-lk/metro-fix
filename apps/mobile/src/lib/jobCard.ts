@@ -27,20 +27,21 @@ export interface JobCardPayload {
 }
 
 let counter = 0;
-export const newLine = (kind: JobCardLineKind = 'LABOUR'): LineDraft => ({
+export const newLine = (kind: JobCardLineKind = 'LABOUR', labourRate = 0): LineDraft => ({
   id: `line-${Date.now()}-${counter++}`,
   kind,
   description: '',
   quantity: '1',
-  unitPrice: '',
+  // Labour lines start at the company's standard hourly rate (Settings > Billing).
+  unitPrice: kind === 'LABOUR' && labourRate > 0 ? String(labourRate) : '',
 });
 
 const numberText = (value: number) => (Number.isFinite(value) ? String(value) : '');
 
 /** Starts from an existing card section (the estimate, to confirm at completion) or a blank card. */
-export function draftFromSection(section: JobCardSection | null | undefined): JobCardDraft {
+export function draftFromSection(section: JobCardSection | null | undefined, labourRate = 0): JobCardDraft {
   if (!section || section.lineItems.length === 0) {
-    return { lines: [newLine('LABOUR')], hours: '', notes: '' };
+    return { lines: [newLine('LABOUR', labourRate)], hours: '', notes: '' };
   }
   return {
     lines: section.lineItems.map((item) => ({

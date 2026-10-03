@@ -42,6 +42,20 @@ export class UserEntity {
   @Column({ nullable: true })
   pushToken?: string;
 
+  /** Deactivated accounts cannot sign in, and their existing sessions stop working. */
+  @Column({ type: 'bit', default: true })
+  isActive!: boolean;
+
+  @Column({ type: 'int', default: 0 })
+  failedLoginCount!: number;
+
+  /** While in the future, sign-in is refused (too many wrong passwords). */
+  @Column({ type: 'datetime', nullable: true })
+  lockedUntil?: Date | null;
+
+  @Column({ type: 'datetime', nullable: true })
+  lastLoginAt?: Date | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

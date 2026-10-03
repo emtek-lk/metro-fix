@@ -9,6 +9,7 @@ import {
   HttpStatus,
   OnModuleInit,
   OnModuleDestroy,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { LessThanOrEqual, Repository } from 'typeorm';
@@ -24,6 +25,7 @@ import {
   type JobCard,
   type JobCardSection,
   JOB_CARD_CURRENCY,
+  DEFAULT_APP_SETTINGS,
   SUBSCRIPTION_REQUIRED_CODE,
   computeJobCardTotals,
 } from '@metro-fix/core-types';
@@ -38,6 +40,7 @@ import { SubmitProofDto } from './dto/submit-proof.dto';
 import type { JobCardSectionInput } from './dto/job-card.dto';
 import { randomUUID } from 'crypto';
 import { JobsGateway } from './jobs.gateway';
+import { SettingsService } from '../settings/settings.service';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -77,7 +80,13 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     @InjectRepository(CustomerEntity)
     private readonly customerRepo: Repository<CustomerEntity>,
     private readonly jobsGateway: JobsGateway,
+    // Optional so tests can build the service without it; the defaults then apply.
+    @Optional() private readonly settings?: SettingsService,
   ) {}
+
+  private async appSettings() {
+    return (await this.settings?.get()) ?? DEFAULT_APP_SETTINGS;
+  }
 
   // ── Offer timeout ─────────────────────────────────────────────────────────
 
@@ -95,10 +104,15 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     if (this.offerSweepTimer) clearInterval(this.offerSweepTimer);
   }
 
-  /** Seconds a worker has to answer an offer (overridable with OFFER_TIMEOUT_SECONDS). */
-  get offerTimeoutSeconds(): number {
+  /**
+   * Seconds a worker has to answer an offer: Settings > Dispatch, unless OFFER_TIMEOUT_SECONDS is set
+   * in the environment (handy for tests and demos).
+   */
+  async resolveOfferTimeoutSeconds(): Promise<number> {
     const configured = Number(process.env.OFFER_TIMEOUT_SECONDS);
-    return Number.isFinite(configured) && configured > 0 ? configured : OFFER_TIMEOUT_SECONDS;
+    if (Number.isFinite(configured) && configured > 0) return configured;
+    const hours = (await this.appSettings()).dispatch.offerTimeoutHours;
+    return Math.round(hours * 3600) || OFFER_TIMEOUT_SECONDS;
   }
 
   /** Returns every offer that has gone unanswered past its deadline to the dispatch queue. */
@@ -182,7 +196,7 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
         targetCustomerId = customer.id;
         customerExists = true;
         // Customers raising their own request need a paid plan; dispatch can raise one for anyone.
-        if (options.requireSubscription && !customer.subscriptionTier) {
+        if (options.requireSubscription && !customer.subscriptionTier && (await this.appSettings()).requests.requirePlanToRequest) {
           throw new HttpException(
             {
               statusCode: HttpStatus.PAYMENT_REQUIRED,
@@ -289,7 +303,7 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
   // ── Offers (REQUESTED -> PENDING_ACCEPTANCE -> ASSIGNED) ──────────────────
 
   /**
-   * Dispatch offers a job to one worker. They have `offerTimeoutSeconds` to accept; otherwise the
+   * Dispatch offers a job to one worker. They have the offer window (Settings > Dispatch) to accept; otherwise the
    * job returns to REQUESTED. A worker who already declined or rejected this job cannot be offered
    * it again.
    */
@@ -313,7 +327,7 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
         status: JobStatus.PENDING_ACCEPTANCE,
         workerId: worker.id,
         offeredAt: now,
-        offerExpiresAt: new Date(now.getTime() + this.offerTimeoutSeconds * 1000),
+        offerExpiresAt: new Date(now.getTime() + (await this.resolveOfferTimeoutSeconds()) * 1000),
       },
       { expected: JobStatus.REQUESTED },
     );
@@ -497,7 +511,7 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     await this.assertWorkerOwns(job, actor);
     this.assertTransition(job.status, JobStatus.IN_PROGRESS);
 
-    const taxRate = dto.taxRate ?? job.jobCard?.taxRate ?? 0;
+    const taxRate = dto.taxRate ?? job.jobCard?.taxRate ?? (await this.appSettings()).billing.defaultTaxRatePct;
     const input: JobCardSectionInput = dto.lineItems
       ? {
           lineItems: dto.lineItems,
@@ -611,6 +625,9 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     const job = await this.findOne(id);
     if (actor?.role === Role.CUSTOMER && job.customer?.userId !== actor.id) {
       throw new ForbiddenException('You do not have access to this request.');
+    }
+    if (actor?.role === Role.CUSTOMER && !(await this.appSettings()).requests.allowCustomerCancellation) {
+      throw new ForbiddenException('Requests can only be cancelled by contacting support.');
     }
     if (!canTransition(job.status, JobStatus.CANCELLED)) {
       throw new ConflictException(

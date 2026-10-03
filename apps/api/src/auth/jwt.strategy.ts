@@ -33,6 +33,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (!user) {
       throw new UnauthorizedException('User no longer exists.');
     }
+    // Switching an account off ends its existing sessions too, not just new sign-ins.
+    if (user.isActive === false) {
+      throw new UnauthorizedException('This account has been deactivated.');
+    }
     return user;
   }
 }

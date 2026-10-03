@@ -169,3 +169,27 @@ describe('WorkersService.updateWorker', () => {
     await expect(service.updateWorker('w1', { email: 'taken@demo.local' })).rejects.toThrow('already uses');
   });
 });
+
+describe('dispatch settings', () => {
+  const build2 = (dispatch: Record<string, number>) => {
+    const w = (id: string, rating: number, lat: number) => ({ id, rating, isAvailable: true, servicePillars: [], latitude: lat, longitude: 79.8, user: { fullName: id } });
+    const near = w('near', 4.0, 6.9);
+    const good = w('good', 5.0, 7.3);
+    const workerRepo = { find: jest.fn(async () => [near, good]) };
+    const jobRepo = { findOne: jest.fn(async () => ({ id: 'j', latitude: 6.9, longitude: 79.8, offerHistory: null })), find: jest.fn(async () => []) };
+    const settings = { get: jest.fn(async () => ({ dispatch: { maxActiveJobs: 5, defaultRadiusKm: 0, proximityWeight: 1, ratingWeight: 20, ...dispatch } })) };
+    return new WorkersService(workerRepo as any, jobRepo as any, {} as any, settings as any);
+  };
+
+  it('ranks by the rating and proximity weights from Settings', async () => {
+    // good is ~44 km away: with the default weights the rating (5*20-44) loses to near (4*20-0).
+    expect((await build2({}).getAvailableWorkersForJob('j')).map((r) => r.worker.id)).toEqual(['near', 'good']);
+    // Valuing rating far more than distance flips the order.
+    expect((await build2({ ratingWeight: 100, proximityWeight: 0.1 }).getAvailableWorkersForJob('j')).map((r) => r.worker.id)).toEqual(['good', 'near']);
+  });
+
+  it('applies the default search radius when none is asked for', async () => {
+    const limited = await build2({ defaultRadiusKm: 10 }).getAvailableWorkersForJob('j');
+    expect(limited.map((r) => r.worker.id)).toEqual(['near']);
+  });
+});

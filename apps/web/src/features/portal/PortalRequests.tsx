@@ -4,6 +4,7 @@ import { API_BASE_URL } from '../../lib/api';
 import { WebSocketService } from '../../lib/websocket';
 import { RefreshButton } from '../../components/RefreshButton';
 import { SkeletonCards } from '@metro-fix/ui';
+import { useAppSettings } from '../../lib/settings';
 
 // The stages and their order come from the shared lifecycle; only the customer-facing wording is here.
 const STAGES = JOB_STAGES;
@@ -28,6 +29,7 @@ export function PortalRequests({ refreshKey }: { refreshKey: number }) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const app = useAppSettings();
   const [cancelling, setCancelling] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -125,7 +127,7 @@ export function PortalRequests({ refreshKey }: { refreshKey: number }) {
               {job.worker?.user?.fullName && <span>Technician: {job.worker.user.fullName}</span>}
               {job.quoteAmount != null && <span>Quote: LKR {Number(job.quoteAmount).toLocaleString('en-LK')}</span>}
               {job.cancelReason && <span>Reason: {job.cancelReason}</span>}
-              {canTransition(job.status, JobStatus.CANCELLED) && (
+              {app.allowCustomerCancellation && canTransition(job.status, JobStatus.CANCELLED) && (
                 <button
                   type="button"
                   style={styles.cancelButton}

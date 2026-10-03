@@ -33,7 +33,10 @@ interface PlanPickerProps {
 const titleCase = (value: string) => value.charAt(0) + value.slice(1).toLowerCase();
 
 /** Plan cards with a monthly / annual switch. Choosing one opens the card checkout. */
+import { useAppSettings } from '../../lib/settings';
+
 export function PlanPicker({ currentTier, currentCycle, token, onSubscribed, onDeclined }: PlanPickerProps) {
+  const app = useAppSettings();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -118,7 +121,7 @@ export function PlanPicker({ currentTier, currentCycle, token, onSubscribed, onD
                 ))}
               </ul>
               {plan.isCustomPriced ? (
-                <a href="mailto:support@metro-fix.com?subject=Business%20plan%20quote" style={styles.contact}>
+                <a href={`mailto:${app.supportEmail}?subject=Business%20plan%20quote`} style={styles.contact}>
                   Contact us for a quote
                 </a>
               ) : (
@@ -157,11 +160,11 @@ export function PlanPicker({ currentTier, currentCycle, token, onSubscribed, onD
 const styles: Record<string, CSSProperties> = {
   muted: { color: 'var(--text-secondary)', fontSize: '0.9rem' },
   error: { color: '#ff8a80', fontSize: '0.9rem' },
-  cycleSwitch: { display: 'inline-flex', padding: 4, borderRadius: 999, border: '1px solid var(--border-subtle)', background: 'var(--surface-strong)', marginBottom: 18, gap: 4 },
+  cycleSwitch: { display: 'inline-flex', padding: 4, borderRadius: 999, borderWidth: '1px', borderStyle: 'solid', borderColor: 'var(--border-subtle)', background: 'var(--surface-strong)', marginBottom: 18, gap: 4 },
   cycleBtn: { border: 'none', background: 'transparent', color: 'var(--text-secondary)', padding: '8px 16px', borderRadius: 999, fontWeight: 600, fontSize: '0.84rem', cursor: 'pointer' },
   cycleBtnActive: { background: '#f38808', color: '#ffffff' },
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 },
-  plan: { position: 'relative', display: 'flex', flexDirection: 'column', gap: 8, padding: 18, borderRadius: 18, border: '1px solid var(--border-subtle)', background: 'var(--surface)' },
+  plan: { position: 'relative', display: 'flex', flexDirection: 'column', gap: 8, padding: 18, borderRadius: 18, borderWidth: '1px', borderStyle: 'solid', borderColor: 'var(--border-subtle)', background: 'var(--surface)' },
   planCurrent: { borderColor: '#f38808', boxShadow: '0 0 0 1px #f38808 inset' },
   currentBadge: { position: 'absolute', top: 12, right: 12, background: '#f38808', color: '#fff', borderRadius: 999, padding: '2px 10px', fontSize: '0.7rem', fontWeight: 700 },
   planName: { margin: 0, fontSize: '1.15rem', color: 'var(--text-primary)' },
@@ -170,7 +173,7 @@ const styles: Record<string, CSSProperties> = {
   from: { fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' },
   per: { fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-secondary)', marginLeft: 2 },
   features: { margin: '4px 0 10px', paddingLeft: 18, color: 'var(--text-secondary)', fontSize: '0.82rem', lineHeight: 1.5, flex: 1 },
-  choose: { border: '1px solid #d37105', background: 'linear-gradient(135deg, #f38808, #d37105)', color: '#fff', padding: '10px 14px', borderRadius: 12, fontWeight: 700, cursor: 'pointer' },
-  chooseDisabled: { opacity: 0.55, cursor: 'default', background: 'var(--surface-strong)', color: 'var(--text-secondary)', border: '1px solid var(--border-subtle)' },
-  contact: { textAlign: 'center', border: '1px solid rgba(243,136,8,0.55)', color: '#f38808', padding: '10px 14px', borderRadius: 12, fontWeight: 700, textDecoration: 'none' },
+  choose: { borderWidth: '1px', borderStyle: 'solid', borderColor: '#d37105', background: 'linear-gradient(135deg, #f38808, #d37105)', color: '#fff', padding: '10px 14px', borderRadius: 12, fontWeight: 700, cursor: 'pointer' },
+  chooseDisabled: { opacity: 0.55, cursor: 'default', background: 'var(--surface-strong)', color: 'var(--text-secondary)', borderWidth: '1px', borderStyle: 'solid', borderColor: 'var(--border-subtle)' },
+  contact: { textAlign: 'center', borderWidth: '1px', borderStyle: 'solid', borderColor: 'rgba(243,136,8,0.55)', color: '#f38808', padding: '10px 14px', borderRadius: 12, fontWeight: 700, textDecoration: 'none' },
 };

@@ -126,6 +126,20 @@ npm run build --workspace=apps/web
 ```
 
 
+## 5a. Settings (sidebar, bottom)
+
+* **My account** (everyone): your name and phone, change your password, theme, and sign out.
+* **Company** (admin): name, support email and phone (shown on sign-in and in the apps), address, time zone and tax registration number (printed on invoice exports).
+* **Dispatch**: the offer window, max active jobs per worker, the rating and proximity weights that rank workers (score = rating × rating weight − distance km × proximity weight), and the default search radius.
+* **Billing & tax**: invoice number prefix, default tax rate, default hourly labour rate (pre-filled in the technician's quote form), and payment terms (sets invoice due dates).
+* **Requests & plans**: require a subscription to raise requests; let customers cancel their own requests.
+* **Security**: minimum password length, failed sign-ins before lockout and how long the lock lasts.
+* **Team & access**: add Admin or Customer Care staff with a temporary password, change a role, deactivate or reactivate, reset a password, unlock a locked account. You cannot deactivate yourself or the last active admin.
+* **Audit log**: who changed what and when (settings, accounts, lockouts, exports). Passwords are never recorded.
+* **Data & system**: download customers, workers, jobs and invoices as CSV; see database status, uptime and record counts.
+
+Changes take effect immediately. Each save is recorded in the audit log.
+
 ## 6. Customers: subscription and requests
 
 * **Sign-up** (web or mobile): step one saves the account; step two offers the plans with **Skip for now**. Either way you land on the app home.

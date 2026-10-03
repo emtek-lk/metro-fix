@@ -92,6 +92,9 @@ metro-fix/
 | **CustomersModule** (`src/customers/`) | `GET /customers`, `GET /customers/:id`, `POST /customers`, `PATCH /customers/:id` (ADMIN) | `createCustomer()`, `updateCustomer()` |
 | **ServicesModule** (`src/services/`) | `GET /services`, `POST /services` | Service catalog CRUD |
 | **SubscriptionsModule** (`src/subscriptions/`) | `GET /subscriptions`, `POST /subscriptions`, `GET /subscriptions/me`, `POST /subscriptions/checkout` | Plan CRUD; `getMine()`, `checkout()` (buy / upgrade / downgrade through the `CARD_PAYMENT_GATEWAY`; demo gateway in `src/payments/demo-card-gateway.ts`) |
+| **SettingsModule** (`src/settings/`, global) | `GET /settings/public`, `GET /settings/app`, `GET/PATCH /settings` | `SettingsService.get()` (stored over `DEFAULT_APP_SETTINGS`, 5 s cache), `update()` (validated, audited) |
+| **AuditModule** (`src/audit/`, global) | `GET /audit-log` | `AuditService.record()` |
+| **AdminModule** (`src/admin/`) | `/admin/users`, `/admin/system`, `/admin/export/:entity` | staff accounts, lockout unlock, password reset, CSV exports |
 | **UploadsModule** (`src/uploads/`) | `POST /uploads` | `savePhoto()` validates by content and writes to `UPLOAD_DIR` |
 | **FinancialsModule** (`src/financials/`) | `GET /financials`, `GET /financials/summary`, `GET /financials/export` (ADMIN) | Invoices from finished jobs' job cards plus subscription payments; nothing is invented |
 

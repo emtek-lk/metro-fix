@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
+import { SettingsService } from '../settings/settings.service';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
-import { JobStatus, jobCardBillable, ticketRef } from '@metro-fix/core-types';
+import { JobStatus, jobCardBillable, ticketRef, DEFAULT_APP_SETTINGS } from '@metro-fix/core-types';
 import { ServiceRequestEntity, SubscriptionPaymentEntity } from '../entities';
 
 export interface FinancialRecordDto {
@@ -17,6 +18,8 @@ export interface FinancialRecordDto {
   /** Invoiced = approved and closed by dispatch; Awaiting approval = work done, not yet closed. */
   paymentStatus: 'Invoiced' | 'Awaiting approval';
   invoiceDate: string;
+  /** Invoice date plus the payment terms from Settings > Billing. */
+  dueDate: string;
 }
 
 export interface FinancialSummaryDto {
@@ -38,7 +41,12 @@ export class FinancialsService {
     private readonly jobRepo: Repository<ServiceRequestEntity>,
     @InjectRepository(SubscriptionPaymentEntity)
     private readonly paymentRepo: Repository<SubscriptionPaymentEntity>,
+    @Optional() private readonly settings?: SettingsService,
   ) {}
+
+  private async appSettings() {
+    return (await this.settings?.get()) ?? DEFAULT_APP_SETTINGS;
+  }
 
   /** What a finished job bills: the confirmed final job card, else the estimate, else the flat quote. */
   private billable(job: ServiceRequestEntity): { amount: number; hours: number } {
@@ -58,6 +66,7 @@ export class FinancialsService {
   /** One row per finished job that has a price. Nothing is invented: no jobs, no rows. */
   async getFinancialRecords(): Promise<FinancialRecordDto[]> {
     const jobs = await this.billedJobs();
+    const { billing } = await this.appSettings();
     return jobs
       .map((job) => ({ job, ...this.billable(job) }))
       .filter(({ amount }) => amount > 0)
@@ -65,7 +74,7 @@ export class FinancialsService {
         const ref = ticketRef(job.id);
         const billedAt = job.closedAt ?? job.updatedAt ?? job.createdAt;
         return {
-          id: `INV-${ref}`,
+          id: `${billing.invoicePrefix}${ref}`,
           jobId: ref,
           customerName: job.customer?.user?.fullName || 'Customer',
           servicePillar: job.servicePillar,
@@ -74,6 +83,7 @@ export class FinancialsService {
           hours,
           paymentStatus: job.status === JobStatus.CLOSED ? 'Invoiced' : 'Awaiting approval',
           invoiceDate: new Date(billedAt).toISOString().split('T')[0],
+          dueDate: new Date(new Date(billedAt).getTime() + billing.paymentTermsDays * 86400000).toISOString().split('T')[0],
         } as FinancialRecordDto;
       });
   }
@@ -138,11 +148,16 @@ export class FinancialsService {
 
   async generateCsvReport(): Promise<string> {
     const records = await this.getFinancialRecords();
-    const headers = ['Invoice ID', 'Ticket', 'Customer Name', 'Service Pillar', 'Amount (LKR)', 'Hours', 'Status', 'Date'];
+    const headers = ['Invoice ID', 'Ticket', 'Customer Name', 'Service Pillar', 'Amount (LKR)', 'Hours', 'Status', 'Date', 'Due'];
     const cell = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`;
     const rows = records.map((r) =>
-      [r.id, r.jobId, r.customerName, r.servicePillar, r.amountLkr.toFixed(2), r.hours, r.paymentStatus, r.invoiceDate].map(cell),
+      [r.id, r.jobId, r.customerName, r.servicePillar, r.amountLkr.toFixed(2), r.hours, r.paymentStatus, r.invoiceDate, r.dueDate].map(cell),
     );
-    return [headers.join(','), ...rows.map((row) => row.join(','))].join('\n');
+    const { company } = await this.appSettings();
+    // The seller's details lead the file, the way they would head an invoice.
+    const preamble = [company.name, company.address, company.taxRegistrationNo && `Tax registration: ${company.taxRegistrationNo}`]
+      .filter(Boolean)
+      .map((line) => cell(line as string));
+    return [...preamble, headers.join(','), ...rows.map((row) => row.join(','))].join('\n');
   }
 }

@@ -1,6 +1,7 @@
 import { MapPicker, type PickedLocation } from '../../components/MapPicker';
 import { RefreshButton } from '../../components/RefreshButton';
 import { SkeletonCards } from '@metro-fix/ui';
+import { useAppSettings } from '../../lib/settings';
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { FacilityType, ServicePillar } from '@metro-fix/core-types';
 import { API_BASE_URL } from '../../lib/api';
@@ -32,6 +33,7 @@ interface PortalServicesProps {
 }
 
 export function PortalServices({ onRequested, onNeedSubscription }: PortalServicesProps) {
+  const app = useAppSettings();
   const [subscribed, setSubscribed] = useState<boolean | null>(null);
   const [gateOpen, setGateOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
@@ -46,12 +48,12 @@ export function PortalServices({ onRequested, onNeedSubscription }: PortalServic
     const token = localStorage.getItem('metrofix_token');
     fetch(`${API_BASE_URL}/subscriptions/me`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
       .then((res) => (res.ok ? res.json() : null))
-      .then((data) => active && setSubscribed(data ? Boolean(data.tier) : null))
+      .then((data) => active && setSubscribed(data ? Boolean(data.tier) || !app.requirePlanToRequest : null))
       .catch(() => active && setSubscribed(null));
     return () => {
       active = false;
     };
-  }, [reloadKey]);
+  }, [reloadKey, app.requirePlanToRequest]);
 
   useEffect(() => {
     let active = true;

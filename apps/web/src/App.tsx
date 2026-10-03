@@ -11,6 +11,7 @@ import { ProfileModal } from './features/profile/ProfileModal';
 import { PortalServices } from './features/portal/PortalServices';
 import { PortalRequests } from './features/portal/PortalRequests';
 import { PortalSubscription } from './features/portal/PortalSubscription';
+import { SettingsPage } from './features/settings/SettingsPage';
 import { NotFound } from './features/errors/NotFound';
 import { Unauthorized } from './features/errors/Unauthorized';
 import { evaluateRouteGuard, getHomePathForRole, isKnownRoute } from './routing/routeGuard';
@@ -33,6 +34,7 @@ const pathToConfig: Record<string, { label: string; viewType?: AdminViewType }> 
   '/portal/services': { label: 'Browse Services' },
   '/portal/requests': { label: 'My Requests' },
   '/portal/subscription': { label: 'Subscription' },
+  '/settings': { label: 'Settings' },
 };
 
 const labelToPath: Record<string, string> = {
@@ -46,6 +48,7 @@ const labelToPath: Record<string, string> = {
   'Browse Services': '/portal/services',
   'My Requests': '/portal/requests',
   'Subscription': '/portal/subscription',
+  'Settings': '/settings',
 };
 
 // ─── Shared Styles ───────────────────────────────────────────────────
@@ -368,6 +371,17 @@ export default function App() {
         return <PortalServices onNeedSubscription={() => navigateTo('/portal/subscription')} onRequested={() => { setPortalRefresh((k) => k + 1); showToast('Request sent! Dispatch will assign a technician shortly.', 'success'); navigateTo('/portal/requests'); }} />;
       case '/portal/requests':
         return <PortalRequests refreshKey={portalRefresh} />;
+      case '/settings':
+        return (
+          <SettingsPage
+            user={user}
+            onProfileUpdated={(updated) => {
+              setUser(updated);
+              showToast('Your details were updated.', 'success');
+            }}
+            onLogout={handleLogout}
+          />
+        );
       case '/portal/subscription':
         return <PortalSubscription onChanged={() => showToast('Your subscription was updated.', 'success')} onDeclined={(message) => showToast(message, 'error')} />;
       case '/dispatch':

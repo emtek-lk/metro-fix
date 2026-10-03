@@ -150,7 +150,9 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: '12px',
     fontSize: '0.86rem',
     fontWeight: 700,
-    border: '1px solid var(--border-subtle)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-subtle)',
   },
   fieldGroup: {
     display: 'flex',
@@ -165,7 +167,9 @@ const styles: Record<string, CSSProperties> = {
   input: {
     width: '100%',
     boxSizing: 'border-box',
-    border: '1px solid var(--border-subtle)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-subtle)',
     background: 'var(--surface-elevated)',
     color: 'var(--text-primary)',
     borderRadius: '14px',

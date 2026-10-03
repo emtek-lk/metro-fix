@@ -83,3 +83,24 @@ describe('customer status alerts', () => {
     expect(statusChangeAlert(undefined, job('ASSIGNED'))).toBeNull();
   });
 });
+
+describe('settings-driven defaults', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { newLine, draftFromSection } = require('../src/lib/jobCard');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { offerWindowSeconds } = require('../src/lib/countdown');
+
+  it('pre-fills labour lines with the company hourly rate, but not materials', () => {
+    expect(newLine('LABOUR', 2500).unitPrice).toBe('2500');
+    expect(newLine('MATERIAL', 2500).unitPrice).toBe('');
+    expect(newLine('LABOUR').unitPrice).toBe('');
+    expect(draftFromSection(null, 3000).lines[0].unitPrice).toBe('3000');
+  });
+
+  it('measures the offer progress against the window the offer was really given', () => {
+    const job = { offeredAt: '2026-10-04T08:00:00Z', offerExpiresAt: '2026-10-04T10:00:00Z' };
+    expect(offerWindowSeconds(job, 90)).toBe(7200);
+    expect(offerWindowSeconds({}, 90)).toBe(90);
+    expect(offerWindowSeconds(null, 90)).toBe(90);
+  });
+});

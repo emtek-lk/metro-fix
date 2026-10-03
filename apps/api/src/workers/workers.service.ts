@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException, Optional } from '@nestjs/common';
+import { SettingsService } from '../settings/settings.service';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { WorkerEntity, ServiceRequestEntity, UserEntity } from '../entities';
@@ -8,6 +9,7 @@ import {
   JobStatus,
   isFinishedStatus,
   UpdateWorkerLocationDto,
+  DEFAULT_APP_SETTINGS,
 } from '@metro-fix/core-types';
 
 import { CreateWorkerDto } from './dto/create-worker.dto';
@@ -62,6 +64,7 @@ export class WorkersService {
     private readonly jobRepo: Repository<ServiceRequestEntity>,
     @InjectRepository(UserEntity)
     private readonly userRepo: Repository<UserEntity>,
+    @Optional() private readonly settings?: SettingsService,
   ) {}
 
   /** All workers, each with `liveActiveJobs`: accepted unfinished jobs plus open offers, counted now. */
@@ -148,20 +151,26 @@ export class WorkersService {
     return R * c;
   }
 
-  private maxActiveJobs(): number {
+  /** Settings > Dispatch, unless MAX_ACTIVE_JOBS is set in the environment. */
+  private async maxActiveJobs(): Promise<number> {
     const configured = Number(process.env.MAX_ACTIVE_JOBS);
-    return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_MAX_ACTIVE_JOBS;
+    if (Number.isFinite(configured) && configured > 0) return configured;
+    return (await this.appSettings()).dispatch.maxActiveJobs || DEFAULT_MAX_ACTIVE_JOBS;
+  }
+
+  private async appSettings() {
+    return (await this.settings?.get()) ?? DEFAULT_APP_SETTINGS;
   }
 
   /**
-   * Dispatch search: workers ranked by `rating * 20 - distance(km)` (nearer and better rated first).
+   * Dispatch search: workers ranked by `rating * ratingWeight - distanceKm * proximityWeight` (Settings > Dispatch; nearer and better rated first).
    * Each result says whether the worker can take the job now. By default only available workers are
    * returned; `includeUnavailable` also returns off-duty, full and previously declined workers,
    * flagged with the reason, so dispatch can still override.
    */
   async getAvailableWorkersForJob(
     jobId: string,
-    radiusMeters: number = 50000,
+    radiusMeters?: number,
     includeUnavailable: boolean = false,
   ): Promise<DispatchSearchResult[]> {
     const job = await this.jobRepo.findOne({ where: { id: jobId } });
@@ -188,7 +197,9 @@ export class WorkersService {
 
     const jobLat = job.latitude ?? 37.7749;
     const jobLon = job.longitude ?? -122.4194;
-    const cap = this.maxActiveJobs();
+    const dispatch = (await this.appSettings()).dispatch;
+    const cap = await this.maxActiveJobs();
+    const radius = radiusMeters ?? dispatch.defaultRadiusKm * 1000;
 
     const results: DispatchSearchResult[] = allWorkers.map((worker) => {
       const wLat = worker.latitude ?? jobLat;
@@ -207,7 +218,7 @@ export class WorkersService {
         worker,
         distanceMeters: Math.round(distanceKm * 1000),
         distanceKm: parseFloat(distanceKm.toFixed(2)),
-        dispatchScore: parseFloat((worker.rating * 20 - distanceKm).toFixed(2)),
+        dispatchScore: parseFloat((worker.rating * dispatch.ratingWeight - distanceKm * dispatch.proximityWeight).toFixed(2)),
         activeJobs,
         available: unavailableReason === null,
         unavailableReason,
@@ -216,7 +227,7 @@ export class WorkersService {
 
     return results
       .filter((res) => includeUnavailable || res.available)
-      .filter((res) => radiusMeters <= 0 || res.distanceMeters <= radiusMeters)
+      .filter((res) => radius <= 0 || res.distanceMeters <= radius)
       .sort((a, b) => Number(b.available) - Number(a.available) || b.dispatchScore - a.dispatchScore);
   }
 

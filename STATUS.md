@@ -10,10 +10,10 @@
 | Area | Status | Notes |
 |---|---|---|
 | Shared types (`packages/core-types`) | Done | New 7+1 lifecycle, 4 tiers, `ServiceGroup`. |
-| API (`apps/api`) | Working | Role-gated; offers, job cards, subscriptions with demo card payments, live financials, photo uploads. 118 jest tests pass. |
+| API (`apps/api`) | Working | Role-gated; offers, job cards, subscriptions with demo card payments, live financials, photo uploads. 157 jest tests pass. |
 | Web dispatch dashboard (`apps/web`) | Working | Kanban uses new states; Approve & Close; live updates via socket.io; plans and catalog pages updated. |
 | Web customer portal (`/portal/*`) | Working (MVP) | Browse by pillar/group, request, track live. Verified in headless browser. |
-| Mobile apps (`apps/mobile`) | Working | Worker and customer apps run on iOS and Android; 151 jest tests pass. Checked in browser and simulators; photo upload and card checkout still want a real-device pass. |
+| Mobile apps (`apps/mobile`) | Working | Worker and customer apps run on iOS and Android; 158 jest tests pass. Checked in browser and simulators; photo upload and card checkout still want a real-device pass. |
 | Docs | Updated 2026-10-03 | This file and `PRODUCT.md` added. |
 
 ## 2. Done (spec alignment, 2026-10-03)
@@ -79,6 +79,8 @@
 API `cd apps/api && npm run start:dev` (:3000, needs SQL Server and `apps/api/.env`) · Web `cd apps/web && npm run dev` (:5173) · Mobile `cd apps/mobile && EXPO_NO_DEVTOOLS=1 EXPO_PUBLIC_API_URL=http://localhost:3000 npx expo start --web` (:8081). Full guide: `SETUP.md`.
 
 ## 9. Changelog (newest first)
+
+- **2026-10-04**: Fixed selected options keeping a stuck border colour after you click another (inline `border` shorthand mixed with `borderColor`; see CONVENTIONS). Settings. The sidebar Settings button now opens a Settings page. Everyone gets *My account* (details, change password, theme, sign out). Admins also get Company, Dispatch (offer window, max active jobs, ranking weights, default radius), Billing & tax (invoice prefix, default tax, labour rate, payment terms), Requests & plans (require plan, allow cancellation), Security (password length, lockout), Team & access (add staff, roles, deactivate, reset password, unlock), Audit log and Data & system (CSV exports, health). Stored in `app_settings`, applied live by the API, audited. Sign-in now locks after repeated failures and refuses deactivated accounts; login no longer enforces a password length. Settings not built because they need an outside service: email / SMS / push delivery, a payment-gateway switch, SSO / 2FA.
 
 - **2026-10-04**: Admin can edit customers (name, company, email, phone, address, facility, plan without payment, or clear it back to a lead) and workers (details, internal rating, services, on duty) from the web Customers / Workers tables: `PATCH /customers/:id`, `PATCH /workers/:id` (ADMIN). Leaflet now ships inside the web and mobile apps (nothing is downloaded from unpkg). Admin-created customers default to Colombo coordinates instead of San Francisco.
 

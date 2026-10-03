@@ -3,6 +3,7 @@ import { AccessibilityInfo, Modal, View, StyleSheet } from 'react-native';
 import { Text } from './ui/AppText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ServiceRequest, OFFER_TIMEOUT_SECONDS } from '@metro-fix/core-types';
+import { offerWindowSeconds } from '../lib/countdown';
 import { haptics } from '../lib/haptics';
 import { getErrorMessage } from '../lib/errors';
 import { customerNameOf, coordinatesOf } from '../lib/jobs';
@@ -142,7 +143,7 @@ export const NewJobAlertModal: React.FC<NewJobAlertModalProps> = ({
                 style={[
                   styles.progressFill,
                   urgent && styles.progressFillUrgent,
-                  { width: `${fractionLeft(secondsLeft, OFFER_TIMEOUT_SECONDS) * 100}%` },
+                  { width: `${fractionLeft(secondsLeft, offerWindowSeconds(job, OFFER_TIMEOUT_SECONDS)) * 100}%` },
                 ]}
               />
             </View>

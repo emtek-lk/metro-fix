@@ -13,6 +13,13 @@ jest.mock('../src/hooks/useJobs', () => ({
   useCancelJob: () => ({ mutateAsync: mockCancel, isPending: false }),
 }));
 
+// The settings hook reads the API through react-query; here it is just the built-in defaults, with a
+// switch to try the "customers may not cancel" rule.
+let mockAllowCancel = true;
+jest.mock('../src/hooks/useAppSettings', () => ({
+  useAppSettings: () => ({ allowCustomerCancellation: mockAllowCancel, supportEmail: 'support@metro-fix.com' }),
+}));
+
 const job = (extra: Record<string, unknown> = {}): ServiceRequest =>
   ({
     id: 'job-1',
@@ -138,6 +145,16 @@ describe('customer tracking', () => {
       await confirm.onPress();
     });
     expect(texts(renderer)).toContain('A job in IN_PROGRESS can no longer be cancelled.');
+  });
+
+  it('hides cancel when dispatch has switched customer cancellation off', async () => {
+    mockAllowCancel = false;
+    try {
+      const renderer = await show(job({ status: JobStatus.REQUESTED }));
+      expect(buttonLabels(renderer)).not.toContain('Cancel request');
+    } finally {
+      mockAllowCancel = true;
+    }
   });
 
   it('offers no cancel once work has started', async () => {

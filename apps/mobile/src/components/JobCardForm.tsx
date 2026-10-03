@@ -24,10 +24,12 @@ interface JobCardFormProps {
   onChange: (draft: JobCardDraft) => void;
   taxRate?: number;
   currency?: string;
+  /** The standard hourly rate pre-filled on new labour lines. */
+  labourRate?: number;
 }
 
 /** Itemised job card: priced lines, time on site, notes and a live total. Used for the quote and the final. */
-export const JobCardForm: React.FC<JobCardFormProps> = ({ draft, onChange, taxRate = 0, currency = 'LKR' }) => {
+export const JobCardForm: React.FC<JobCardFormProps> = ({ draft, onChange, taxRate = 0, currency = 'LKR', labourRate = 0 }) => {
   const totals = draftTotals(draft, taxRate);
   const setLine = (id: string, patch: Partial<LineDraft>) =>
     onChange({ ...draft, lines: draft.lines.map((line) => (line.id === id ? { ...line, ...patch } : line)) });
@@ -96,7 +98,7 @@ export const JobCardForm: React.FC<JobCardFormProps> = ({ draft, onChange, taxRa
         {KINDS.map(({ kind, label }) => (
           <Pressable
             key={kind}
-            onPress={() => onChange({ ...draft, lines: [...draft.lines, newLine(kind)] })}
+            onPress={() => onChange({ ...draft, lines: [...draft.lines, newLine(kind, labourRate)] })}
             accessibilityRole="button"
             accessibilityLabel={`Add ${label} line`}
             style={s.add}

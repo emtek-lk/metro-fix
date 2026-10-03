@@ -92,6 +92,7 @@ export type FinancialRecord = {
   /** Invoiced = approved and closed by dispatch; Awaiting approval = work done, not yet closed. */
   paymentStatus: 'Invoiced' | 'Awaiting approval';
   invoiceDate: string;
+  dueDate?: string;
 };
 
 export type FinancialSummary = {
@@ -230,6 +231,7 @@ const financialColumns: ColumnDef<FinancialRecord>[] = [
     cell: ({ row }) => <span style={{ fontWeight: 700 }}>{row.original.amount}</span>,
   },
   { accessorKey: 'invoiceDate', header: 'Date' },
+  { accessorKey: 'dueDate', header: 'Due', cell: ({ getValue }) => getValue<string>() || '—' },
   {
     accessorKey: 'paymentStatus',
     header: 'Status',
@@ -723,6 +725,7 @@ export function AdminWorkspace({
             hours: Number(item.hours ?? 0),
             paymentStatus: item.paymentStatus,
             invoiceDate: item.invoiceDate,
+            dueDate: item.dueDate,
           }));
           setFinancials(mappedFin);
         } else {

@@ -6,6 +6,7 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { Public } from './public.decorator';
 import { registerSchema, RegisterDto } from './dto/register.dto';
+import { changePasswordSchema, ChangePasswordDto } from './dto/change-password.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -24,6 +25,14 @@ export class AuthController {
   @UsePipes(new ZodValidationPipe(registerSchema))
   async register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
+  }
+
+  /** Change your own password (needs the current one). */
+  @Post('change-password')
+  @UsePipes(new ZodValidationPipe(changePasswordSchema))
+  async changePassword(@Req() req: any, @Body() dto: ChangePasswordDto) {
+    await this.authService.changePassword(req.user.id, dto.currentPassword, dto.newPassword);
+    return { ok: true };
   }
 
   @Get('me')

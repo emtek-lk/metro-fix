@@ -16,7 +16,7 @@ export const registerSchema = z.object({
   address: z.string().trim().max(300).optional().or(z.literal('')),
   password: z
     .string()
-    .min(8, 'Use at least 8 characters.')
+    .min(6, 'Use at least 6 characters.')
     .max(128)
     .refine((value) => /[A-Za-z]/.test(value) && /\d/.test(value), 'Include both letters and numbers.'),
 });

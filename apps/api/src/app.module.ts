@@ -14,6 +14,8 @@ import {
   ServiceCatalogEntity,
   SubscriptionPlanEntity,
   SubscriptionPaymentEntity,
+  AppSettingEntity,
+  AuditLogEntity,
 } from './entities';
 import { WorkersModule } from './workers/workers.module';
 import { JobsModule } from './jobs/jobs.module';
@@ -25,6 +27,9 @@ import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/roles.guard';
 import { UploadsModule } from './uploads/uploads.module';
+import { SettingsModule } from './settings/settings.module';
+import { AuditModule } from './audit/audit.module';
+import { AdminModule } from './admin/admin.module';
 import { SeedService } from './common/seed.service';
 
 @Module({
@@ -48,6 +53,8 @@ import { SeedService } from './common/seed.service';
         ServiceCatalogEntity,
         SubscriptionPlanEntity,
         SubscriptionPaymentEntity,
+        AppSettingEntity,
+        AuditLogEntity,
       ],
       synchronize: process.env.DB_SYNCHRONIZE === 'true' || process.env.NODE_ENV !== 'production',
     }),
@@ -59,7 +66,12 @@ import { SeedService } from './common/seed.service';
       ServiceCatalogEntity,
       SubscriptionPlanEntity,
       SubscriptionPaymentEntity,
+      AppSettingEntity,
+      AuditLogEntity,
     ]),
+    SettingsModule,
+    AuditModule,
+    AdminModule,
     AuthModule,
     UploadsModule,
     WorkersModule,
