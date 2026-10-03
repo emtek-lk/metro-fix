@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, StyleProp, ViewStyle } from 'react-native';
+import { View, StyleSheet, StyleProp, ViewStyle } from 'react-native';
+import { Text } from './AppText';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { spacing } from '../../theme/layout';
@@ -29,7 +30,7 @@ export const ScreenHeader: React.FC<ScreenHeaderProps> = ({
   <View style={[styles.container, style]}>
     <View style={styles.textCol}>
       {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
-      <Text style={styles.title} numberOfLines={2}>
+      <Text style={styles.title} numberOfLines={2} accessibilityRole="header">
         {title}
       </Text>
       {subtitle ? (

@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, Text, View, StyleSheet } from 'react-native';
+import { Pressable, View, StyleSheet } from 'react-native';
+import { Text } from './AppText';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { spacing, radius, layout } from '../../theme/layout';
@@ -45,7 +46,13 @@ export function SegmentedControl<T extends string>({
             accessibilityState={{ selected, checked: selected }}
             accessibilityLabel={option.label}
           >
-            <Text style={[styles.label, selected && styles.labelSelected]}>{option.label}</Text>
+            <Text
+              style={[styles.label, selected && styles.labelSelected]}
+              numberOfLines={1}
+              maxFontSizeMultiplier={1.3}
+            >
+              {option.label}
+            </Text>
           </Pressable>
         );
       })}

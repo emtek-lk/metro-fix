@@ -1,27 +1,27 @@
-import React, { useState } from 'react';
-import {
-  StyleSheet,
-  View,
-  Text,
-  Pressable,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-} from 'react-native';
+import React, { useRef, useState } from 'react';
+import { StyleSheet, View, Image, Pressable, KeyboardAvoidingView, Platform, ScrollView, TextInput } from 'react-native';
+import { Text } from './ui/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { User } from '@metro-fix/core-types';
 import { useAuth } from '../context/AuthContext';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Icon } from './ui/Icon';
+import { IconButton } from './ui/IconButton';
+import { GlassSurface } from './ui/GlassSurface';
 import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { spacing, radius, layout } from '../theme/layout';
 import { elevation } from '../theme/elevation';
 import { themedStyles } from '../theme/themedStyles';
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const LOGO = require('../../assets/logo-tile.png');
+
 export interface MobileLoginScreenProps {
   onLoginSuccess?: (user: User, token: string) => void;
+  /** Opens customer self-registration. The link is hidden when this is not provided. */
+  onRegister?: () => void;
 }
 
 /**
@@ -39,12 +39,15 @@ const DEV_ACCOUNTS: { label: string; email: string; password: string }[] = __DEV
     ]
   : [];
 
-export function MobileLoginScreen({ onLoginSuccess }: MobileLoginScreenProps) {
+export function MobileLoginScreen({ onLoginSuccess, onRegister }: MobileLoginScreenProps) {
   const { login } = useAuth();
-  const [email, setEmail] = useState('worker1@demo.local');
-  const [password, setPassword] = useState('Demo123!');
+  // Fields start empty in every build; dev builds get the quick sign-in chips below instead.
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const passwordRef = useRef<TextInput>(null);
 
   const handleLogin = async (overrideEmail?: string, overridePassword?: string) => {
     const targetEmail = overrideEmail || email;
@@ -79,90 +82,136 @@ export function MobileLoginScreen({ onLoginSuccess }: MobileLoginScreenProps) {
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           showsVerticalScrollIndicator={false}
         >
           {/* Brand Header */}
           <View style={styles.header}>
-            <View style={styles.logoBadge}>
-              <Text style={styles.logoBadgeText}>MF</Text>
+            <View style={styles.logoWrap}>
+              <Image source={LOGO} style={styles.logo} accessibilityLabel="METRO-FIX logo" />
             </View>
-            <Text style={styles.brandTitle}>METRO-FIX</Text>
-            <Text style={styles.brandSubtitle}>Field Technician & Service Portal</Text>
+            <Text style={styles.brandTitle} accessibilityRole="header">
+              METRO-FIX
+            </Text>
+            <Text style={styles.brandSubtitle}>Managed facility maintenance, on demand</Text>
           </View>
 
-          {/* Login Form Container */}
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Sign in to your workspace</Text>
-            <Text style={styles.cardDesc}>Enter your dispatch credentials to manage jobs</Text>
+          {/* Login form */}
+          <GlassSurface borderRadius={radius.xxl} style={styles.glassCard}>
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Welcome back</Text>
+              <Text style={styles.cardDesc}>Sign in to continue</Text>
 
-            {error ? (
-              <View style={styles.errorBox}>
-                <Icon name="alert-circle" size={16} color={colors.dangerText} />
-                <Text style={styles.errorText}>{error}</Text>
-              </View>
-            ) : null}
-
-            <View style={styles.fields}>
-              <Input
-                label="Email Address"
-                icon="mail"
-                placeholder="you@metro-fix.com"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                textContentType="emailAddress"
-                value={email}
-                onChangeText={setEmail}
-              />
-
-              <Input
-                label="Password"
-                icon="lock"
-                placeholder="Enter your password"
-                secureTextEntry
-                textContentType="password"
-                value={password}
-                onChangeText={setPassword}
-              />
-            </View>
-
-            {/* Submit Button */}
-            <Button
-              title="Sign In"
-              onPress={() => handleLogin()}
-              isLoading={isLoading}
-              variant="primary"
-              size="large"
-              style={styles.submitButton}
-            />
-
-            {/* Quick Preset Buttons for Testing — development builds only */}
-            {__DEV__ && (
-              <View style={styles.presetContainer}>
-                <Text style={styles.presetHeading}>Quick dev sign-in</Text>
-                <View style={styles.presetRow}>
-                  {DEV_ACCOUNTS.map((account) => (
-                    <Pressable
-                      key={account.email}
-                      style={({ pressed }) => [
-                        styles.presetChip,
-                        pressed && styles.presetChipPressed,
-                      ]}
-                      onPress={() => {
-                        setEmail(account.email);
-                        setPassword(account.password);
-                        handleLogin(account.email, account.password);
-                      }}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Sign in as ${account.label}`}
-                    >
-                      <Text style={styles.presetChipText}>{account.label}</Text>
-                    </Pressable>
-                  ))}
+              {error ? (
+                <View
+                  style={styles.errorBox}
+                  accessibilityLiveRegion="polite"
+                  accessibilityRole="alert"
+                >
+                  <Icon name="alert-circle" size={16} color={colors.dangerText} />
+                  <Text style={styles.errorText}>{error}</Text>
                 </View>
+              ) : null}
+
+              <View style={styles.fields}>
+                <Input
+                  label="Email Address"
+                  icon="mail"
+                  placeholder="you@metro-fix.com"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  textContentType="emailAddress"
+                  autoComplete="email"
+                  returnKeyType="next"
+                  blurOnSubmit={false}
+                  onSubmitEditing={() => passwordRef.current?.focus()}
+                  value={email}
+                  onChangeText={setEmail}
+                />
+
+                <Input
+                  label="Password"
+                  icon="lock"
+                  placeholder="Enter your password"
+                  secureTextEntry={!showPassword}
+                  textContentType="password"
+                  autoComplete="current-password"
+                  autoCapitalize="none"
+                  returnKeyType="go"
+                  onSubmitEditing={() => handleLogin()}
+                  inputRef={passwordRef}
+                  value={password}
+                  onChangeText={setPassword}
+                  trailing={
+                    <IconButton
+                      onPress={() => setShowPassword((shown) => !shown)}
+                      accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                      icon={
+                        <Icon
+                          name={showPassword ? 'eye-off' : 'eye'}
+                          size={18}
+                          color={colors.textSecondary}
+                        />
+                      }
+                      backgroundColor="transparent"
+                      size={44}
+                    />
+                  }
+                />
               </View>
-            )}
-          </View>
+
+              {/* Submit Button */}
+              <Button
+                title="Sign In"
+                onPress={() => handleLogin()}
+                isLoading={isLoading}
+                variant="primary"
+                size="large"
+                style={styles.submitButton}
+              />
+
+              {onRegister ? (
+                <Pressable
+                  onPress={onRegister}
+                  style={styles.registerLink}
+                  accessibilityRole="button"
+                  accessibilityLabel="Create a customer account"
+                >
+                  <Text style={styles.registerText}>
+                    New customer? <Text style={styles.registerAction}>Create an account</Text>
+                  </Text>
+                </Pressable>
+              ) : null}
+
+              {/* Quick Preset Buttons for Testing — development builds only */}
+              {__DEV__ && (
+                <View style={styles.presetContainer}>
+                  <Text style={styles.presetHeading}>Quick dev sign-in</Text>
+                  <View style={styles.presetRow}>
+                    {DEV_ACCOUNTS.map((account) => (
+                      <Pressable
+                        key={account.email}
+                        style={({ pressed }) => [
+                          styles.presetChip,
+                          pressed && styles.presetChipPressed,
+                        ]}
+                        onPress={() => {
+                          setEmail(account.email);
+                          setPassword(account.password);
+                          handleLogin(account.email, account.password);
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Sign in as ${account.label}`}
+                      >
+                        <Text style={styles.presetChipText}>{account.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </View>
+          </GlassSurface>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -189,20 +238,17 @@ const styles = themedStyles(() => StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.xxxl,
   },
-  logoBadge: {
-    width: 64,
-    height: 64,
-    borderRadius: radius.xl,
-    backgroundColor: colors.brand,
-    alignItems: 'center',
-    justifyContent: 'center',
+  // The shadow sits on a rounded wrapper so it follows the tile's corners, not the image's square box.
+  logoWrap: {
+    width: 104,
+    height: 104,
+    borderRadius: 24,
     marginBottom: spacing.lg,
-    ...elevation.e2,
+    ...elevation.e3,
   },
-  logoBadgeText: {
-    ...typography.h1,
-    color: colors.white,
-    letterSpacing: 1,
+  logo: {
+    width: '100%',
+    height: '100%',
   },
   brandTitle: {
     ...typography.display,
@@ -217,13 +263,11 @@ const styles = themedStyles(() => StyleSheet.create({
   },
 
   // ── Form card ──
+  glassCard: {
+    width: '100%',
+  },
   card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.xxl,
-    borderWidth: 1,
-    borderColor: colors.border,
     padding: spacing.xxl,
-    ...elevation.e2,
   },
   cardTitle: {
     ...typography.h2,
@@ -240,6 +284,20 @@ const styles = themedStyles(() => StyleSheet.create({
   },
   submitButton: {
     marginTop: spacing.xxl,
+  },
+  registerLink: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: layout.minTap,
+    marginTop: spacing.md,
+  },
+  registerText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+  },
+  registerAction: {
+    fontWeight: '700',
+    color: colors.brand,
   },
 
   // ── Error ──
@@ -262,7 +320,7 @@ const styles = themedStyles(() => StyleSheet.create({
 
   // ── Dev presets ──
   presetContainer: {
-    marginTop: spacing.xxl,
+    marginTop: spacing.xl,
     paddingTop: spacing.lg,
     borderTopWidth: 1,
     borderTopColor: colors.border,

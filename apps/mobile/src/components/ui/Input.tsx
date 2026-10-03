@@ -1,13 +1,6 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  StyleSheet,
-  StyleProp,
-  ViewStyle,
-  type TextInputProps,
-} from 'react-native';
+import { View, TextInput, StyleSheet, StyleProp, ViewStyle, type TextInputProps } from 'react-native';
+import { Text } from './AppText';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { spacing, radius, layout } from '../../theme/layout';
@@ -22,6 +15,10 @@ export interface InputProps extends Omit<TextInputProps, 'style'> {
   icon?: FeatherIconName;
   multiline?: boolean;
   containerStyle?: StyleProp<ViewStyle>;
+  /** Optional control shown at the end of the field, e.g. a show / hide password toggle. */
+  trailing?: React.ReactNode;
+  /** Ref to the underlying TextInput, e.g. to move focus to the next field. */
+  inputRef?: React.Ref<TextInput>;
 }
 
 /**
@@ -36,6 +33,8 @@ export const Input: React.FC<InputProps> = ({
   icon,
   multiline,
   containerStyle,
+  trailing,
+  inputRef,
   ...inputProps
 }) => {
   const [focused, setFocused] = useState(false);
@@ -67,6 +66,7 @@ export const Input: React.FC<InputProps> = ({
 
         <TextInput
           {...inputProps}
+          ref={inputRef}
           multiline={multiline}
           placeholderTextColor={colors.textMuted}
           style={[styles.input, multiline && styles.inputMultiline]}
@@ -79,10 +79,11 @@ export const Input: React.FC<InputProps> = ({
             inputProps.onBlur?.(e);
           }}
         />
+        {trailing ? <View style={styles.trailing}>{trailing}</View> : null}
       </View>
 
       {error ? (
-        <View style={styles.messageRow}>
+        <View style={styles.messageRow} accessibilityLiveRegion="polite" accessibilityRole="alert">
           <Icon name="alert-circle" size={12} color={colors.dangerText} />
           <Text style={styles.errorText}>{error}</Text>
         </View>
@@ -128,6 +129,9 @@ const styles = themedStyles(() => StyleSheet.create({
   inputMultiline: {
     textAlignVertical: 'top',
     paddingVertical: 0,
+  },
+  trailing: {
+    marginRight: -spacing.sm,
   },
   messageRow: {
     flexDirection: 'row',

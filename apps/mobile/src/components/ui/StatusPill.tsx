@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, StyleProp, ViewStyle } from 'react-native';
+import { View, StyleSheet, StyleProp, ViewStyle } from 'react-native';
+import { Text } from './AppText';
 import { JobStatus } from '@metro-fix/core-types';
 import { getStatusPresentation } from '../../theme/status';
 import { typography } from '../../theme/typography';

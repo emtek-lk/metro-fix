@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, StyleSheet, ViewStyle, StyleProp, Text } from 'react-native';
+import { Pressable, StyleSheet, ViewStyle, StyleProp } from 'react-native';
+import { Text } from './AppText';
 import { colors } from '../../theme/colors';
 import { layout } from '../../theme/layout';
 import { elevation } from '../../theme/elevation';
@@ -14,7 +15,8 @@ export interface IconButtonProps {
   color?: string;
   style?: StyleProp<ViewStyle>;
   disabled?: boolean;
-  accessibilityLabel?: string;
+  /** Required: an icon-only control has no visible text for screen readers to announce. */
+  accessibilityLabel: string;
 }
 
 export const IconButton: React.FC<IconButtonProps> = ({

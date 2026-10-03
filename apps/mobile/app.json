@@ -1,6 +1,6 @@
 {
   "name": "mobile",
-  "displayName": "mobile",
+  "displayName": "METRO-FIX",
   "plugins": [
     "expo-secure-store"
   ]

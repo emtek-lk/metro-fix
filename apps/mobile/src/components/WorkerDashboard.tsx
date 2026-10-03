@@ -1,12 +1,6 @@
-import React from 'react';
-import {
-  Animated,
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  RefreshControl,
-} from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { Animated, View, StyleSheet, Pressable, RefreshControl } from 'react-native';
+import { Text } from './ui/AppText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ServiceRequest } from '@metro-fix/core-types';
 
@@ -17,6 +11,7 @@ import { Icon } from './ui/Icon';
 import { ScreenHeader } from './ui/ScreenHeader';
 import { GlassHeader, useCollapsingHeader } from './ui/GlassHeader';
 import { StageStepper } from './ui/StageStepper';
+import { SegmentedControl } from './ui/SegmentedControl';
 import { StatusPill } from './ui/StatusPill';
 import { MetaChip } from './ui/MetaChip';
 import { EmptyState } from './ui/EmptyState';
@@ -27,7 +22,10 @@ import { typography } from '../theme/typography';
 import { spacing, radius, layout, tabBarClearance } from '../theme/layout';
 import { PILLAR_ICON, FACILITY_ICON, getStatusColor } from '../theme/status';
 import { useWorkerJobs } from '../hooks/useJobs';
+import { countJobs, filterJobs, sortJobs, type JobFilter } from '../lib/jobFilters';
+import { relativeTime } from '../lib/time';
 import { themedStyles } from '../theme/themedStyles';
+import { shortRef } from '../lib/ticket';
 
 export interface WorkerDashboardProps {
   workerId: string;
@@ -47,6 +45,9 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({
   // 1. Fetch real jobs data using useWorkerJobs React Query hook
   const { data: jobs = [], isLoading, isError, error, isRefetching, refetch } = useWorkerJobs();
   const { scrollY, onScroll } = useCollapsingHeader();
+  const [filter, setFilter] = useState<JobFilter>('all');
+  const counts = useMemo(() => countJobs(jobs), [jobs]);
+  const visibleJobs = useMemo(() => sortJobs(filterJobs(jobs, filter)), [jobs, filter]);
 
   // 2. Render each assigned job inside our Soft UI Card primitive
   const renderJobItem = ({ item }: { item: ServiceRequest }) => {
@@ -65,7 +66,12 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({
         >
           {/* Card Header: Job ID & Status Badge */}
           <View style={styles.cardHeader}>
-            <Text style={styles.ticketId}>TICKET #{item.id.slice(-6).toUpperCase()}</Text>
+            <Text style={[styles.ticketId, styles.ticketShrink]} numberOfLines={1}>
+              TICKET #{shortRef(item.id)}
+              {item.updatedAt || item.createdAt ? (
+                <Text style={styles.ticketAge}>{`  ·  ${relativeTime(item.updatedAt ?? item.createdAt)}`}</Text>
+              ) : null}
+            </Text>
             <StatusPill status={item.status} size="small" />
           </View>
 
@@ -101,7 +107,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({
               <View style={styles.footerLine}>
                 <Icon name="user" size={13} color={colors.textSecondary} />
                 <Text style={styles.customerName} numberOfLines={1}>
-                  {(item as any).customerName || `Customer #${item.customerId?.slice(-4) || 'Ref'}`}
+                  {(item as any).customerName || `Customer #${shortRef(item.customerId, 4) || 'Ref'}`}
                 </Text>
               </View>
               <View style={styles.footerLine}>
@@ -143,6 +149,24 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({
     />
   );
 
+  const listHeader = (
+    <View>
+      {largeTitle}
+      <View style={styles.filterWrap}>
+        <SegmentedControl
+          options={[
+            { id: 'all' as JobFilter, label: `All ${counts.all}` },
+            { id: 'active' as JobFilter, label: `Active ${counts.active}` },
+            { id: 'done' as JobFilter, label: `Done ${counts.done}` },
+          ]}
+          value={filter}
+          onChange={setFilter}
+          accessibilityLabel="Filter jobs"
+        />
+      </View>
+    </View>
+  );
+
   return (
     <View style={styles.container}>
       {/* Static title while there is no list to scroll (loading / error) */}
@@ -168,10 +192,10 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({
       ) : (
         /* 5. FlatList Rendering & Pull-To-Refresh */
         <Animated.FlatList
-          data={jobs}
+          data={visibleJobs}
           onScroll={onScroll}
           scrollEventThrottle={16}
-          ListHeaderComponent={largeTitle}
+          ListHeaderComponent={listHeader}
           keyExtractor={(item) => item.id}
           renderItem={renderJobItem}
           contentContainerStyle={[
@@ -190,8 +214,14 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({
           ListEmptyComponent={
             <EmptyState
               icon="inbox"
-              title="No jobs assigned"
-              description="Your workload queue is clear. Stand by for Customer Care dispatch notifications."
+              title={filter === 'done' ? 'Nothing completed yet' : 'No jobs assigned'}
+              description={
+                filter === 'done'
+                  ? 'Finished tickets will show up here.'
+                  : filter === 'active'
+                    ? 'No open work right now. Stand by for Customer Care dispatch notifications.'
+                    : 'Your workload queue is clear. Stand by for Customer Care dispatch notifications.'
+              }
             />
           }
         />
@@ -217,6 +247,16 @@ const styles = themedStyles(() => StyleSheet.create({
   largeTitle: {
     paddingTop: spacing.xs,
     paddingBottom: spacing.xs,
+  },
+  filterWrap: {
+    marginTop: spacing.sm,
+  },
+  ticketAge: {
+    ...typography.caption,
+    fontWeight: '500',
+    letterSpacing: 0,
+    textTransform: 'none',
+    color: colors.textMuted,
   },
   statusStripe: {
     borderLeftWidth: 4,
@@ -248,6 +288,10 @@ const styles = themedStyles(() => StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
     marginBottom: spacing.md,
+  },
+  // Lets the ticket line truncate instead of pushing the status pill off the card at large text sizes.
+  ticketShrink: {
+    flexShrink: 1,
   },
   ticketId: {
     ...typography.overline,

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Platform, StyleSheet, Text, View } from 'react-native';
+import { Animated, Platform, StyleSheet, View } from 'react-native';
+import { Text } from './AppText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
@@ -34,6 +35,13 @@ export interface GlassHeaderProps {
   /** Compact title, shown once the large title has scrolled away. */
   title: string;
   scrollY: Animated.Value;
+  /**
+   * Whether the parent already leaves room for the status bar (a safe-area container). When the
+   * screen runs edge to edge under the status bar, pass false. Defaults to true.
+   */
+  parentPadded?: boolean;
+  /** Optional leading control (e.g. a back button), shown with the compact bar. */
+  left?: React.ReactNode;
   /** Optional trailing control (e.g. an IconButton), shown with the compact bar. */
   right?: React.ReactNode;
 }
@@ -42,7 +50,13 @@ export interface GlassHeaderProps {
  * A glass bar pinned to the top that fades in as the screen's large title scrolls away. It reaches
  * up under the status bar, so render it inside the safe-area container and above the scroll view.
  */
-export const GlassHeader: React.FC<GlassHeaderProps> = ({ title, scrollY, right }) => {
+export const GlassHeader: React.FC<GlassHeaderProps> = ({
+  title,
+  scrollY,
+  left,
+  right,
+  parentPadded = true,
+}) => {
   const insets = useSafeAreaInsets();
   // The bar only takes touches once it is visible, so it never blocks the large title's controls.
   const [interactive, setInteractive] = useState(false);
@@ -71,7 +85,7 @@ export const GlassHeader: React.FC<GlassHeaderProps> = ({ title, scrollY, right 
       style={[
         styles.wrap,
         {
-          top: -insets.top,
+          top: parentPadded ? -insets.top : 0,
           height: insets.top + GLASS_HEADER_HEIGHT,
           opacity,
           transform: [{ translateY }],
@@ -81,7 +95,13 @@ export const GlassHeader: React.FC<GlassHeaderProps> = ({ title, scrollY, right 
     >
       <GlassSurface borderRadius={0} shadow={false} style={styles.glass}>
         <View style={[styles.row, { paddingTop: insets.top }]}>
-          <Text style={styles.title} numberOfLines={1} accessibilityRole="header">
+          {left ? <View style={styles.side}>{left}</View> : null}
+          <Text
+            style={styles.title}
+            numberOfLines={1}
+            accessibilityRole="header"
+            maxFontSizeMultiplier={1.3}
+          >
             {title}
           </Text>
           {right ? <View style={styles.right}>{right}</View> : null}
@@ -114,6 +134,9 @@ const styles = themedStyles(() =>
       ...typography.bodyStrong,
       flex: 1,
       color: colors.text,
+    },
+    side: {
+      flexShrink: 0,
     },
     right: {
       flexShrink: 0,

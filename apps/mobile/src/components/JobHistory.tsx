@@ -1,5 +1,6 @@
 import React from 'react';
-import { Animated, View, Text, StyleSheet } from 'react-native';
+import { Animated, View, StyleSheet } from 'react-native';
+import { Text } from './ui/AppText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { JobStatus, ServiceRequest } from '@metro-fix/core-types';
 
@@ -16,6 +17,7 @@ import { spacing, radius, layout, tabBarClearance } from '../theme/layout';
 import { PILLAR_ICON } from '../theme/status';
 import { useWorkerJobs } from '../hooks/useJobs';
 import { themedStyles } from '../theme/themedStyles';
+import { shortRef } from '../lib/ticket';
 import { GlassHeader, useCollapsingHeader } from './ui/GlassHeader';
 
 export const JobHistoryScreen: React.FC = () => {
@@ -71,7 +73,9 @@ export const JobHistoryScreen: React.FC = () => {
           renderItem={({ item }: { item: ServiceRequest }) => (
             <Card variant="elevated" borderRadius={radius.xl} padding={spacing.xl}>
               <View style={styles.cardHeader}>
-                <Text style={styles.ticketId}>#{item.id.slice(-6).toUpperCase()}</Text>
+                <Text style={[styles.ticketId, styles.ticketShrink]} numberOfLines={1}>
+                  #{shortRef(item.id)}
+                </Text>
                 <StatusPill status={item.status} size="small" />
               </View>
 
@@ -134,6 +138,9 @@ const styles = themedStyles(() => StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
     marginBottom: spacing.md,
+  },
+  ticketShrink: {
+    flexShrink: 1,
   },
   ticketId: {
     ...typography.overline,

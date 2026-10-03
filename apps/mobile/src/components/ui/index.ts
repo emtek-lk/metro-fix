@@ -48,8 +48,14 @@ export type { GlassSurfaceProps } from './GlassSurface';
 
 export { AppBackground } from './AppBackground';
 
+export { ToastProvider, ToastHost, useToast } from './Toast';
+export type { ToastTone } from './Toast';
+
 export { GlassHeader, useCollapsingHeader, GLASS_HEADER_HEIGHT } from './GlassHeader';
 export type { GlassHeaderProps } from './GlassHeader';
 
 export { StageStepper } from './StageStepper';
 export type { StageStepperProps } from './StageStepper';
+
+export { QuickAction } from './QuickAction';
+export type { QuickActionProps } from './QuickAction';

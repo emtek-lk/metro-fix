@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, ActivityIndicator, StyleSheet, StyleProp, ViewStyle } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, StyleProp, ViewStyle } from 'react-native';
+import { Text } from './AppText';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { spacing } from '../../theme/layout';

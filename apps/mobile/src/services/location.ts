@@ -146,6 +146,55 @@ export async function getCurrentWorkerLocation(): Promise<LocationCoordinates> {
 }
 
 /**
+ * The device's current position, or null if permission is denied or no fix is available.
+ * Unlike `getCurrentWorkerLocation` it never substitutes a made-up location, so a customer can't
+ * book a job at the wrong place without knowing.
+ */
+export async function getCurrentPositionOrNull(): Promise<LocationCoordinates | null> {
+  try {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') return null;
+    const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+    return { latitude: location.coords.latitude, longitude: location.coords.longitude };
+  } catch (error) {
+    console.warn('[LocationService] Could not read the current position:', error);
+    return null;
+  }
+}
+
+/** "Street, City" from a reverse-geocoded place, or null if there is nothing useful to show. */
+export function formatPlace(
+  place:
+    | {
+        name?: string | null;
+        street?: string | null;
+        district?: string | null;
+        city?: string | null;
+        subregion?: string | null;
+        region?: string | null;
+      }
+    | null
+    | undefined,
+): string | null {
+  if (!place) return null;
+  const first = place.name || place.street || place.district;
+  const second = place.city || place.subregion || place.region;
+  const parts = [first, second].filter((part): part is string => !!part && part.trim().length > 0);
+  const unique = parts.filter((part, index) => parts.indexOf(part) === index);
+  return unique.length > 0 ? unique.join(', ') : null;
+}
+
+/** A human-readable address for a coordinate pair, or null if geocoding is unavailable. */
+export async function describeCoordinates(coords: LocationCoordinates): Promise<string | null> {
+  try {
+    const [place] = await Location.reverseGeocodeAsync(coords);
+    return formatPlace(place);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Mock background sync function that sends periodic worker GPS coordinates to backend (for fallback/web test)
  */
 export function startBackgroundLocationSync(

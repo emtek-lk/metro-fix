@@ -1,22 +1,27 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
+import { View, StyleSheet, Animated } from 'react-native';
+import { Text } from './ui/AppText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { JobStatus, ServiceRequest } from '@metro-fix/core-types';
 import { realtimeSocket } from '../services/websocket';
 
 import { Button } from './ui/Button';
 import { Icon } from './ui/Icon';
+import { IconButton } from './ui/IconButton';
 import { ScreenHeader } from './ui/ScreenHeader';
 import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { spacing, radius, layout, tabBarClearance } from '../theme/layout';
 import { getStatusPresentation } from '../theme/status';
 import { themedStyles } from '../theme/themedStyles';
+import { shortRef } from '../lib/ticket';
 import { GlassHeader, useCollapsingHeader } from './ui/GlassHeader';
 
 interface CustomerTrackingViewProps {
   job: ServiceRequest;
   onNewBooking: () => void;
+  /** When provided, a back button is shown (e.g. when opened from the requests list). */
+  onBack?: () => void;
 }
 
 /**
@@ -37,6 +42,7 @@ const LIFECYCLE_STAGES: JobStatus[] = [
 export const CustomerTrackingView: React.FC<CustomerTrackingViewProps> = ({
   job: initialJob,
   onNewBooking,
+  onBack,
 }) => {
   const insets = useSafeAreaInsets();
   const { scrollY, onScroll } = useCollapsingHeader();
@@ -69,11 +75,23 @@ export const CustomerTrackingView: React.FC<CustomerTrackingViewProps> = ({
         contentContainerStyle={[styles.content, { paddingBottom: tabBarClearance(insets) }]}
         showsVerticalScrollIndicator={false}
       >
+        {onBack ? (
+          <View style={styles.backRow}>
+            <IconButton
+              onPress={onBack}
+              accessibilityLabel="Back to my requests"
+              icon={<Icon name="chevron-left" size={22} color={colors.text} />}
+              backgroundColor={colors.surface}
+              size={44}
+            />
+          </View>
+        ) : null}
+
         {/* Header */}
         <ScreenHeader
           eyebrow="Live service tracking"
           title={currentJob.title}
-          subtitle={`Ticket #${currentJob.id.slice(-6).toUpperCase()}`}
+          subtitle={`Ticket #${shortRef(currentJob.id)}`}
           right={
             <View style={styles.liveBadge}>
               <View style={styles.liveDot} />
@@ -176,12 +194,30 @@ export const CustomerTrackingView: React.FC<CustomerTrackingViewProps> = ({
           style={styles.newBookingBtn}
         />
       </Animated.ScrollView>
-    <GlassHeader title="Live Tracking" scrollY={scrollY} />
+    <GlassHeader
+      title="Live Tracking"
+      scrollY={scrollY}
+      left={
+        onBack ? (
+          <IconButton
+            onPress={onBack}
+            accessibilityLabel="Back to my requests"
+            icon={<Icon name="chevron-left" size={22} color={colors.text} />}
+            backgroundColor={colors.surface}
+            size={44}
+          />
+        ) : undefined
+      }
+    />
     </View>
   );
 };
 
 const styles = themedStyles(() => StyleSheet.create({
+  backRow: {
+    flexDirection: 'row',
+    marginTop: spacing.xs,
+  },
   scrollFill: {
     flex: 1,
   },

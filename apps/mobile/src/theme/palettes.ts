@@ -51,7 +51,9 @@ export const darkPalette = {
   /** Opaque stand-in for glass when transparency is reduced. */
   glassSolid: '#1E293B',
   /** Android has no blur material, so its glass stand-in is nearly opaque to keep text legible. */
-  glassAndroid: 'rgba(30, 41, 59, 0.94)',
+  glassAndroid: 'rgba(30, 41, 59, 0.985)',
+  /** A heavier wash for glass that carries text over busy content (toasts). */
+  glassStrong: 'rgba(30, 41, 59, 0.88)',
   /** The sliding tab "bubble": native glass tint on iOS 26+, plain fill / sheen / rim elsewhere. */
   bubbleTint: 'rgba(249, 115, 22, 0.16)',
   bubbleFill: 'rgba(255, 255, 255, 0.07)',
@@ -92,9 +94,10 @@ export const lightPalette: ThemeColors = {
   textInverse: '#FFFFFF',
 
   // ── Brand ──
-  brand: '#EA580C',
-  brandPressed: '#C2410C',
-  brandSubtle: 'rgba(234, 88, 12, 0.12)',
+  // Deep enough that small orange text reaches 4.5:1 on the light surfaces (white text on it: 5.2:1).
+  brand: '#C2410C',
+  brandPressed: '#9A3412',
+  brandSubtle: 'rgba(194, 65, 12, 0.12)',
 
   // ── Semantic ──
   success: '#059669',
@@ -116,7 +119,8 @@ export const lightPalette: ThemeColors = {
   glassTint: 'rgba(255, 255, 255, 0.62)',
   glassBorder: 'rgba(255, 255, 255, 0.75)',
   glassSolid: '#FFFFFF',
-  glassAndroid: 'rgba(255, 255, 255, 0.95)',
+  glassAndroid: 'rgba(255, 255, 255, 0.985)',
+  glassStrong: 'rgba(255, 255, 255, 0.90)',
   bubbleTint: 'rgba(234, 88, 12, 0.24)',
   bubbleFill: 'rgba(255, 255, 255, 0.40)',
   bubbleLight: 'rgba(255, 255, 255, 0.90)',

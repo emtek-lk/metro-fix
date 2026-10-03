@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, LayoutChangeEvent, PanResponder, StyleSheet, Text, View } from 'react-native';
+import { Animated, LayoutChangeEvent, PanResponder, StyleSheet, View } from 'react-native';
+import { Text } from './AppText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
@@ -28,6 +29,8 @@ export interface FloatingTabBarProps {
   activeTab: string;
   onTabPress: (tabId: string) => void;
   tabs?: TabItem[];
+  /** Unread counts by tab id; a tab with a count above zero shows a badge. */
+  badges?: Record<string, number>;
 }
 
 const DEFAULT_TABS: TabItem[] = [
@@ -58,6 +61,7 @@ export const FloatingTabBar: React.FC<FloatingTabBarProps> = ({
   activeTab,
   onTabPress,
   tabs = DEFAULT_TABS,
+  badges,
 }) => {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReduceMotion();
@@ -258,7 +262,9 @@ export const FloatingTabBar: React.FC<FloatingTabBarProps> = ({
                 style={styles.tab}
                 accessible
                 accessibilityRole="tab"
-                accessibilityLabel={tab.label}
+                accessibilityLabel={
+                  badges?.[tab.id] ? `${tab.label}, ${badges[tab.id]} unread` : tab.label
+                }
                 accessibilityState={{ selected: index === activeIndex }}
                 accessibilityActions={[{ name: 'activate' }]}
                 onAccessibilityAction={(event) => {
@@ -266,14 +272,25 @@ export const FloatingTabBar: React.FC<FloatingTabBarProps> = ({
                 }}
                 onAccessibilityTap={() => activate(index)}
               >
-                <Animated.View style={{ transform: [{ scale: iconScales[index] }] }}>
+                <Animated.View style={[styles.iconWrap, { transform: [{ scale: iconScales[index] }] }]}>
                   <Icon
                     name={tab.icon as FeatherIconName}
                     size={19}
                     color={isLit ? colors.brand : colors.textSecondary}
                   />
+                  {badges?.[tab.id] ? (
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText} maxFontSizeMultiplier={1}>
+                        {badges[tab.id] > 9 ? '9+' : badges[tab.id]}
+                      </Text>
+                    </View>
+                  ) : null}
                 </Animated.View>
-                <Text style={[styles.tabLabel, isLit && styles.tabLabelLit]} numberOfLines={1}>
+                <Text
+                  style={[styles.tabLabel, isLit && styles.tabLabelLit]}
+                  numberOfLines={1}
+                  maxFontSizeMultiplier={1.15}
+                >
                   {tab.label}
                 </Text>
               </View>
@@ -320,6 +337,30 @@ const styles = themedStyles(() =>
       alignItems: 'center',
       gap: 3,
       paddingHorizontal: spacing.xs,
+    },
+    iconWrap: {
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    badge: {
+      position: 'absolute',
+      top: -5,
+      right: -9,
+      minWidth: 16,
+      height: 16,
+      paddingHorizontal: 4,
+      borderRadius: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.brand,
+      borderWidth: 1.5,
+      borderColor: colors.glassSolid,
+    },
+    badgeText: {
+      fontSize: 9,
+      lineHeight: 11,
+      fontWeight: '800',
+      color: colors.white,
     },
     tabLabel: {
       ...typography.caption,

@@ -1,5 +1,6 @@
 import React from 'react';
-import { Animated, View, Text, StyleSheet } from 'react-native';
+import { Animated, View, StyleSheet } from 'react-native';
+import { Text } from './ui/AppText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Card } from './ui/Card';
 import { ScreenHeader } from './ui/ScreenHeader';
@@ -21,13 +22,28 @@ const APPEARANCE_OPTIONS: { id: ThemePreference; label: string }[] = [
   { id: 'dark', label: 'Dark' },
 ];
 
+/**
+ * Worker stats and service pillars are not exposed by the API yet. Release builds show a dash
+ * rather than invented numbers; development builds show sample values so the layout can be reviewed.
+ * TODO(backend): replace with the worker's real rating, completed jobs, on-time rate and pillars.
+ */
+const NOT_AVAILABLE = '—';
+const WORKER_STATS = __DEV__
+  ? { rating: '4.9', completed: '142', onTime: '99%', pillars: 'HARD / SOFT' }
+  : { rating: NOT_AVAILABLE, completed: NOT_AVAILABLE, onTime: NOT_AVAILABLE, pillars: NOT_AVAILABLE };
+
 const SETTINGS_ROWS: { icon: FeatherIconName; label: string; value: string }[] = [
   { icon: 'radio', label: 'Telemetry GPS Auto-Sync', value: 'ACTIVE' },
-  { icon: 'zap', label: 'Service Pillars', value: 'HARD / SOFT' },
+  { icon: 'zap', label: 'Service Pillars', value: WORKER_STATS.pillars },
   { icon: 'shield', label: 'Authentication Token', value: 'JWT Bearer' },
 ];
 
-export const ProfileScreen: React.FC = () => {
+export interface ProfileScreenProps {
+  /** Development builds only: opens the UI gallery. */
+  onOpenGallery?: () => void;
+}
+
+export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onOpenGallery }) => {
   const insets = useSafeAreaInsets();
   const { scrollY, onScroll } = useCollapsingHeader();
   const { user, logout } = useAuth();
@@ -73,18 +89,18 @@ export const ProfileScreen: React.FC = () => {
               <View style={styles.statBox}>
                 <View style={styles.statValueRow}>
                   <Icon name="star" size={14} color={colors.brand} />
-                  <Text style={styles.statValue}>4.9</Text>
+                  <Text style={styles.statValue}>{WORKER_STATS.rating}</Text>
                 </View>
                 <Text style={styles.statLabel}>Internal Rating</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statBox}>
-                <Text style={styles.statValue}>142</Text>
+                <Text style={styles.statValue}>{WORKER_STATS.completed}</Text>
                 <Text style={styles.statLabel}>Completed Jobs</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statBox}>
-                <Text style={styles.statValue}>99%</Text>
+                <Text style={styles.statValue}>{WORKER_STATS.onTime}</Text>
                 <Text style={styles.statLabel}>On-Time Rate</Text>
               </View>
             </View>
@@ -127,6 +143,21 @@ export const ProfileScreen: React.FC = () => {
             accessibilityLabel="Theme"
           />
         </Card>
+
+        {__DEV__ && onOpenGallery ? (
+          <>
+            <Text style={styles.sectionHeading}>Developer</Text>
+            <Card variant="elevated" borderRadius={radius.lg} padding={spacing.md}>
+              <Button
+                title="Open UI gallery"
+                onPress={onOpenGallery}
+                variant="secondary"
+                size="medium"
+                icon={<Icon name="grid" size={16} color={colors.text} />}
+              />
+            </Card>
+          </>
+        ) : null}
 
         {/* Logout Button */}
         <Button
