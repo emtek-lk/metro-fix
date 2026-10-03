@@ -515,3 +515,31 @@ table tbody tr:hover {
     transform: rotate(360deg);
   }
 }
+
+.metro-worker-search {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 10px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 0.88rem;
+  outline: none;
+}
+.metro-worker-search:focus {
+  border-color: #f38808;
+  box-shadow: 0 0 0 2px rgba(243, 136, 8, 0.25);
+}
+.metro-worker-row {
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.metro-worker-row:hover {
+  border-color: rgba(243, 136, 8, 0.6) !important;
+}
+.metro-worker-row:focus-visible {
+  border-color: #f38808 !important;
+  box-shadow: 0 0 0 2px rgba(243, 136, 8, 0.35);
+}

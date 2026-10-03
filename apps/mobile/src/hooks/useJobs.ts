@@ -1,3 +1,4 @@
+import type { JobCardPayload } from '../lib/jobCard';
 import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { apiClient } from '../lib/api';
 import { apiService, type WorkerStats } from '../services/api';
@@ -39,6 +40,24 @@ export function useWorkerStats(enabled = true) {
     queryKey: ['workerStats'],
     queryFn: () => apiService.fetchMyStats(),
     enabled,
+  });
+}
+
+/** Flips the worker's on-duty switch; the Profile toggle updates at once and rolls back on failure. */
+export function useSetAvailability() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (isAvailable: boolean) => apiService.setAvailability(isAvailable),
+    onMutate: async (isAvailable) => {
+      await queryClient.cancelQueries({ queryKey: ['workerStats'] });
+      const previous = queryClient.getQueryData<WorkerStats>(['workerStats']);
+      if (previous) queryClient.setQueryData<WorkerStats>(['workerStats'], { ...previous, isAvailable });
+      return { previous };
+    },
+    onError: (_error, _value, context) => {
+      if (context?.previous) queryClient.setQueryData(['workerStats'], context.previous);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['workerStats'] }),
   });
 }
 
@@ -120,24 +139,24 @@ export function useUpdateJobStatus() {
 
 /**
  * Mutation: Submit inspection quote via POST /jobs/:id/quote
- * Payload: { estimatedCost, estimatedHours, notes }
+ * Payload: { lineItems, estimatedHours, notes } (the itemised job card)
  */
 export function useSubmitQuote() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({
       jobId,
-      estimatedCost,
+      lineItems,
       estimatedHours,
       notes,
     }: {
       jobId: string;
-      estimatedCost: number;
+      lineItems: JobCardPayload['lineItems'];
       estimatedHours: number;
       notes: string;
     }) => {
       const response = await apiClient.post<ServiceRequest>(`/jobs/${jobId}/quote`, {
-        estimatedCost,
+        lineItems,
         estimatedHours,
         notes,
       });
@@ -158,14 +177,18 @@ export function useSubmitProof() {
       jobId,
       signature,
       photos,
+      finalCard,
     }: {
       jobId: string;
       signature: string;
       photos: string[];
+      /** The job card as confirmed or corrected at completion. */
+      finalCard?: JobCardPayload;
     }) => {
       const response = await apiClient.post<ServiceRequest>(`/jobs/${jobId}/proof`, {
         signature,
         photos,
+        finalCard,
       });
       return response.data;
     },

@@ -28,6 +28,7 @@ interface Initial {
   workerId?: string | null;
   offerExpiresAt?: Date | null;
   offerHistory?: JobOfferRecord[] | null;
+  jobCard?: unknown;
 }
 
 /** An in-memory stand-in for the repositories and gateway, enough to exercise the service rules. */
@@ -449,6 +450,59 @@ describe('quote, proof and reject', () => {
       worker1,
     );
     expect(quoted.status).toBe(JobStatus.IN_PROGRESS);
+  });
+
+  it('stores an itemised job card with server-computed totals', async () => {
+    const { service, job } = build({ status: JobStatus.INSPECTION, workerId: W1 });
+    await service.submitJobQuote(
+      JOB_ID,
+      {
+        lineItems: [
+          { kind: 'LABOUR', description: 'Technician', quantity: 2, unitPrice: 1500 },
+          { kind: 'MATERIAL', description: 'Valve', quantity: 3, unitPrice: 250.5 },
+        ],
+        taxRate: 10,
+        notes: 'n',
+      } as any,
+      worker1,
+    );
+    expect(job.jobCard.estimate).toMatchObject({ subtotal: 3751.5, tax: 375.15, total: 4126.65, hours: 2 });
+    expect(job.jobCard.final).toBeNull();
+    expect(job.quoteAmount).toBe(4126.65);
+    expect(job.estimatedHours).toBe(2);
+  });
+
+  it('turns the flat cost form into a single line', async () => {
+    const { service, job } = build({ status: JobStatus.INSPECTION, workerId: W1 });
+    await service.submitJobQuote(JOB_ID, { estimatedCost: 80, estimatedHours: 1.5, notes: '' } as any, worker1);
+    expect(job.jobCard.estimate.lineItems).toHaveLength(1);
+    expect(job.jobCard.estimate.total).toBe(80);
+  });
+
+  it('records the final card confirmed at completion, keeping the estimate', async () => {
+    const { service, job } = build({
+      status: JobStatus.IN_PROGRESS,
+      workerId: W1,
+      jobCard: { currency: 'LKR', taxRate: 0, estimate: { lineItems: [], hours: 1, notes: '', subtotal: 100, tax: 0, total: 100, savedAt: 'x' }, final: null },
+    });
+    await service.submitJobProof(
+      JOB_ID,
+      { signature: 'sig', photos: [], finalCard: { lineItems: [{ kind: 'LABOUR', description: 'Work', quantity: 3, unitPrice: 50 }], hours: 3, notes: '' } } as any,
+      worker1,
+    );
+    expect(job.jobCard.estimate.total).toBe(100);
+    expect(job.jobCard.final).toMatchObject({ total: 150, hours: 3 });
+  });
+
+  it('lets dispatch correct the final card until the ticket is closed', async () => {
+    const dispatcher: Actor = { id: 'user-cc', role: Role.CUSTOMER_CARE };
+    const body = { lineItems: [{ kind: 'OTHER', description: 'Fix', quantity: 1, unitPrice: 20 }], hours: 1, notes: '' } as any;
+    const open = build({ status: JobStatus.COMPLETED, workerId: W1 });
+    await open.service.updateFinalCard(JOB_ID, body, dispatcher);
+    expect(open.job.jobCard.final.total).toBe(20);
+
+    const closed = build({ status: JobStatus.CLOSED, workerId: W1 });
+    await expect(closed.service.updateFinalCard(JOB_ID, body, dispatcher)).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('only lets the assigned worker quote or complete', async () => {

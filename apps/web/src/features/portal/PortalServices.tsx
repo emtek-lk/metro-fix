@@ -1,3 +1,4 @@
+import { MapPicker, type PickedLocation } from '../../components/MapPicker';
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { FacilityType, ServicePillar } from '@metro-fix/core-types';
 import { API_BASE_URL } from '../../lib/api';
@@ -19,7 +20,6 @@ const ICONS: Record<string, string> = {
 };
 
 // Colombo, used when the browser cannot share a location.
-const DEFAULT_COORDS = { latitude: 6.9271, longitude: 79.8612 };
 
 type Urgency = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
@@ -140,24 +140,14 @@ function RequestModal({ service, onClose, onCreated }: RequestModalProps) {
   const [address, setAddress] = useState('');
   const [facilityType, setFacilityType] = useState<FacilityType>(FacilityType.RESIDENTIAL);
   const [urgency, setUrgency] = useState<Urgency>('MEDIUM');
-  const [coords, setCoords] = useState(DEFAULT_COORDS);
-  const [usingGps, setUsingGps] = useState(false);
+  const [coords, setCoords] = useState<PickedLocation | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const useMyLocation = () => {
-    navigator.geolocation?.getCurrentPosition(
-      (pos) => {
-        setCoords({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
-        setUsingGps(true);
-      },
-      () => setError('Location permission denied. We will use the default Colombo location.'),
-    );
-  };
 
   const submit = async () => {
     if (details.trim().length < 5) return setError('Please describe the problem (at least 5 characters).');
     if (address.trim().length < 3) return setError('Please enter the site address.');
+    if (!coords) return setError('Please drop a pin on the map for the site.');
     setBusy(true);
     setError(null);
     const token = localStorage.getItem('metrofix_token');
@@ -229,9 +219,16 @@ function RequestModal({ service, onClose, onCreated }: RequestModalProps) {
           </div>
         </div>
 
-        <button type="button" style={styles.linkBtn} onClick={useMyLocation}>
-          {usingGps ? '📍 Using your current location' : '📍 Use my current location'}
-        </button>
+        <label style={styles.label}>Pin the site on the map *</label>
+        <MapPicker
+          value={coords}
+          height={240}
+          onChange={(picked, label) => {
+            setCoords(picked);
+            // A searched place fills the address if the customer has not typed one.
+            if (label && label !== 'My location') setAddress((current) => current || label);
+          }}
+        />
 
         <div style={styles.actions}>
           <button type="button" style={styles.cancelBtn} onClick={onClose}>Cancel</button>

@@ -13,6 +13,7 @@ import {
   FacilityType,
   ServicePillar,
   type JobOfferRecord,
+  type JobCard,
 } from '@metro-fix/core-types';
 import { CustomerEntity } from './customer.entity';
 import { WorkerEntity } from './worker.entity';
@@ -78,6 +79,18 @@ export class ServiceRequestEntity {
 
   @Column({ type: 'varchar', length: 'max', nullable: true })
   quoteNotes?: string | null;
+
+  /** Itemised estimate and final for invoicing, stored as JSON text. */
+  @Column({
+    type: 'varchar',
+    length: 'max',
+    nullable: true,
+    transformer: {
+      to: (value?: JobCard | null) => (value ? JSON.stringify(value) : null),
+      from: (value?: string | null) => (value ? (JSON.parse(value) as JobCard) : null),
+    },
+  })
+  jobCard?: JobCard | null;
 
   @Column({ type: 'varchar', length: 'max', nullable: true })
   signature?: string | null;

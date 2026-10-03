@@ -1,3 +1,4 @@
+import { LocationMapPicker } from './LocationMapPicker';
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Pressable, StyleSheet, Animated, ActivityIndicator, Platform } from 'react-native';
 import { Text } from './ui/AppText';
@@ -80,7 +81,6 @@ export const CustomerBookingWizard: React.FC<CustomerBookingWizardProps> = ({
   const [longitude, setLongitude] = useState<string>('');
   const [place, setPlace] = useState<string | null>(null);
   const [locationStatus, setLocationStatus] = useState<LocationStatus>('idle');
-  const [manualOpen, setManualOpen] = useState<boolean>(false);
   const [title, setTitle] = useState<string>('');
   const [description, setDescription] = useState<string>('');
   const [urgency, setUrgency] = useState<Urgency>('MEDIUM');
@@ -99,7 +99,6 @@ export const CustomerBookingWizard: React.FC<CustomerBookingWizardProps> = ({
     const position = await getCurrentPositionOrNull();
     if (!position) {
       setLocationStatus('failed');
-      setManualOpen(true);
       return;
     }
     setLatitude(position.latitude.toFixed(6));
@@ -117,10 +116,18 @@ export const CustomerBookingWizard: React.FC<CustomerBookingWizardProps> = ({
 
   const coords = parseCoords(latitude, longitude);
 
+  // A pin placed or dragged on the map becomes the site location.
+  const handlePinPicked = (point: { latitude: number; longitude: number }) => {
+    setLatitude(point.latitude.toFixed(6));
+    setLongitude(point.longitude.toFixed(6));
+    setLocationStatus('found');
+    setPlace(null);
+    describeCoordinates(point).then(setPlace);
+  };
+
   const handleNextStep2 = () => {
     if (!coords.valid) {
-      toast.error('Use your current location or enter valid coordinates.', 'Site location needed');
-      setManualOpen(true);
+      toast.error('Drop a pin on the map, or use your current location.', 'Site location needed');
       return;
     }
     setStep(3);
@@ -338,7 +345,7 @@ export const CustomerBookingWizard: React.FC<CustomerBookingWizardProps> = ({
                         <>
                           <Text style={styles.locationPrimary}>We couldn’t read your location</Text>
                           <Text style={styles.locationSecondary}>
-                            Allow location access, or enter the coordinates below.
+                            Allow location access, or drop a pin on the map below.
                           </Text>
                         </>
                       ) : (
@@ -367,48 +374,10 @@ export const CustomerBookingWizard: React.FC<CustomerBookingWizardProps> = ({
                     <Text style={styles.locateText}>Use my current location</Text>
                   </Pressable>
 
-                  <Pressable
-                    onPress={() => setManualOpen((open) => !open)}
-                    style={styles.manualToggle}
-                    accessibilityRole="button"
-                    accessibilityState={{ expanded: manualOpen }}
-                    accessibilityLabel="Enter coordinates manually"
-                  >
-                    <Text style={styles.manualText}>Enter coordinates manually</Text>
-                    <Icon
-                      name={manualOpen ? 'chevron-up' : 'chevron-down'}
-                      size={16}
-                      color={colors.textSecondary}
-                    />
-                  </Pressable>
-
-                  {manualOpen ? (
-                    <View style={styles.coordInputsRow}>
-                      <Input
-                        label="Latitude"
-                        containerStyle={styles.coordInputCol}
-                        value={latitude}
-                        onChangeText={(value) => {
-                          setLatitude(value);
-                          setPlace(null);
-                        }}
-                        keyboardType="numbers-and-punctuation"
-                        placeholder="6.9271"
-                        returnKeyType="next"
-                      />
-                      <Input
-                        label="Longitude"
-                        containerStyle={styles.coordInputCol}
-                        value={longitude}
-                        onChangeText={(value) => {
-                          setLongitude(value);
-                          setPlace(null);
-                        }}
-                        keyboardType="numbers-and-punctuation"
-                        placeholder="79.8612"
-                      />
-                    </View>
-                  ) : null}
+                  <LocationMapPicker
+                    value={coords.valid ? { latitude: coords.lat, longitude: coords.lng } : null}
+                    onChange={handlePinPicked}
+                  />
                 </View>
 
                 <View style={styles.navRow}>

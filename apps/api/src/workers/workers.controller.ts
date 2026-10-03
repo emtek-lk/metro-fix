@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Body,
   Param,
   Query,
@@ -17,10 +18,13 @@ import { WorkerEntity, UserEntity } from '../entities';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { registerPushTokenSchema, RegisterPushTokenDto } from './dto/register-push-token.dto';
 import { updateWorkerLocationSchema, UpdateWorkerLocationDto } from './dto/update-worker-location.dto';
+import { z } from 'zod';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 
 import { Role } from '@metro-fix/core-types';
 import { Roles } from '../auth/roles.decorator';
+
+const updateAvailabilitySchema = z.object({ isAvailable: z.boolean() });
 
 @Controller('workers')
 export class WorkersController {
@@ -44,6 +48,14 @@ export class WorkersController {
   @Get('me/stats')
   async getMyStats(@Req() req: any): Promise<WorkerStats> {
     return this.workersService.getStatsForUser(req.user?.id);
+  }
+
+  /** The worker's on-duty switch (Profile screen). */
+  @Roles(Role.WORKER)
+  @Patch('me/availability')
+  @UsePipes(new ZodValidationPipe(updateAvailabilitySchema))
+  async setMyAvailability(@Req() req: any, @Body() dto: { isAvailable: boolean }): Promise<WorkerEntity> {
+    return this.workersService.setAvailability(req.user?.id, dto.isAvailable);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -78,8 +90,9 @@ export class WorkersController {
   async getAvailableWorkersForJob(
     @Query('jobId') jobId: string,
     @Query('radius', new DefaultValuePipe(50000), ParseIntPipe) radius: number,
+    @Query('includeUnavailable') includeUnavailable?: string,
   ): Promise<DispatchSearchResult[]> {
-    return this.workersService.getAvailableWorkersForJob(jobId, radius);
+    return this.workersService.getAvailableWorkersForJob(jobId, radius, includeUnavailable === 'true');
   }
 
   @Roles(Role.ADMIN, Role.CUSTOMER_CARE)

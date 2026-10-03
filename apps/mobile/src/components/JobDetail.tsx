@@ -1,3 +1,6 @@
+import { JobCardForm } from './JobCardForm';
+import { draftFromSection, draftToPayload, type JobCardDraft } from '../lib/jobCard';
+import { jobCardBillable } from '@metro-fix/core-types';
 import React, { useState, useRef } from 'react';
 import { Animated, View, StyleSheet, ScrollView, Pressable, Image, Modal, Dimensions, Linking, Platform } from 'react-native';
 import { Text } from './ui/AppText';
@@ -55,9 +58,13 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
   const submitProof = useSubmitProof();
 
   const [gpsStatus, setGpsStatus] = useState('Standby');
-  const [quoteCost, setQuoteCost] = useState(currentJob.quoteAmount?.toString() || '');
-  const [quoteHours, setQuoteHours] = useState(currentJob.estimatedHours?.toString() || '');
-  const [quoteNotes, setQuoteNotes] = useState(currentJob.quoteNotes || '');
+  // The job card: filled in as the quote at inspection, confirmed or corrected at completion.
+  const [quoteCard, setQuoteCard] = useState<JobCardDraft>(() => draftFromSection(currentJob.jobCard?.estimate));
+  const [finalCard, setFinalCard] = useState<JobCardDraft>(() =>
+    draftFromSection(jobCardBillable(currentJob.jobCard)),
+  );
+  const cardTaxRate = currentJob.jobCard?.taxRate ?? 0;
+  const cardCurrency = currentJob.jobCard?.currency ?? 'LKR';
 
   // Reject (unserviceable / out of scope) state
   const [rejecting, setRejecting] = useState(false);
@@ -67,6 +74,8 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
   // Proof modal state
   const [proofModalVisible, setProofModalVisible] = useState(false);
   const signatureRef = useRef<any>(null);
+  // Drawing a signature must not scroll the sheet underneath it.
+  const [sheetScrollable, setSheetScrollable] = useState(true);
   const [signatureB64, setSignatureB64] = useState(currentJob.signature || '');
   const [photos, setPhotos] = useState<string[]>(currentJob.photos || []);
 
@@ -96,12 +105,17 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
   };
 
   const handleQuote = async () => {
-    const cost = parseFloat(quoteCost), hrs = parseFloat(quoteHours);
-    if (isNaN(cost) || cost < 0) return toast.error('Enter a valid cost.', 'Invalid quote');
-    if (isNaN(hrs) || hrs < 0) return toast.error('Enter valid hours.', 'Invalid quote');
+    const result = draftToPayload(quoteCard);
+    if (!result.ok) return toast.error(result.error, 'Check the quote');
     try {
-      const updated = await submitQuote.mutateAsync({ jobId: currentJob.id, estimatedCost: cost, estimatedHours: hrs, notes: quoteNotes });
+      const updated = await submitQuote.mutateAsync({
+        jobId: currentJob.id,
+        lineItems: result.payload.lineItems,
+        estimatedHours: result.payload.hours,
+        notes: result.payload.notes,
+      });
       onJobUpdated?.(updated);
+      setFinalCard(draftFromSection(jobCardBillable(updated.jobCard)));
       toast.success('The job is now in progress.', 'Quote submitted');
     } catch (e: any) { toast.error(e.message || 'Failed to submit quote.', 'Quote failed'); }
   };
@@ -131,12 +145,38 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
     } catch (e: any) { toast.error(e.message || 'Could not open the camera.', 'Camera error'); }
   };
 
+  const handlePickFromLibrary = async () => {
+    try {
+      // The system picker needs no permission prompt; it only hands over what the worker selects.
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: true,
+        selectionLimit: 6,
+        quality: 0.7,
+        base64: true,
+      });
+      if (!result.canceled && result.assets?.length) {
+        setPhotos((prev) => [
+          ...prev,
+          ...result.assets.map((a) => (a.base64 ? `data:image/jpeg;base64,${a.base64}` : a.uri)),
+        ]);
+      }
+    } catch (e: any) { toast.error(e.message || 'Could not open your photos.', 'Library error'); }
+  };
+
   const handleProofSubmit = async () => {
     if (!signatureB64 || signatureB64.length < 10) {
       return toast.error('Complete the customer signature first.', 'Signature required');
     }
+    const card = draftToPayload(finalCard);
+    if (!card.ok) return toast.error(card.error, 'Check the job card');
     try {
-      const updated = await submitProof.mutateAsync({ jobId: currentJob.id, signature: signatureB64, photos });
+      const updated = await submitProof.mutateAsync({
+        jobId: currentJob.id,
+        signature: signatureB64,
+        photos,
+        finalCard: card.payload,
+      });
       onJobUpdated?.(updated);
       setProofModalVisible(false);
       toast.success('The ticket is completed.', 'Proof submitted');
@@ -298,39 +338,10 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
                 </View>
                 <View style={s.formHeaderText}>
                   <Text style={s.formTitle}>Inspection quote</Text>
-                  <Text style={s.formDesc}>Cost estimate and labour hours for the customer</Text>
+                  <Text style={s.formDesc}>Itemise labour and materials. Dispatch and the customer see this as your estimate.</Text>
                 </View>
               </View>
-              <View style={s.formFields}>
-                <View style={s.formRow}>
-                  <Input
-                    containerStyle={s.formHalf}
-                    label="Cost (LKR)"
-                    value={quoteCost}
-                    onChangeText={setQuoteCost}
-                    placeholder="4500"
-                    keyboardType="decimal-pad"
-                    returnKeyType="next"
-                  />
-                  <Input
-                    containerStyle={s.formHalf}
-                    label="Hours"
-                    value={quoteHours}
-                    onChangeText={setQuoteHours}
-                    placeholder="2.5"
-                    keyboardType="decimal-pad"
-                    returnKeyType="next"
-                  />
-                </View>
-                <Input
-                  label="Notes"
-                  value={quoteNotes}
-                  onChangeText={setQuoteNotes}
-                  placeholder="Describe findings…"
-                  multiline
-                  numberOfLines={3}
-                />
-              </View>
+              <JobCardForm draft={quoteCard} onChange={setQuoteCard} taxRate={cardTaxRate} currency={cardCurrency} />
               <Button title="Submit quote" onPress={handleQuote} isLoading={submitQuote.isPending} variant="primary" size="large" style={s.formSubmit} />
             </Card>
           )}
@@ -387,13 +398,27 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
             tintColor={colors.glassStrong}
             style={[m.sheet, { marginBottom: insets.bottom + spacing.sm }]}
           >
-            <View style={m.sheetInner}>
+            <ScrollView
+              style={m.sheetScroll}
+              contentContainerStyle={m.sheetInner}
+              scrollEnabled={sheetScrollable}
+              keyboardShouldPersistTaps="handled"
+              automaticallyAdjustKeyboardInsets
+              showsVerticalScrollIndicator={false}
+            >
               <View style={m.handle} />
               <View style={m.sectionHeader}>
                 <Icon name="camera" size={17} color={colors.brand} />
                 <Text style={m.title}>Work completion proof</Text>
               </View>
-              <Text style={m.subtitle}>Capture photos and collect the customer’s signature</Text>
+              <Text style={m.subtitle}>Confirm the job card, add photos and collect the customer’s signature</Text>
+
+              <View style={[m.sectionHeader, m.sectionHeaderSpaced]}>
+                <Icon name="file-text" size={17} color={colors.brand} />
+                <Text style={m.title}>Job card</Text>
+              </View>
+              <Text style={m.subtitle}>Correct anything that changed on site. This becomes the basis for the invoice.</Text>
+              <JobCardForm draft={finalCard} onChange={setFinalCard} taxRate={cardTaxRate} currency={cardCurrency} />
 
               <Pressable
                 style={({ pressed }) => [m.camBtn, pressed && m.camBtnPressed]}
@@ -402,7 +427,16 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
                 accessibilityLabel="Capture photo"
               >
                 <Icon name="camera" size={17} color={colors.text} />
-                <Text style={m.camBtnText}>Capture photo</Text>
+                <Text style={m.camBtnText}>Take photo</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [m.camBtn, m.libBtn, pressed && m.camBtnPressed]}
+                onPress={handlePickFromLibrary}
+                accessibilityRole="button"
+                accessibilityLabel="Choose photos from library"
+              >
+                <Icon name="image" size={17} color={colors.text} />
+                <Text style={m.camBtnText}>Choose from library</Text>
               </Pressable>
 
               {photos.length > 0 && (
@@ -418,16 +452,37 @@ export const JobDetail: React.FC<JobDetailProps> = ({ job: initialJob, workerId,
               <View style={m.sigBox}>
                 <SignatureScreen
                   ref={signatureRef}
+                  // The pad reports the drawing when a stroke ends; without this the screen never
+                  // received a signature and "Submit proof" stayed refused.
+                  onBegin={() => setSheetScrollable(false)}
+                  onEnd={() => {
+                    setSheetScrollable(true);
+                    signatureRef.current?.readSignature();
+                  }}
                   onOK={(sig: string) => setSignatureB64(sig)}
-                  webStyle={`.m-signature-pad{box-shadow:none;border:none;background-color:${colors.bg}}.m-signature-pad--body{border:none}.m-signature-pad--footer{display:none}`}
+                  onClear={() => setSignatureB64('')}
+                  onEmpty={() => setSignatureB64('')}
+                  // A signature is ink on paper: always dark ink on a light pad, in either theme.
+                  penColor="#111827"
+                  backgroundColor="#ffffff"
+                  webStyle=".m-signature-pad{box-shadow:none;border:none;background-color:#ffffff}.m-signature-pad--body{border:none}.m-signature-pad--footer{display:none}"
                 />
               </View>
+              <Pressable
+                onPress={() => signatureRef.current?.clearSignature()}
+                accessibilityRole="button"
+                accessibilityLabel="Clear signature"
+                hitSlop={8}
+                style={m.clearSig}
+              >
+                <Text style={m.clearSigText}>Clear signature</Text>
+              </Pressable>
 
               <View style={m.modalActions}>
                 <Button title="Submit proof" onPress={handleProofSubmit} isLoading={submitProof.isPending} variant="primary" size="large" />
                 <Button title="Cancel" onPress={() => setProofModalVisible(false)} variant="outline" size="medium" />
               </View>
-            </View>
+            </ScrollView>
           </GlassSurface>
         </View>
       </Modal>
@@ -529,6 +584,7 @@ const m = themedStyles(() => StyleSheet.create({
     marginHorizontal: spacing.sm,
     maxHeight: SCREEN_H * 0.85,
   },
+  sheetScroll: { maxHeight: SCREEN_H * 0.85 },
   sheetInner: {
     padding: spacing.xxl,
   },
@@ -557,6 +613,7 @@ const m = themedStyles(() => StyleSheet.create({
     paddingVertical: spacing.md,
   },
   camBtnPressed: { backgroundColor: colors.border },
+  libBtn: { marginTop: spacing.sm },
   camBtnText: { ...typography.label, fontWeight: '800', color: colors.text },
   thumbRow: { marginVertical: spacing.md },
   thumb: { width: 72, height: 72, borderRadius: radius.md, marginRight: spacing.sm },
@@ -566,7 +623,10 @@ const m = themedStyles(() => StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1.5,
     borderColor: colors.border,
-    marginVertical: spacing.md,
+    backgroundColor: '#ffffff',
+    marginTop: spacing.md,
   },
+  clearSig: { alignSelf: 'flex-end', paddingVertical: spacing.sm },
+  clearSigText: { ...typography.caption, fontWeight: '700', color: colors.brand },
   modalActions: { gap: spacing.md, marginTop: spacing.lg },
 }));

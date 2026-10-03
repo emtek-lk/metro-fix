@@ -189,6 +189,15 @@ export class MobileApiService {
   }
 
   /**
+   * The worker's on-duty switch. Off-duty workers are not offered new jobs.
+   * PATCH /workers/me/availability
+   */
+  async setAvailability(isAvailable: boolean): Promise<{ isAvailable: boolean }> {
+    const res = await apiClient.patch('/workers/me/availability', { isAvailable });
+    return res.data;
+  }
+
+  /**
    * The signed-in worker's rating, job counts and service pillars.
    * GET /workers/me/stats
    */

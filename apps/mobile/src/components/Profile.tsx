@@ -1,5 +1,5 @@
 import React from 'react';
-import { Animated, View, StyleSheet } from 'react-native';
+import { Animated, View, StyleSheet, Switch } from 'react-native';
 import { Text } from './ui/AppText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Card } from './ui/Card';
@@ -11,7 +11,8 @@ import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { spacing, radius, layout, tabBarClearance } from '../theme/layout';
 import { useAuth } from '../context/AuthContext';
-import { useWorkerStats } from '../hooks/useJobs';
+import { useWorkerStats, useSetAvailability } from '../hooks/useJobs';
+import { useToast } from './ui/Toast';
 import { useTheme, type ThemePreference } from '../theme/ThemeProvider';
 import { Role } from '@metro-fix/core-types';
 import { themedStyles } from '../theme/themedStyles';
@@ -45,6 +46,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onOpenGallery }) =
   // The worker's real rating, completed and active jobs (GET /workers/me/stats).
   const statsQuery = useWorkerStats(isWorker);
   const stats = statsQuery.data;
+  const setAvailability = useSetAvailability();
+  const toast = useToast();
   const statValue = (value: number | string | undefined) =>
     value === undefined ? NOT_AVAILABLE : String(value);
   const pillars = stats?.servicePillars?.length ? stats.servicePillars.join(' / ') : NOT_AVAILABLE;
@@ -102,6 +105,28 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onOpenGallery }) =
                 <Text style={styles.statValue}>{statValue(stats?.activeJobs)}</Text>
                 <Text style={styles.statLabel}>Active now</Text>
               </View>
+            </View>
+
+            <View style={styles.dutyRow}>
+              <View style={styles.dutyText}>
+                <Text style={styles.dutyTitle}>{stats?.isAvailable === false ? 'Off duty' : 'On duty'}</Text>
+                <Text style={styles.dutyDesc}>
+                  {stats?.isAvailable === false
+                    ? 'Dispatch will not offer you new jobs.'
+                    : 'Dispatch can offer you new jobs.'}
+                </Text>
+              </View>
+              <Switch
+                value={stats?.isAvailable !== false}
+                disabled={!stats || setAvailability.isPending}
+                onValueChange={(next) =>
+                  setAvailability.mutate(next, {
+                    onError: () => toast.error('Could not change your duty status. Try again.', 'Not updated'),
+                  })
+                }
+                trackColor={{ true: colors.brand }}
+                accessibilityLabel="On duty"
+              />
             </View>
             </>
           )}
@@ -242,6 +267,20 @@ const styles = themedStyles(() => StyleSheet.create({
   },
 
   // ── Stats ──
+  dutyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.lg,
+    marginTop: spacing.xl,
+    paddingTop: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    alignSelf: 'stretch',
+  },
+  dutyText: { flex: 1 },
+  dutyTitle: { ...typography.label, fontWeight: '800', color: colors.text },
+  dutyDesc: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',

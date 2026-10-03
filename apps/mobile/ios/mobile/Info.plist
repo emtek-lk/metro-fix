@@ -33,6 +33,10 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>METRO-FIX uses the camera so you can photograph completed work as proof for the customer and dispatch.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>METRO-FIX needs access to your photos only if you choose an existing picture as job proof.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>METRO-FIX uses your location in the background while you are on a job so dispatch and customers can track your arrival.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

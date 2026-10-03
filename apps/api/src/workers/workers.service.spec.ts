@@ -88,3 +88,51 @@ describe('dispatch search', () => {
     expect(results.map((r) => r.worker.id).sort()).toEqual(['w1', 'w2']);
   });
 });
+
+describe('dispatch availability', () => {
+  const makeService = (opts: { w1?: Partial<any>; openJobs?: { workerId: string }[]; history?: JobOfferRecord[] }) => {
+    const base = { rating: 4.5, servicePillars: [ServicePillar.HARD], isAvailable: true, latitude: 6.92, longitude: 79.85, user: { fullName: 'x' } };
+    const w1 = { ...base, id: 'w1', userId: 'u1', ...opts.w1 };
+    const w2 = { ...base, id: 'w2', userId: 'u2', rating: 4 };
+    const workerRepo = {
+      find: jest.fn(async () => [w1, w2]),
+      findOne: jest.fn(async () => w1),
+      save: jest.fn(async (v: any) => v),
+    };
+    const jobRepo = {
+      findOne: jest.fn(async () => ({ id: 'job-1', latitude: 6.9, longitude: 79.8, offerHistory: opts.history ?? null })),
+      find: jest.fn(async () => opts.openJobs ?? []),
+    };
+    return { service: new WorkersService(workerRepo as any, jobRepo as any, {} as any), workerRepo };
+  };
+
+  it('leaves off-duty workers out, unless dispatch asks for everyone', async () => {
+    const { service } = makeService({ w1: { isAvailable: false } });
+    expect((await service.getAvailableWorkersForJob('job-1')).map((r) => r.worker.id)).toEqual(['w2']);
+    const all = await service.getAvailableWorkersForJob('job-1', 50000, true);
+    expect(all.map((r) => [r.worker.id, r.unavailableReason])).toEqual([
+      ['w2', null],
+      ['w1', 'OFF_DUTY'],
+    ]);
+  });
+
+  it('treats a worker at the active-job cap as unavailable', async () => {
+    const openJobs = Array.from({ length: 5 }, () => ({ workerId: 'w1' }));
+    const { service } = makeService({ openJobs });
+    const all = await service.getAvailableWorkersForJob('job-1', 50000, true);
+    expect(all.find((r) => r.worker.id === 'w1')).toMatchObject({ available: false, unavailableReason: 'AT_CAPACITY', activeJobs: 5 });
+  });
+
+  it('flags a worker who declined this job', async () => {
+    const { service } = makeService({ history: [{ workerId: 'w1', outcome: 'DECLINED', at: new Date().toISOString() }] });
+    const all = await service.getAvailableWorkersForJob('job-1', 50000, true);
+    expect(all.find((r) => r.worker.id === 'w1')?.unavailableReason).toBe('DECLINED_THIS_JOB');
+  });
+
+  it('lets a worker flip their own on-duty switch', async () => {
+    const { service, workerRepo } = makeService({});
+    const updated = await service.setAvailability('u1', false);
+    expect(updated.isAvailable).toBe(false);
+    expect(workerRepo.save).toHaveBeenCalled();
+  });
+});

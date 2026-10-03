@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { WorkerEntity, ServiceRequestEntity, UserEntity } from '../entities';
 import {
   Role,
@@ -24,11 +24,23 @@ export interface WorkerStats {
   isAvailable: boolean;
 }
 
+/**
+ * A worker can be offered a job when they are on duty (their own switch in the mobile app) and
+ * carry fewer than this many accepted, unfinished jobs. Override with MAX_ACTIVE_JOBS.
+ */
+export const DEFAULT_MAX_ACTIVE_JOBS = 5;
+
+export type UnavailableReason = 'OFF_DUTY' | 'AT_CAPACITY' | 'DECLINED_THIS_JOB';
+
 export interface DispatchSearchResult {
   worker: WorkerEntity;
   distanceMeters: number;
   distanceKm: number;
   dispatchScore: number;
+  /** Accepted, unfinished jobs plus any offer awaiting an answer, counted live. */
+  activeJobs: number;
+  available: boolean;
+  unavailableReason: UnavailableReason | null;
 }
 
 @Injectable()
@@ -116,51 +128,83 @@ export class WorkersService {
     return R * c;
   }
 
+  private maxActiveJobs(): number {
+    const configured = Number(process.env.MAX_ACTIVE_JOBS);
+    return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_MAX_ACTIVE_JOBS;
+  }
+
   /**
-   * Dispatch Sorting Algorithm
+   * Dispatch search: workers ranked by `rating * 20 - distance(km)` (nearer and better rated first).
+   * Each result says whether the worker can take the job now. By default only available workers are
+   * returned; `includeUnavailable` also returns off-duty, full and previously declined workers,
+   * flagged with the reason, so dispatch can still override.
    */
   async getAvailableWorkersForJob(
     jobId: string,
     radiusMeters: number = 50000,
+    includeUnavailable: boolean = false,
   ): Promise<DispatchSearchResult[]> {
     const job = await this.jobRepo.findOne({ where: { id: jobId } });
     if (!job) {
       throw new NotFoundException(`Service request with ID "${jobId}" not found`);
     }
 
-    const allWorkers = await this.workerRepo.find({
-      where: { isAvailable: true },
-      relations: { user: true },
-    });
-    // Do not suggest anyone who already declined or rejected this job.
+    const allWorkers = await this.workerRepo.find({ relations: { user: true } });
     const turnedDown = new Set(
       (job.offerHistory ?? [])
         .filter((entry) => entry.outcome === 'DECLINED' || entry.outcome === 'REJECTED')
         .map((entry) => entry.workerId),
     );
-    const workers = allWorkers.filter((worker) => !turnedDown.has(worker.id));
+
+    // Live workload per worker: accepted unfinished jobs and open offers.
+    const open = await this.jobRepo.find({
+      where: { status: In([JobStatus.PENDING_ACCEPTANCE, JobStatus.ASSIGNED, JobStatus.ON_ROUTE, JobStatus.INSPECTION, JobStatus.IN_PROGRESS]) },
+      select: { id: true, workerId: true },
+    });
+    const workload = new Map<string, number>();
+    for (const { workerId } of open) {
+      if (workerId) workload.set(workerId, (workload.get(workerId) ?? 0) + 1);
+    }
 
     const jobLat = job.latitude ?? 37.7749;
     const jobLon = job.longitude ?? -122.4194;
+    const cap = this.maxActiveJobs();
 
-    const results: DispatchSearchResult[] = workers.map((worker) => {
+    const results: DispatchSearchResult[] = allWorkers.map((worker) => {
       const wLat = worker.latitude ?? jobLat;
       const wLon = worker.longitude ?? jobLon;
       const distanceKm = this.calculateHaversineKm(jobLat, jobLon, wLat, wLon);
-      const distanceMeters = Math.round(distanceKm * 1000);
-      const dispatchScore = worker.rating * 20 - distanceKm;
+      const activeJobs = workload.get(worker.id) ?? 0;
+      const unavailableReason: UnavailableReason | null = turnedDown.has(worker.id)
+        ? 'DECLINED_THIS_JOB'
+        : !worker.isAvailable
+          ? 'OFF_DUTY'
+          : activeJobs >= cap
+            ? 'AT_CAPACITY'
+            : null;
 
       return {
         worker,
-        distanceMeters,
+        distanceMeters: Math.round(distanceKm * 1000),
         distanceKm: parseFloat(distanceKm.toFixed(2)),
-        dispatchScore: parseFloat(dispatchScore.toFixed(2)),
+        dispatchScore: parseFloat((worker.rating * 20 - distanceKm).toFixed(2)),
+        activeJobs,
+        available: unavailableReason === null,
+        unavailableReason,
       };
     });
 
     return results
+      .filter((res) => includeUnavailable || res.available)
       .filter((res) => radiusMeters <= 0 || res.distanceMeters <= radiusMeters)
-      .sort((a, b) => b.dispatchScore - a.dispatchScore);
+      .sort((a, b) => Number(b.available) - Number(a.available) || b.dispatchScore - a.dispatchScore);
+  }
+
+  /** A worker's own on-duty switch. Off-duty workers are not offered new jobs. */
+  async setAvailability(userId: string, isAvailable: boolean): Promise<WorkerEntity> {
+    const worker = await this.findWorkerForUser(userId);
+    worker.isAvailable = isAvailable;
+    return this.workerRepo.save(worker);
   }
 
   async findJobsForWorkerUser(userId: string) {

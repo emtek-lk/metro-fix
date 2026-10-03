@@ -26,6 +26,7 @@ import { rejectJobSchema, RejectJobDto } from './dto/reject-job.dto';
 import { cancelJobSchema, CancelJobDto } from './dto/cancel-job.dto';
 import { declineOfferSchema, DeclineOfferDto } from './dto/decline-offer.dto';
 import { Roles } from '../auth/roles.decorator';
+import { jobCardSectionSchema, type JobCardSectionInput } from './dto/job-card.dto';
 
 type AuthedRequest = { user: UserEntity };
 
@@ -144,6 +145,18 @@ export class JobsController {
     @Req() req: AuthedRequest,
   ): Promise<ServiceRequestEntity> {
     return this.jobsService.submitJobProof(id, dto, actorOf(req));
+  }
+
+  /** Dispatch corrects the final job card before closing (hours, items, prices). */
+  @Roles(Role.ADMIN, Role.CUSTOMER_CARE)
+  @Patch(':id/job-card')
+  @UsePipes(new ZodValidationPipe(jobCardSectionSchema))
+  async updateJobCard(
+    @Param('id') id: string,
+    @Body() dto: JobCardSectionInput,
+    @Req() req: AuthedRequest,
+  ): Promise<ServiceRequestEntity> {
+    return this.jobsService.updateFinalCard(id, dto, actorOf(req));
   }
 
   /** A worker who already accepted hands the job back. */

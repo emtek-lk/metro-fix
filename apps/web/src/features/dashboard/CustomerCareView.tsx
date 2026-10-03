@@ -7,10 +7,14 @@ import {
   describeOfferTimeout,
   formatCountdown,
   canTransition,
+  jobCardBillable,
+  type JobCard,
 } from '@metro-fix/core-types';
 import { useMediaQuery } from '@metro-fix/ui';
 import { API_BASE_URL } from '../../lib/api';
 import { WebSocketService } from '../../lib/websocket';
+import { CreateRequestModal } from './CreateRequestModal';
+import { JobCardModal } from './JobCardModal';
 
 // Column order and the rules for moving between columns come from the shared lifecycle in
 // @metro-fix/core-types, the same definition the API enforces and the mobile apps use.
@@ -38,6 +42,17 @@ type WorkerCandidate = {
   rating: number;
   proximityKm: number;
   isAvailable: boolean;
+  /** Accepted unfinished jobs plus open offers, counted by the API. */
+  activeJobs: number;
+  /** Set by the API when the worker cannot take this job right now. */
+  unavailableReason: 'OFF_DUTY' | 'AT_CAPACITY' | 'DECLINED_THIS_JOB' | null;
+  score: number;
+};
+
+const UNAVAILABLE_LABEL: Record<NonNullable<WorkerCandidate['unavailableReason']>, string> = {
+  OFF_DUTY: 'Off duty',
+  AT_CAPACITY: 'At capacity',
+  DECLINED_THIS_JOB: 'Declined this job',
 };
 
 type AssignedWorker = {
@@ -61,6 +76,7 @@ type DispatchCard = {
   /** While PENDING_ACCEPTANCE: when the offer lapses and returns to the queue. */
   offerExpiresAt?: string | null;
   cancelReason?: string | null;
+  jobCard?: JobCard | null;
 };
 
 const asIso = (value: unknown): string =>
@@ -88,6 +104,7 @@ function jobToCard(job: any): DispatchCard {
     createdAt: asIso(job.createdAt),
     offerExpiresAt: job.offerExpiresAt ? asIso(job.offerExpiresAt) : null,
     cancelReason: job.cancelReason ?? null,
+    jobCard: job.jobCard ?? null,
   };
 }
 
@@ -139,13 +156,8 @@ const toUrgency = (value?: string): UrgencyLevel => {
   return (normalized.charAt(0) + normalized.slice(1).toLowerCase()) as UrgencyLevel;
 };
 
-function calculateWorkerScore(worker: WorkerCandidate) {
-  const availabilityBonus = worker.isAvailable ? 12 : -12;
-  return worker.rating * 25 + availabilityBonus - worker.proximityKm * 4;
-}
-
 function getWorkerBadgeLabel(worker: WorkerCandidate) {
-  return `${worker.rating.toFixed(1)} rating · ${worker.proximityKm.toFixed(1)}km`;
+  return `${worker.rating.toFixed(1)} rating · ${worker.proximityKm.toFixed(1)} km away · ${worker.activeJobs} active`;
 }
 
 export function CustomerCareView() {
@@ -162,6 +174,11 @@ export function CustomerCareView() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [workerQuery, setWorkerQuery] = useState('');
+  const [isCreateOpen, setCreateOpen] = useState(false);
+  const [jobCardCardId, setJobCardCardId] = useState<string | null>(null);
+  const [includeUnavailable, setIncludeUnavailable] = useState(false);
+  const [workersLoading, setWorkersLoading] = useState(false);
 
   const showToast = (message: string, type: 'success' | 'error') => {
     setToast({ message, type });
@@ -289,10 +306,18 @@ export function CustomerCareView() {
     }));
   }, [grouped, searchQuery]);
 
-  const sortedWorkers = useMemo(
-    () => [...workersList].sort((left, right) => calculateWorkerScore(right) - calculateWorkerScore(left)),
-    [workersList]
-  );
+  // The API returns workers ranked for this job (available first, then nearest and best rated).
+  const sortedWorkers = workersList;
+
+  const visibleWorkers = useMemo(() => {
+    const q = workerQuery.toLowerCase().trim();
+    const pool = includeUnavailable ? sortedWorkers : sortedWorkers.filter((worker) => !worker.unavailableReason);
+    if (!q) return pool;
+    return pool.filter((worker) =>
+      [worker.fullName, worker.coverageZone, getWorkerBadgeLabel(worker)].some((text) => text.toLowerCase().includes(q)),
+    );
+  }, [sortedWorkers, workerQuery, includeUnavailable]);
+  const hiddenUnavailableCount = sortedWorkers.filter((worker) => worker.unavailableReason).length;
 
   const selectedCard = useMemo(() => {
     if (!selectedCardId) {
@@ -306,36 +331,40 @@ export function CustomerCareView() {
     setSelectedCardId(cardId);
     setDispatchModalOpen(true);
 
+    setWorkersList([]);
+    setSelectedWorkerId(null);
+    setWorkersLoading(true);
     const token = localStorage.getItem('metrofix_token');
-    fetch(`${API_BASE_URL}/workers`, {
+    // Ranked for this job: real distance, rating, on-duty flag and live workload.
+    fetch(`${API_BASE_URL}/workers/dispatch-search?jobId=${encodeURIComponent(cardId)}&radius=0&includeUnavailable=true`, {
       headers: {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
     })
       .then((res) => (res.ok ? res.json() : []))
       .then((data: any[]) => {
-        if (Array.isArray(data) && data.length > 0) {
-          const mapped: WorkerCandidate[] = data.map((item) => ({
-            id: item.id,
-            fullName: item.user?.fullName || 'Field Worker',
-            serviceTypes: [ServiceType.Hard],
-            coverageZone: 'Colombo Central',
-            rating: item.rating ?? 5.0,
-            proximityKm: 1.5,
-            isAvailable: item.isAvailable ?? true,
-          }));
-          setWorkersList(mapped);
-          setSelectedWorkerId(mapped[0].id);
-        } else {
-          setSelectedWorkerId(sortedWorkers[0]?.id ?? null);
-        }
+        const mapped: WorkerCandidate[] = (Array.isArray(data) ? data : []).map((item) => ({
+          id: item.worker.id,
+          fullName: item.worker.user?.fullName || 'Field Worker',
+          serviceTypes: (item.worker.servicePillars as ServiceType[]) ?? [],
+          coverageZone: (item.worker.servicePillars ?? []).join(' · ') || 'All services',
+          rating: item.worker.rating ?? 5,
+          proximityKm: item.distanceKm ?? 0,
+          isAvailable: item.available,
+          activeJobs: item.activeJobs ?? 0,
+          unavailableReason: item.unavailableReason ?? null,
+          score: item.dispatchScore ?? 0,
+        }));
+        setWorkersList(mapped);
+        setSelectedWorkerId(mapped.find((worker) => !worker.unavailableReason)?.id ?? null);
       })
-      .catch(() => {
-        setSelectedWorkerId(sortedWorkers[0]?.id ?? null);
-      });
+      .catch(() => showToast('Could not load workers. Close and try again.', 'error'))
+      .finally(() => setWorkersLoading(false));
   };
 
   const closeDispatchModal = () => {
+    setWorkerQuery('');
+    setIncludeUnavailable(false);
     setDispatchModalOpen(false);
     setSelectedCardId(null);
     setSelectedWorkerId(null);
@@ -383,7 +412,8 @@ export function CustomerCareView() {
       const sourceCards = [...currentColumns[sourceStatus]];
       const [removedCard] = sourceCards.splice(currentLocation.index, 1);
       const nextCard = mutate ? mutate({ ...removedCard }) : { ...removedCard, status: destinationStatus };
-      const destinationCards = [...currentColumns[destinationStatus]];
+      // The live socket update may already have put the card in its destination column.
+      const destinationCards = destinationStatus === sourceStatus ? sourceCards : [...currentColumns[destinationStatus]];
 
       if (destinationIndex === undefined) {
         destinationCards.unshift(nextCard);
@@ -670,6 +700,14 @@ export function CustomerCareView() {
                 </svg>
                 <span>{isRefreshing ? 'Refreshing…' : 'Refresh'}</span>
               </button>
+              <button
+                type="button"
+                onClick={() => setCreateOpen(true)}
+                aria-label="Create a service request for a customer"
+                style={styles.newRequestButton}
+              >
+                + New request
+              </button>
               {fetchError && <span style={styles.fetchError} role="alert">{fetchError}</span>}
               {isFiltering && (
                 <div className="metro-search-count-pill">
@@ -786,6 +824,21 @@ export function CustomerCareView() {
                                   </button>
                                 )}
 
+                                {(item.jobCard || status === JobStatus.InProgress || status === JobStatus.Completed) && (
+                                  <button
+                                    type="button"
+                                    style={styles.linkActionButton}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      setJobCardCardId(item.id);
+                                    }}
+                                  >
+                                    {item.jobCard
+                                      ? `Job card · ${Math.round(jobCardBillable(item.jobCard)?.total ?? 0).toLocaleString()} ${item.jobCard.currency}`
+                                      : 'Job card'}
+                                  </button>
+                                )}
+
                                 {status === JobStatus.Completed && (
                                   <button
                                     type="button"
@@ -815,6 +868,47 @@ export function CustomerCareView() {
         </div>
       </DragDropContext>
 
+      {jobCardCardId && (() => {
+        const target = Object.values(columns).flat().find((card) => card.id === jobCardCardId);
+        if (!target) return null;
+        return (
+          <JobCardModal
+            key={target.id + (target.jobCard?.final?.savedAt ?? target.jobCard?.estimate?.savedAt ?? '')}
+            jobId={target.id}
+            title={target.title}
+            status={target.status}
+            jobCard={target.jobCard}
+            onClose={() => setJobCardCardId(null)}
+            onSaved={(job) => {
+              setColumns((prev) => {
+                const updated = { ...prev };
+                (Object.keys(updated) as JobStatus[]).forEach((status) => {
+                  updated[status] = updated[status].filter((card) => card.id !== job.id);
+                });
+                const card = jobToCard(job);
+                updated[card.status] = [card, ...(updated[card.status] || [])];
+                return updated;
+              });
+              showToast('Job card saved.', 'success');
+            }}
+          />
+        );
+      })()}
+
+      {isCreateOpen && (
+        <CreateRequestModal
+          onClose={() => setCreateOpen(false)}
+          onCreated={(job) => {
+            setColumns((prev) => {
+              const card = jobToCard(job);
+              if (Object.values(prev).some((cards) => cards.some((existing) => existing.id === card.id))) return prev;
+              return { ...prev, [card.status]: [card, ...(prev[card.status] || [])] };
+            });
+            showToast('Request created. It is in the REQUESTED column.', 'success');
+          }}
+        />
+      )}
+
       {isDispatchModalOpen && (
         <div style={styles.modalOverlay} role="dialog" aria-modal="true" aria-label="Worker dispatch modal" className="metro-modal-overlay">
           <div style={styles.modalCard} className="metro-modal-card">
@@ -840,26 +934,67 @@ export function CustomerCareView() {
 
             <div style={styles.dispatchGrid}>
               <div style={styles.workerList}>
-                <div style={styles.dispatchLaneTitle}>Available workers</div>
-                {sortedWorkers.map((worker) => {
+                <div style={styles.dispatchLaneTitle}>
+                  {includeUnavailable ? 'All workers' : 'Available workers'} ({visibleWorkers.length})
+                </div>
+                <label style={styles.workerToggle}>
+                  <input
+                    type="checkbox"
+                    checked={includeUnavailable}
+                    onChange={(e) => setIncludeUnavailable(e.target.checked)}
+                  />
+                  <span>
+                    Include unavailable{hiddenUnavailableCount > 0 ? ` (${hiddenUnavailableCount})` : ''}
+                  </span>
+                </label>
+                <input
+                  type="search"
+                  value={workerQuery}
+                  onChange={(e) => setWorkerQuery(e.target.value)}
+                  placeholder="Search workers by name or zone…"
+                  aria-label="Search workers"
+                  className="metro-worker-search"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                <div style={styles.workerScroll}>
+                {visibleWorkers.length === 0 && (
+                  <div style={styles.workerEmpty}>
+                    {workersLoading
+                      ? 'Finding the best workers…'
+                      : sortedWorkers.length === 0
+                        ? 'No workers found.'
+                        : workerQuery.trim()
+                          ? 'No workers match your search.'
+                          : 'No one is available for this job right now. Tick “Include unavailable” to override.'}
+                  </div>
+                )}
+                {visibleWorkers.map((worker) => {
                   const isSelected = worker.id === selectedWorkerId;
 
                   return (
                     <button
                       key={worker.id}
                       type="button"
+                      className="metro-worker-row"
+                      aria-pressed={isSelected}
                       style={{ ...styles.workerRow, ...(isSelected ? styles.workerRowSelected : undefined) }}
                       onClick={() => setSelectedWorkerId(worker.id)}
                     >
                       <div style={styles.workerTopRow}>
                         <strong style={styles.workerName}>{worker.fullName}</strong>
-                        <span style={styles.workerScore}>{calculateWorkerScore(worker).toFixed(0)}</span>
+                        {worker.unavailableReason ? (
+                          <span style={styles.workerUnavailable}>{UNAVAILABLE_LABEL[worker.unavailableReason]}</span>
+                        ) : (
+                          <span style={styles.workerScore}>{worker.score.toFixed(0)}</span>
+                        )}
                       </div>
                       <div style={styles.workerMeta}>{worker.coverageZone}</div>
                       <div style={styles.workerMeta}>{getWorkerBadgeLabel(worker)}</div>
                     </button>
                   );
                 })}
+                </div>
               </div>
 
               <div style={styles.dispatchPreview}>
@@ -1136,6 +1271,19 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: '0.08em',
     color: '#f38808',
   },
+  newRequestButton: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    height: 36,
+    padding: '0 14px',
+    borderRadius: 999,
+    border: '1px solid #d37105',
+    background: 'linear-gradient(135deg, #f38808, #d37105)',
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: 'pointer',
+  } as CSSProperties,
   refreshButton: {
     display: 'inline-flex',
     alignItems: 'center',
@@ -1284,6 +1432,33 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: '14px',
     padding: '14px',
     border: '1px solid var(--border-subtle)',
+  },
+  workerToggle: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    marginBottom: '10px',
+    fontSize: '0.82rem',
+    color: 'var(--text-secondary)',
+    cursor: 'pointer',
+  },
+  workerUnavailable: {
+    borderRadius: '999px',
+    border: '1px solid rgba(255, 138, 128, 0.6)',
+    color: '#ff8a80',
+    padding: '1px 8px',
+    fontSize: '0.7rem',
+    fontWeight: 700,
+  },
+  workerScroll: {
+    maxHeight: '46vh',
+    overflowY: 'auto',
+    paddingRight: '2px',
+  },
+  workerEmpty: {
+    color: 'var(--text-secondary)',
+    fontSize: '0.85rem',
+    padding: '10px 2px',
   },
   workerRow: {
     width: '100%',

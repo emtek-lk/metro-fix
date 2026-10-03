@@ -19,6 +19,10 @@ import {
   canTransition,
   type JobOfferOutcome,
   type JobOfferRecord,
+  type JobCard,
+  type JobCardSection,
+  JOB_CARD_CURRENCY,
+  computeJobCardTotals,
 } from '@metro-fix/core-types';
 import { RejectJobDto } from './dto/reject-job.dto';
 import { CancelJobDto } from './dto/cancel-job.dto';
@@ -28,6 +32,8 @@ import { UpdateJobStatusDto } from './dto/update-job-status.dto';
 import { CreateJobDto } from './dto/create-job.dto';
 import { SubmitQuoteDto } from './dto/submit-quote.dto';
 import { SubmitProofDto } from './dto/submit-proof.dto';
+import type { JobCardSectionInput } from './dto/job-card.dto';
+import { randomUUID } from 'crypto';
 import { JobsGateway } from './jobs.gateway';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -440,7 +446,30 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Submits a cost and labor quote for a job ticket and transitions state to IN_PROGRESS.
+   * Turns client input into a priced card section. Totals are always computed here, never taken
+   * from the client, so the card can be trusted for invoicing.
+   */
+  private buildCardSection(input: JobCardSectionInput, taxRate: number, savedBy?: string | null): JobCardSection {
+    const lineItems = input.lineItems.map((item) => ({
+      id: item.id || randomUUID(),
+      kind: item.kind,
+      description: item.description.trim(),
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+    }));
+    return {
+      lineItems,
+      hours: input.hours,
+      notes: input.notes ?? '',
+      ...computeJobCardTotals(lineItems, taxRate),
+      savedAt: new Date().toISOString(),
+      savedBy: savedBy ?? null,
+    };
+  }
+
+  /**
+   * Submits the inspection quote as a job card (itemised lines, time, notes) and moves the job to
+   * IN_PROGRESS. The flat cost / hours form is still accepted and becomes one line.
    */
   async submitJobQuote(
     id: string,
@@ -451,12 +480,32 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     await this.assertWorkerOwns(job, actor);
     this.assertTransition(job.status, JobStatus.IN_PROGRESS);
 
+    const taxRate = dto.taxRate ?? job.jobCard?.taxRate ?? 0;
+    const input: JobCardSectionInput = dto.lineItems
+      ? {
+          lineItems: dto.lineItems,
+          hours:
+            dto.estimatedHours ??
+            dto.lineItems.filter((line) => line.kind === 'LABOUR').reduce((sum, line) => sum + line.quantity, 0),
+          notes: dto.notes ?? '',
+        }
+      : {
+          lineItems: [
+            { kind: 'OTHER', description: 'Estimated work', quantity: 1, unitPrice: dto.estimatedCost ?? 0 },
+          ],
+          hours: dto.estimatedHours ?? 0,
+          notes: dto.notes ?? '',
+        };
+    const estimate = this.buildCardSection(input, taxRate, actor?.id);
+    const jobCard: JobCard = { currency: JOB_CARD_CURRENCY, taxRate, estimate, final: null };
+
     return this.commit(
       id,
       {
-        quoteAmount: dto.estimatedCost,
-        estimatedHours: dto.estimatedHours,
-        quoteNotes: dto.notes,
+        jobCard,
+        quoteAmount: estimate.total,
+        estimatedHours: estimate.hours,
+        quoteNotes: estimate.notes,
         status: JobStatus.IN_PROGRESS,
       },
       { expected: job.status },
@@ -464,7 +513,8 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Submits signature and photo proof for a job ticket and transitions state to COMPLETED.
+   * Submits signature and photo proof and moves the job to COMPLETED. If the worker confirmed or
+   * corrected the job card, that becomes the final section the invoice is based on.
    */
   async submitJobProof(
     id: string,
@@ -475,15 +525,44 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
     await this.assertWorkerOwns(job, actor);
     this.assertTransition(job.status, JobStatus.COMPLETED);
 
-    return this.commit(
-      id,
-      {
-        signature: dto.signature,
-        photos: dto.photos,
-        status: JobStatus.COMPLETED,
-      },
-      { expected: job.status },
-    );
+    const patch: Partial<ServiceRequestEntity> = {
+      signature: dto.signature,
+      photos: dto.photos,
+      status: JobStatus.COMPLETED,
+    };
+    if (dto.finalCard) {
+      patch.jobCard = this.withFinal(job.jobCard, dto.finalCard, actor?.id);
+    }
+
+    return this.commit(id, patch, { expected: job.status });
+  }
+
+  private withFinal(existing: JobCard | null | undefined, input: JobCardSectionInput, savedBy?: string | null): JobCard {
+    const taxRate = input.taxRate ?? existing?.taxRate ?? 0;
+    const final = this.buildCardSection(input, taxRate, savedBy);
+    // A job quoted before job cards existed has no estimate; the final stands in for it.
+    return {
+      currency: existing?.currency ?? JOB_CARD_CURRENCY,
+      taxRate,
+      estimate: existing?.estimate ?? final,
+      final,
+    };
+  }
+
+  /**
+   * Dispatch corrects the final job card (hours or items changed on site, a price was wrong)
+   * before the ticket is closed and billed. Closed tickets are locked.
+   */
+  async updateFinalCard(id: string, input: JobCardSectionInput, actor: Actor): Promise<ServiceRequestEntity> {
+    const job = await this.findOne(id);
+    if (job.status !== JobStatus.IN_PROGRESS && job.status !== JobStatus.COMPLETED) {
+      throw new ConflictException(
+        job.status === JobStatus.CLOSED
+          ? 'This ticket is closed, so its job card is locked.'
+          : `The job card can be edited once work is in progress; this job is ${job.status}.`,
+      );
+    }
+    return this.commit(id, { jobCard: this.withFinal(job.jobCard, input, actor.id) }, { expected: job.status });
   }
 
   /**

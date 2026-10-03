@@ -157,6 +157,9 @@ REQUESTED -> PENDING_ACCEPTANCE. The worker then calls `POST /jobs/:id/accept` o
 
 ### 4.6 Submit Quote — `POST /jobs/:id/quote`
 
+Body: `{ lineItems: [{kind: LABOUR|MATERIAL|OTHER, description, quantity, unitPrice}], estimatedHours?, notes?, taxRate? }` (the old `{estimatedCost, estimatedHours, notes}` still works and becomes one line). Totals are computed by the API and stored in `jobCard.estimate`. `POST /jobs/:id/proof` accepts an optional `finalCard` `{lineItems, hours, notes}`; `PATCH /jobs/:id/job-card` (ADMIN, CUSTOMER_CARE) edits the final until CLOSED. `PATCH /workers/me/availability {isAvailable}` is the worker's on-duty switch; `GET /workers/dispatch-search?jobId=&radius=&includeUnavailable=` ranks workers for a job.
+
+
 **Decorator:** `@Public()`, validated by `submitQuoteSchema`
 
 ```json

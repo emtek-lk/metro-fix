@@ -309,6 +309,8 @@ export type ServiceRequest = z.infer<typeof serviceRequestSchema> & {
   worker?: JobParty | null;
   /** Everyone this job was offered to and what they answered. */
   offerHistory?: JobOfferRecord[] | null;
+  /** Itemised estimate / final for invoicing; absent on jobs quoted before job cards existed. */
+  jobCard?: JobCard | null;
 };
 
 // Worker Job Queue Response DTO
@@ -333,6 +335,72 @@ export const updateWorkerLocationSchema = z.object({
 });
 
 export type UpdateWorkerLocationDto = z.infer<typeof updateWorkerLocationSchema>;
+
+// ==========================================
+// Job card (quote now, confirmed at completion, basis for the invoice)
+// ==========================================
+
+export type JobCardLineKind = 'LABOUR' | 'MATERIAL' | 'OTHER';
+
+export interface JobCardLineItem {
+  id: string;
+  kind: JobCardLineKind;
+  description: string;
+  /** Hours for labour, units for materials. */
+  quantity: number;
+  unitPrice: number;
+}
+
+/** One priced version of the work: the estimate made at inspection, or the final confirmed at completion. */
+export interface JobCardSection {
+  lineItems: JobCardLineItem[];
+  /** Total labour time in hours (the schedule estimate, or the time actually spent). */
+  hours: number;
+  notes: string;
+  subtotal: number;
+  tax: number;
+  total: number;
+  savedAt: string;
+  /** User id of whoever last saved this section. */
+  savedBy?: string | null;
+}
+
+export interface JobCard {
+  currency: string;
+  /** Tax as a percentage, e.g. 8 for 8%. */
+  taxRate: number;
+  estimate: JobCardSection;
+  /** Confirmed values at completion; the invoice uses this, falling back to the estimate. */
+  final?: JobCardSection | null;
+}
+
+export const JOB_CARD_CURRENCY = 'LKR';
+
+const roundMoney = (value: number): number => Math.round((value + Number.EPSILON) * 100) / 100;
+
+/** Line total, never negative or NaN. */
+export function jobCardLineTotal(item: Pick<JobCardLineItem, 'quantity' | 'unitPrice'>): number {
+  const quantity = Number.isFinite(item.quantity) ? Math.max(0, item.quantity) : 0;
+  const unitPrice = Number.isFinite(item.unitPrice) ? Math.max(0, item.unitPrice) : 0;
+  return roundMoney(quantity * unitPrice);
+}
+
+/** Subtotal, tax and total for a set of lines. The API recomputes these; clients use it for live totals. */
+export function computeJobCardTotals(
+  lineItems: readonly Pick<JobCardLineItem, 'quantity' | 'unitPrice'>[],
+  taxRate: number = 0,
+): { subtotal: number; tax: number; total: number } {
+  const subtotal = roundMoney(lineItems.reduce((sum, item) => sum + jobCardLineTotal(item), 0));
+  const rate = Number.isFinite(taxRate) ? Math.max(0, taxRate) : 0;
+  const tax = roundMoney((subtotal * rate) / 100);
+  return { subtotal, tax, total: roundMoney(subtotal + tax) };
+}
+
+/** The section that counts for billing: the confirmed final if there is one, otherwise the estimate. */
+export function jobCardBillable(card: JobCard | null | undefined): JobCardSection | null {
+  if (!card) return null;
+  return card.final ?? card.estimate ?? null;
+}
 
 // Job Quote DTO (worker estimate submission)
 export const submitJobQuoteSchema = z.object({
