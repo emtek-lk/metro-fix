@@ -10,9 +10,11 @@ const authHeaders = (): Record<string, string> => {
 };
 
 /** Sends a PATCH and returns the parsed body, or throws an Error whose message is fit to show. */
-async function patch(path: string, body: unknown): Promise<unknown> {
+const patch = (path: string, body: unknown) => send('PATCH', path, body);
+
+async function send(method: 'PATCH' | 'POST', path: string, body: unknown): Promise<unknown> {
   const response = await fetch(`${API_BASE}${path}`, {
-    method: 'PATCH',
+    method,
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(body),
   });
@@ -45,6 +47,12 @@ export interface EditableWorker {
   rating: number;
   servicePillars: string[];
   isAvailable: boolean;
+  /** The worker's login (users table); present when the API sent it. */
+  userId?: string;
+  accountActive?: boolean;
+  accountLocked?: boolean;
+  /** Still on a one-time password, hasn't chosen their own yet. */
+  mustChangePassword?: boolean;
 }
 
 function Modal({ title, subtitle, onClose, onSubmit, saving, error, children }: {
@@ -173,6 +181,97 @@ const PILLARS = [
   { key: 'STRATEGIC', label: 'Strategic FM' },
 ];
 
+// No 0/O/1/l/I so a password read out loud or typed from a screen is not misread.
+const PW_LETTERS = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ';
+const PW_DIGITS = '23456789';
+
+/** A random one-time password with letters and digits, made in the browser and shown once. */
+function generateOneTimePassword(length = 10): string {
+  const pick = (set: string) => set[crypto.getRandomValues(new Uint32Array(1))[0] % set.length];
+  const all = PW_LETTERS + PW_DIGITS;
+  const chars = [pick(PW_LETTERS), pick(PW_DIGITS)];
+  while (chars.length < length) chars.push(pick(all));
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = crypto.getRandomValues(new Uint32Array(1))[0] % (i + 1);
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+  return chars.join('');
+}
+
+/**
+ * The admin's controls over a worker's login. The admin never chooses the worker's real password:
+ * a reset issues a one-time password that the worker must replace at their next sign-in.
+ */
+function WorkerAccess({ worker, onChanged }: { worker: EditableWorker; onChanged: () => void }) {
+  const [active, setActive] = useState(worker.accountActive !== false);
+  const [locked, setLocked] = useState(worker.accountLocked === true);
+  const [pending, setPending] = useState(worker.mustChangePassword === true);
+  const [issued, setIssued] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  if (!worker.userId) return null;
+  const userId = worker.userId;
+
+  const run = async (key: string, action: () => Promise<void>) => {
+    setBusy(key);
+    setProblem(null);
+    setNote(null);
+    try {
+      await action();
+      onChanged();
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : 'That did not work.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const resetPassword = () =>
+    run('reset', async () => {
+      const password = generateOneTimePassword();
+      await send('POST', `/admin/users/${userId}/reset-password`, { password });
+      setIssued(password);
+      setPending(true);
+      setLocked(false);
+    });
+  const toggleActive = () =>
+    run('active', async () => {
+      await send('PATCH', `/admin/users/${userId}`, { isActive: !active });
+      setActive(!active);
+      setNote(active ? 'Account switched off. They cannot sign in, and any open session ends.' : 'Account switched back on.');
+    });
+  const unlock = () =>
+    run('unlock', async () => {
+      await send('POST', `/admin/users/${userId}/unlock`, {});
+      setLocked(false);
+      setNote('Account unlocked.');
+    });
+
+  const state = !active ? 'Deactivated' : locked ? 'Locked after failed sign-ins' : pending ? 'Waiting for the worker to set their own password' : 'Active';
+
+  return (
+    <div style={styles.access}>
+      <div style={styles.label}>Login access</div>
+      <div style={styles.hint}>Status: <strong>{state}</strong>. Workers choose and change their own password in the mobile app; you can only issue a one-time one.</div>
+      <div style={styles.accessActions}>
+        <button type="button" style={styles.close} onClick={resetPassword} disabled={busy !== null}>{busy === 'reset' ? 'Working…' : 'Issue new one-time password'}</button>
+        {locked && <button type="button" style={styles.close} onClick={unlock} disabled={busy !== null}>Unlock</button>}
+        <button type="button" style={styles.close} onClick={toggleActive} disabled={busy !== null}>{active ? 'Deactivate account' : 'Reactivate account'}</button>
+      </div>
+      {issued && (
+        <div style={styles.issued} role="status">
+          <div>One-time password for {worker.fullName}. It is shown only now, so share it with them privately:</div>
+          <code style={styles.code}>{issued}</code>
+        </div>
+      )}
+      {note && <div style={styles.hint} role="status">{note}</div>}
+      {problem && <div style={styles.error} role="alert">{problem}</div>}
+    </div>
+  );
+}
+
 export function EditWorkerModal({ worker, onClose, onSaved }: { worker: EditableWorker; onClose: () => void; onSaved: () => void }) {
   const [form, setForm] = useState({
     fullName: worker.fullName,
@@ -240,6 +339,7 @@ export function EditWorkerModal({ worker, onClose, onSaved }: { worker: Editable
         <input type="checkbox" checked={form.isAvailable} onChange={(e) => setForm((f) => ({ ...f, isAvailable: e.target.checked }))} />
         On duty (can be offered new jobs)
       </label>
+      <WorkerAccess worker={worker} onChanged={onSaved} />
     </Modal>
   );
 }
@@ -258,6 +358,10 @@ const styles: Record<string, CSSProperties> = {
   hint: { fontSize: '0.74rem', color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.4 },
   checks: { display: 'flex', gap: 18, flexWrap: 'wrap' },
   check: { display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: '0.88rem', color: 'var(--text-primary)', marginTop: 12 },
+  access: { marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--border-subtle)' },
+  accessActions: { display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10 },
+  issued: { marginTop: 12, padding: '10px 12px', borderRadius: 10, background: 'rgba(243, 136, 8, 0.12)', border: '1px solid rgba(243, 136, 8, 0.4)', color: 'var(--text-primary)', fontSize: '0.84rem', display: 'grid', gap: 6 },
+  code: { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '1.05rem', letterSpacing: '0.08em', userSelect: 'all' },
   error: { marginTop: 14, color: '#ff8a80', fontSize: '0.85rem' },
   actions: { display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 },
   save: { border: '1px solid #d37105', background: 'linear-gradient(135deg, #f38808, #d37105)', color: '#fff', padding: '10px 18px', borderRadius: 12, fontWeight: 700, cursor: 'pointer' },

@@ -67,6 +67,13 @@ describe('AdminUsersService', () => {
     expect(patch).toMatchObject({ failedLoginCount: 0, lockedUntil: null });
     expect(JSON.stringify(audit.record.mock.calls)).not.toContain('Fresh2026Pass');
     await expect(service.resetPassword('u1', 'short', admin)).rejects.toBeInstanceOf(BadRequestException);
+    expect(patch.mustChangePassword).toBe(false);
+  });
+
+  it('makes a reset worker password one-time, so the worker must choose their own', async () => {
+    const { service, repo } = build([person({ id: 'w1', role: Role.WORKER })]);
+    await service.resetPassword('w1', 'Fresh2026Pass', admin);
+    expect(repo.update.mock.calls[0][1]).toMatchObject({ mustChangePassword: true });
   });
 });
 

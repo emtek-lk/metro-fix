@@ -58,8 +58,8 @@ The **Dispatch Board** (`/dispatch`) provides real-time visibility and manual co
 7. `CLOSED`: Dispatcher reviewed the proof and clicked **Approve & Close**; ticket archived and billed.
 
 ### Kanban Drag-and-Drop Operations
-* **Updating Status:** Click and hold any service request card, drag it to the desired destination column, and drop it.
-* **Real-time Persistence:** Dropping a card triggers an immediate `PATCH /jobs/:id/status` API call to update the database.
+* **Updating Status:** Click and hold any service request card, drag it to the desired destination column, and drop it. The card does not move yet: a **Confirm stage change** box names the job, shows `From -> To` and says what will happen (for example that the customer and worker are notified, or that closing archives the ticket). Choose the stage button to go ahead, or **Keep as is** (focused by default, so a stray Enter changes nothing) / Esc / click outside to leave the job where it was. The **Withdraw offer**, **Cancel job** and **Approve & Close** buttons ask the same way. If another dispatcher moved the job while the box was open, nothing is changed and you are told.
+* **Real-time Persistence:** Confirming sends the change to the API (`PATCH /jobs/:id/status`, or `/close` for Approve & Close).
 * **Optimistic UI & Network Resilience:**
   * **Success:** A toast notification confirms: `✓ Job status updated to "[NEW_STATUS]"`.
   * **Failure/Offline:** If the backend network call fails, the action is automatically rolled back to its previous column and an error toast is displayed: `✕ Failed to persist job status change to backend API. Action reverted.`.
@@ -96,6 +96,9 @@ Administrators manage system entities, customer profiles, service catalogs, and 
 ### Worker Directory (`/admin/workers`)
 * **Edit** a worker's contact details, internal rating (1–5, which dispatch ranks by), the services they cover, and whether they are on duty.
 * Monitor technician profiles, internal 1-5 quality ratings, current availability status, and active job loads.
+* **Adding a worker:** the new technician gets a generated one-time password, shown once in the dialog (with a Copy button). Give it to them privately. At first sign-in the mobile app makes them choose their own password, so you never need to know it.
+* **Login access** (inside Edit): *Issue new one-time password* (forgotten password; they must choose a new one again), *Unlock* (after too many wrong attempts), *Deactivate / Reactivate account*. Workers change their own password in the app under Profile > Change password.
+* **Customers see the itemised quote** once the technician has submitted it: every labour, material and other line with quantity, rate and amount, tax, total, estimated time and the technician's note (web My requests and the mobile request screen; it becomes the *Final bill* after completion).
 
 ---
 

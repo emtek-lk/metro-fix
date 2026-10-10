@@ -13,5 +13,7 @@ export type RootStackParamList = {
   Plans: { onboarding?: boolean } | undefined;
   Checkout: { tier: string; cycle: 'MONTHLY' | 'ANNUAL'; amountLkr: number; intent: string; onboarding?: boolean };
   Gallery: undefined;
+  /** Voluntary password change (Profile). The forced first-sign-in version is not a pushed screen. */
+  ChangePassword: undefined;
   Unsupported: undefined;
 };

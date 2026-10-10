@@ -15,8 +15,8 @@ Pilot area: Colombo, Gampaha, Kalutara. Then Kandy, Galle, Matara, Kurunegala, t
 |---|---|---|
 | **Customer** | Web customer portal (`/portal/*`) | Browse the catalog, raise a request, track it live. |
 | **Customer Care / Dispatcher** | Web dashboard | Triage `REQUESTED` tickets, assign workers, watch the roster, review proof and **close** jobs. |
-| **Admin** | Web dashboard | Everything above plus workers, customers, catalog, plans, financials. Creates worker accounts. |
-| **Field Worker (technician)** | Mobile app (Expo) | Travel, inspect, quote, reject if out of scope, do the work, capture photo + signature. Cannot self-register. |
+| **Admin** | Web dashboard | Everything above plus workers, customers, catalog, plans, financials. Creates worker accounts and can issue a one-time password, deactivate or unlock a login, but never sets or sees a worker's real password. |
+| **Field Worker (technician)** | Mobile app (Expo) | Travel, inspect, quote, reject if out of scope, do the work, capture photo + signature. Cannot self-register: an admin creates the account and hands over a one-time password; at first sign-in the worker must choose their own, and can change it any time from Profile. |
 
 ## 3. Subscription plans (indicative launch prices, LKR, pending legal/tax/finance validation)
 

@@ -26,7 +26,16 @@ export interface AddWorkerModalProps {
 export function AddWorkerModal({ isOpen, onClose, onWorkerAdded }: AddWorkerModalProps) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const modalRef = useModalAccessibility(isOpen, onClose);
+  // After creation the one-time password is shown once; the list refreshes when this is dismissed.
+  const [created, setCreated] = useState<{ worker: any; password: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const dismiss = () => {
+    if (created) onWorkerAdded(created.worker);
+    setCreated(null);
+    setCopied(false);
+    onClose();
+  };
+  const modalRef = useModalAccessibility(isOpen, dismiss);
 
   const {
     register,
@@ -70,8 +79,8 @@ export function AddWorkerModal({ isOpen, onClose, onWorkerAdded }: AddWorkerModa
 
       const createdWorker = await response.json();
       reset();
-      onWorkerAdded(createdWorker);
-      onClose();
+      const { temporaryPassword, ...worker } = createdWorker;
+      setCreated({ worker, password: temporaryPassword ?? '' });
     } catch (err: any) {
       setSubmitError(err.message || 'Network error occurred while creating worker.');
     } finally {
@@ -80,7 +89,7 @@ export function AddWorkerModal({ isOpen, onClose, onWorkerAdded }: AddWorkerModa
   };
 
   return (
-    <div style={styles.overlay} onClick={onClose} className="metro-modal-overlay">
+    <div style={styles.overlay} onClick={dismiss} className="metro-modal-overlay">
       <div
         ref={modalRef}
         role="dialog"
@@ -93,13 +102,37 @@ export function AddWorkerModal({ isOpen, onClose, onWorkerAdded }: AddWorkerModa
       >
         <div style={styles.header}>
           <div>
-            <h2 id="add-worker-title" style={styles.title}>Register New Field Technician</h2>
-            <p style={styles.subtitle}>Add a new worker to the active dispatch roster</p>
+            <h2 id="add-worker-title" style={styles.title}>{created ? 'Technician registered' : 'Register New Field Technician'}</h2>
+            <p style={styles.subtitle}>{created ? `${created.worker.user?.fullName ?? 'The worker'} can now sign in to the mobile app` : 'Add a new worker to the active dispatch roster'}</p>
           </div>
-          <button type="button" aria-label="Close modal" className="metro-ghost-btn" style={styles.closeBtn} onClick={onClose}>
+          <button type="button" aria-label="Close modal" className="metro-ghost-btn" style={styles.closeBtn} onClick={dismiss}>
             ✕
           </button>
         </div>
+
+        {created ? (
+          <div style={styles.form}>
+            <p style={{ margin: 0, lineHeight: 1.5 }}>
+              Give them this one-time password privately (in person or by phone). It is shown only now and is not stored in readable form.
+              At first sign-in the app makes them choose their own password, so you never need to know it.
+            </p>
+            <div style={styles.passwordBox}>
+              <code style={styles.passwordCode}>{created.password}</code>
+              <button
+                type="button"
+                className="metro-ghost-btn"
+                style={styles.cancelBtn}
+                onClick={() => navigator.clipboard?.writeText(created.password).then(() => setCopied(true), () => undefined)}
+              >
+                {copied ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+            <div style={styles.actions}>
+              <button type="button" style={styles.submitBtn} onClick={dismiss}>Done</button>
+            </div>
+          </div>
+        ) : (
+          <>
 
         {submitError && (
           <div style={styles.errorBanner}>
@@ -224,6 +257,8 @@ export function AddWorkerModal({ isOpen, onClose, onWorkerAdded }: AddWorkerModa
             </button>
           </div>
         </form>
+          </>
+        )}
       </div>
     </div>
   );
@@ -361,6 +396,22 @@ const styles: Record<string, CSSProperties> = {
     background: 'rgba(243, 136, 8, 0.14)',
     borderColor: '#f38808',
     color: 'var(--text-primary)',
+  },
+  passwordBox: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '12px',
+    padding: '14px 16px',
+    borderRadius: '14px',
+    border: '1px solid rgba(243, 136, 8, 0.45)',
+    background: 'rgba(243, 136, 8, 0.1)',
+  },
+  passwordCode: {
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+    fontSize: '1.3rem',
+    letterSpacing: '0.1em',
+    userSelect: 'all',
   },
   actions: {
     display: 'flex',

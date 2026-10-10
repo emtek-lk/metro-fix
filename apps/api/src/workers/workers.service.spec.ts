@@ -193,3 +193,38 @@ describe('dispatch settings', () => {
     expect(limited.map((r) => r.worker.id)).toEqual(['near']);
   });
 });
+
+describe('WorkersService.createWorker', () => {
+  function make(existing: any = null) {
+    const users: any[] = [];
+    const userRepo = {
+      findOne: jest.fn(async () => existing),
+      create: jest.fn((v: any) => ({ id: 'u-new', ...v })),
+      save: jest.fn(async (v: any) => { users.push(v); return v; }),
+    };
+    const workerRepo = { create: jest.fn((v: any) => ({ id: 'w-new', ...v })), save: jest.fn(async (v: any) => v) };
+    const settings = { get: jest.fn(async () => ({ security: { passwordMinLength: 8 } })) };
+    return { service: new WorkersService(workerRepo as any, {} as any, userRepo as any, settings as any), users };
+  }
+
+  it('gives each worker their own generated one-time password, flagged for change', async () => {
+    const a = make();
+    const b = make();
+    const first = await a.service.createWorker({ fullName: 'Nimal P', email: 'nimal@demo.local' } as any);
+    const second = await b.service.createWorker({ fullName: 'Kasun R', email: 'kasun@demo.local' } as any);
+    expect(first.temporaryPassword).toHaveLength(10);
+    expect(first.temporaryPassword).not.toBe(second.temporaryPassword);
+    expect(a.users[0]).toMatchObject({ role: 'WORKER', mustChangePassword: true, password: first.temporaryPassword });
+  });
+
+  it('accepts an admin-chosen temporary password only if it meets the policy', async () => {
+    const { service } = make();
+    await expect(service.createWorker({ fullName: 'A B', email: 'a@b.co', temporaryPassword: 'weak' } as any)).rejects.toThrow();
+    await expect(service.createWorker({ fullName: 'A B', email: 'a@b.co', temporaryPassword: 'Welcome2026' } as any)).resolves.toMatchObject({ temporaryPassword: 'Welcome2026' });
+  });
+
+  it('refuses a duplicate email', async () => {
+    const { service } = make({ id: 'x' });
+    await expect(service.createWorker({ fullName: 'A B', email: 'a@b.co' } as any)).rejects.toThrow('already exists');
+  });
+});

@@ -251,7 +251,9 @@ Returns workers sorted by proximity to the job's location. Used by Customer Care
 
 ### 5.6 Create Worker — `POST /workers`
 
-Admin-only endpoint to create a worker profile (workers cannot self-register).
+Admin-only endpoint (also reachable as `POST /users`) to create a worker profile and login; workers cannot self-register. Body: `{fullName, email, phoneNumber?, servicePillars?, temporaryPassword?}`. The API sets a **one-time password** (the one supplied if it meets the password policy, otherwise a generated 10-character one) and flags the account `mustChangePassword`. The response is the worker plus `temporaryPassword`, **shown only in this response**; it is never stored readable and never returned again.
+
+**One-time password rule.** While `mustChangePassword` is true the API answers every request from that user with `403 {code: 'PASSWORD_CHANGE_REQUIRED'}` except `GET /auth/me` and `POST /auth/change-password` (enforced in `JwtStrategy`). Changing the password clears the flag. `POST /auth/login` and `GET /auth/me` return `mustChangePassword` on the user. An admin reset (`POST /admin/users/:id/reset-password`) on a worker sets the flag again, so the admin never learns a worker's real password. The mobile app shows a forced "Choose your password" screen; workers can change it any time from Profile > Change password.
 
 ### 5.7 Ping Workers — `POST /workers/ping`
 
@@ -297,10 +299,10 @@ Sends push notification to all available workers (FCM).
 | `GET` | `/audit-log?limit=&action=` | ADMIN | Newest first: settings changes, staff and account administration, lockouts, password changes, exports |
 | `GET` / `POST` | `/admin/users` | ADMIN | List / create Admin and Customer Care accounts (temporary password, checked against the password policy) |
 | `PATCH` | `/admin/users/:id` | ADMIN | `fullName, phoneNumber, role (staff only), isActive`. Cannot deactivate or demote yourself or the last active admin |
-| `POST` | `/admin/users/:id/reset-password` / `/unlock` | ADMIN | Set a new password (also unlocks) / clear a lockout |
+| `POST` | `/admin/users/:id/reset-password` / `/unlock` | ADMIN | Set a new password (also unlocks; for a WORKER it is one-time, see 5.6) / clear a lockout. Works for any user id, including workers (`PATCH /admin/users/:id {isActive}` switches a worker's login off or on) |
 | `GET` | `/admin/system` | ADMIN | Environment, uptime, database status, counts |
 | `GET` | `/admin/export/:entity` | ADMIN | CSV of `customers`, `workers` or `jobs` (cells that look like spreadsheet formulas are neutralised); audited |
-| `POST` | `/auth/change-password` | JWT | `{currentPassword, newPassword}`; the new one must pass the policy |
+| `POST` | `/auth/change-password` | JWT | `{currentPassword, newPassword}`; the new one must pass the policy and differ from the current one. Also clears `mustChangePassword` |
 
 Browser access (CORS): in production only the origins in `CORS_ORIGINS` (comma separated, `*` = one hostname label) may call the API or open the live-update socket; development also allows localhost and `*.localhost`. Requests with no `Origin` header (native apps, curl) are always allowed.
 

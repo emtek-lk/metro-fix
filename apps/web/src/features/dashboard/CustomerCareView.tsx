@@ -17,22 +17,50 @@ import { CreateRequestModal } from './CreateRequestModal';
 import { RefreshButton } from '../../components/RefreshButton';
 import { describeHours, useAppSettings } from '../../lib/settings';
 import { JobCardModal } from './JobCardModal';
+import { useModalAccessibility } from '../../hooks/useModalAccessibility';
 
 // Column order and the rules for moving between columns come from the shared lifecycle in
 // @metro-fix/core-types, the same definition the API enforces and the mobile apps use.
 const boardOrder = JOB_STATUSES_IN_ORDER;
 
 const statusLabels: Record<JobStatus, string> = {
-  [JobStatus.Requested]: 'REQUESTED',
-  [JobStatus.PendingAcceptance]: 'PENDING_ACCEPTANCE',
-  [JobStatus.Assigned]: 'ASSIGNED',
-  [JobStatus.OnRoute]: 'ON_ROUTE',
-  [JobStatus.Inspection]: 'INSPECTION',
-  [JobStatus.InProgress]: 'IN_PROGRESS',
-  [JobStatus.Completed]: 'COMPLETED',
-  [JobStatus.Closed]: 'CLOSED',
-  [JobStatus.Cancelled]: 'CANCELLED',
+  [JobStatus.Requested]: 'Requested',
+  [JobStatus.PendingAcceptance]: 'Pending acceptance',
+  [JobStatus.Assigned]: 'Assigned',
+  [JobStatus.OnRoute]: 'On route',
+  [JobStatus.Inspection]: 'Inspection',
+  [JobStatus.InProgress]: 'In progress',
+  [JobStatus.Completed]: 'Completed',
+  [JobStatus.Closed]: 'Closed',
+  [JobStatus.Cancelled]: 'Cancelled',
 };
+
+/** What a stage change does, in words, for the confirmation dialog. */
+function describeMove(from: JobStatus, to: JobStatus): { title: string; body: string; confirm: string; danger: boolean } {
+  const fromLabel = statusLabels[from];
+  const toLabel = statusLabels[to];
+  if (to === JobStatus.Cancelled) {
+    return { title: 'Cancel this job?', body: 'The customer and any assigned worker will be notified. A cancelled job cannot be restarted.', confirm: 'Yes, cancel job', danger: true };
+  }
+  if (to === JobStatus.Closed) {
+    return { title: 'Approve and close this job?', body: 'Only do this after reviewing the photos, signature and hours. The ticket is archived and can no longer be changed.', confirm: 'Approve & close', danger: false };
+  }
+  if (from === JobStatus.PendingAcceptance && to === JobStatus.Requested) {
+    return { title: 'Withdraw the offer?', body: 'The worker is no longer asked to accept it and the job goes back to the queue.', confirm: 'Withdraw offer', danger: false };
+  }
+  if (to === JobStatus.Requested) {
+    return { title: 'Send this job back to the queue?', body: 'The assigned worker is removed from the job and it needs to be dispatched again.', confirm: 'Back to queue', danger: true };
+  }
+  return {
+    title: `Move this job to ${toLabel}?`,
+    body: `It is currently ${fromLabel}. The customer and the worker see the new stage straight away.`,
+    confirm: `Move to ${toLabel}`,
+    danger: false,
+  };
+}
+
+/** A stage change the dispatcher has asked for but not yet confirmed. */
+type PendingMove = { cardId: string; from: JobStatus; to: JobStatus; index: number };
 
 type UrgencyLevel = 'Low' | 'Medium' | 'High' | 'Critical';
 
@@ -75,7 +103,7 @@ type DispatchCard = {
   status: JobStatus;
   summary: string;
   createdAt: string;
-  /** While PENDING_ACCEPTANCE: when the offer lapses and returns to the queue. */
+  /** While pending acceptance: when the offer lapses and returns to the queue. */
   offerExpiresAt?: string | null;
   cancelReason?: string | null;
   jobCard?: JobCard | null;
@@ -178,6 +206,9 @@ export function CustomerCareView() {
   const [columns, setColumns] = useState<Record<JobStatus, DispatchCard[]>>(emptyColumns);
   const [workersList, setWorkersList] = useState<WorkerCandidate[]>([]);
   const [isDispatchModalOpen, setDispatchModalOpen] = useState(false);
+  const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
+  const closeMoveDialog = useCallback(() => setPendingMove(null), []);
+  const moveDialogRef = useModalAccessibility(pendingMove !== null, closeMoveDialog);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
   const [ariaAnnouncement, setAriaAnnouncement] = useState<string>('');
@@ -554,11 +585,8 @@ export function CustomerCareView() {
     showToast('Offer withdrawn. The job is back in the queue.', 'success');
   };
 
-  /** Cancels a job that has not started work. */
-  const handleCancelJob = async (cardId: string) => {
-    if (!window.confirm('Cancel this job? The customer and any assigned worker will be notified.')) {
-      return;
-    }
+  /** Cancels a job that has not started work (the confirmation dialog has already been answered). */
+  const cancelJob = async (cardId: string) => {
     const error = await requestStatusChange(cardId, JobStatus.Cancelled);
     if (error) {
       showToast(error, 'error');
@@ -566,6 +594,58 @@ export function CustomerCareView() {
     }
     moveCard(cardId, JobStatus.Cancelled, (card) => ({ ...card, status: JobStatus.Cancelled, offerExpiresAt: null }), 0);
     showToast('Job cancelled.', 'success');
+  };
+
+  // Every stage change (drag, Withdraw, Cancel, Approve & Close) waits for a click on Confirm, so a
+  // slip of the mouse cannot notify a customer or archive a ticket. The card stays put until then.
+  const requestMove = (cardId: string, to: JobStatus, index = 0) => {
+    const location = findCardLocation(cardId);
+    if (!location || location.status === to) return;
+    setPendingMove({ cardId, from: location.status, to, index });
+  };
+
+  const executeMove = async ({ cardId, from, to, index }: PendingMove) => {
+    if (to === JobStatus.Closed) return handleCloseJob(cardId);
+    if (to === JobStatus.Cancelled) return cancelJob(cardId);
+    if (from === JobStatus.PendingAcceptance && to === JobStatus.Requested) return handleWithdrawOffer(cardId);
+
+    const sourceCards = [...columns[from]];
+    const sourceIndex = sourceCards.findIndex((card) => card.id === cardId);
+    if (sourceIndex === -1) return;
+
+    const [movedItem] = sourceCards.splice(sourceIndex, 1);
+    const updatedItem: DispatchCard = {
+      ...movedItem,
+      status: to,
+      offerExpiresAt: null,
+      assignedWorker: to === JobStatus.Requested ? null : movedItem.assignedWorker,
+    };
+    const destinationCards = [...columns[to]];
+    destinationCards.splice(index, 0, updatedItem);
+
+    const previousColumns = columns;
+    setColumns((current) => ({ ...current, [from]: sourceCards, [to]: destinationCards }));
+    setAriaAnnouncement(`Moved job card ${movedItem.title || movedItem.id} to ${statusLabels[to]}`);
+
+    const error = await requestStatusChange(cardId, to);
+    if (error) {
+      setColumns(previousColumns);
+      showToast(error, 'error');
+    } else {
+      showToast(`Job moved to ${statusLabels[to]}.`, 'success');
+    }
+  };
+
+  const confirmMove = () => {
+    if (!pendingMove) return;
+    const move = pendingMove;
+    setPendingMove(null);
+    // A live update may have moved the job while the dialog was open; do not act on stale intent.
+    if (findCardLocation(move.cardId)?.status !== move.from) {
+      showToast('This job changed while you were deciding. Check its new stage and try again.', 'error');
+      return;
+    }
+    void executeMove(move);
   };
 
   const handleDragEnd = (result: DropResult) => {
@@ -599,54 +679,14 @@ export function CustomerCareView() {
       return;
     }
 
-    // Dragging a queued job onto PENDING_ACCEPTANCE means "offer it": pick the worker first.
+    // Dragging a queued job onto Pending acceptance means "offer it": pick the worker first.
     if (sourceStatus === JobStatus.Requested && destinationStatus === JobStatus.PendingAcceptance) {
       openDispatchModal(draggableId);
       return;
     }
 
-    if (destinationStatus === JobStatus.Cancelled) {
-      void handleCancelJob(draggableId);
-      return;
-    }
-
-    if (destinationStatus === JobStatus.Requested && sourceStatus === JobStatus.PendingAcceptance) {
-      void handleWithdrawOffer(draggableId);
-      return;
-    }
-
-    const sourceCards = [...columns[sourceStatus]];
-    const sourceIndex = sourceCards.findIndex((card) => card.id === draggableId);
-    if (sourceIndex === -1) {
-      return;
-    }
-
-    const [movedItem] = sourceCards.splice(sourceIndex, 1);
-    const updatedItem: DispatchCard = {
-      ...movedItem,
-      status: destinationStatus,
-      offerExpiresAt: null,
-      assignedWorker: destinationStatus === JobStatus.Requested ? null : movedItem.assignedWorker,
-    };
-    const destinationCards = [...columns[destinationStatus]];
-    destinationCards.splice(destination.index, 0, updatedItem);
-
-    const previousColumns = columns;
-    setColumns((current) => ({
-      ...current,
-      [sourceStatus]: sourceCards,
-      [destinationStatus]: destinationCards,
-    }));
-    setAriaAnnouncement(`Moved job card ${movedItem.title || movedItem.id} to ${statusLabels[destinationStatus]}`);
-
-    void requestStatusChange(draggableId, destinationStatus).then((error) => {
-      if (error) {
-        setColumns(previousColumns);
-        showToast(error, 'error');
-      } else {
-        showToast(`Job status updated to "${statusLabels[destinationStatus]}"`, 'success');
-      }
-    });
+    // Everything else is a stage change: ask first (see requestMove).
+    requestMove(draggableId, destinationStatus, destination.index);
   };
 
   return (
@@ -835,7 +875,7 @@ export function CustomerCareView() {
                                     style={styles.secondaryActionButton}
                                     onClick={(event) => {
                                       event.stopPropagation();
-                                      void handleWithdrawOffer(item.id);
+                                      requestMove(item.id, JobStatus.Requested);
                                     }}
                                   >
                                     Withdraw offer
@@ -848,7 +888,7 @@ export function CustomerCareView() {
                                     style={styles.linkActionButton}
                                     onClick={(event) => {
                                       event.stopPropagation();
-                                      void handleCancelJob(item.id);
+                                      requestMove(item.id, JobStatus.Cancelled);
                                     }}
                                   >
                                     Cancel job
@@ -876,7 +916,7 @@ export function CustomerCareView() {
                                     style={styles.secondaryActionButton}
                                     onClick={(event) => {
                                       event.stopPropagation();
-                                      void handleCloseJob(item.id);
+                                      requestMove(item.id, JobStatus.Closed);
                                     }}
                                   >
                                     Approve &amp; Close
@@ -935,10 +975,56 @@ export function CustomerCareView() {
               if (Object.values(prev).some((cards) => cards.some((existing) => existing.id === card.id))) return prev;
               return { ...prev, [card.status]: [card, ...(prev[card.status] || [])] };
             });
-            showToast('Request created. It is in the REQUESTED column.', 'success');
+            showToast('Request created. It is in the Requested column.', 'success');
           }}
         />
       )}
+
+      {pendingMove && (() => {
+        const info = describeMove(pendingMove.from, pendingMove.to);
+        const card = columns[pendingMove.from].find((entry) => entry.id === pendingMove.cardId);
+        return (
+          <div style={styles.modalOverlay} className="metro-modal-overlay" onClick={closeMoveDialog}>
+            <div
+              ref={moveDialogRef}
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="move-confirm-title"
+              aria-describedby="move-confirm-body"
+              tabIndex={-1}
+              style={{ ...styles.modalCard, width: 'min(460px, 100%)' }}
+              className="metro-modal-card"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div style={styles.kicker}>Confirm stage change</div>
+              <h3 id="move-confirm-title" style={styles.modalTitle}>{info.title}</h3>
+              {card && (
+                <div style={styles.moveJob}>
+                  <div style={styles.moveJobTitle}>{card.title}</div>
+                  <div style={styles.moveJobMeta}>#{ticketRef(card.id)}{card.customerName ? ` · ${card.customerName}` : ''}</div>
+                </div>
+              )}
+              <div style={styles.moveStages} aria-label={`From ${statusLabels[pendingMove.from]} to ${statusLabels[pendingMove.to]}`}>
+                <span style={styles.moveChip}>{statusLabels[pendingMove.from]}</span>
+                <span aria-hidden="true">→</span>
+                <span style={{ ...styles.moveChip, ...styles.moveChipTarget, ...(info.danger ? styles.moveChipDanger : undefined) }}>{statusLabels[pendingMove.to]}</span>
+              </div>
+              <p id="move-confirm-body" style={styles.moveBody}>{info.body}</p>
+              <div style={styles.moveActions}>
+                {/* Keep first: the dialog focuses the first button, so a stray Enter keeps things as they were. */}
+                <button type="button" style={styles.closeButton} onClick={closeMoveDialog}>Keep as is</button>
+                <button
+                  type="button"
+                  style={info.danger ? { ...styles.primaryButton, ...styles.dangerButton } : styles.primaryButton}
+                  onClick={confirmMove}
+                >
+                  {info.confirm}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {isDispatchModalOpen && (
         <div style={styles.modalOverlay} role="dialog" aria-modal="true" aria-label="Worker dispatch modal" className="metro-modal-overlay">
@@ -1441,6 +1527,43 @@ const styles: Record<string, CSSProperties> = {
     textAlign: 'center',
     fontSize: '0.84rem',
   },
+  moveJob: {
+    marginTop: '12px',
+    padding: '10px 12px',
+    borderRadius: '12px',
+    background: 'var(--surface-strong)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-subtle)',
+  },
+  moveJobTitle: { fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.95rem' },
+  moveJobMeta: { marginTop: '2px', color: 'var(--text-secondary)', fontSize: '0.8rem' },
+  moveStages: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    margin: '14px 0 4px',
+    color: 'var(--text-secondary)',
+    flexWrap: 'wrap',
+  },
+  moveChip: {
+    padding: '4px 10px',
+    borderRadius: '999px',
+    background: 'var(--surface-strong)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-subtle)',
+    color: 'var(--text-primary)',
+    fontSize: '0.74rem',
+    fontWeight: 700,
+    textTransform: 'uppercase',
+    letterSpacing: '0.08em',
+  },
+  moveChipTarget: { background: 'rgba(243, 136, 8, 0.14)', borderColor: 'rgba(243, 136, 8, 0.5)', color: '#f38808' },
+  moveChipDanger: { background: 'rgba(255, 77, 77, 0.14)', borderColor: 'rgba(255, 77, 77, 0.5)', color: '#ff7a7a' },
+  moveBody: { margin: '10px 0 0', color: 'var(--text-secondary)', fontSize: '0.88rem', lineHeight: 1.5 },
+  moveActions: { display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '18px' },
+  dangerButton: { background: 'linear-gradient(135deg, #e5484d, #b3262b)', borderColor: '#b3262b' },
   modalOverlay: {
     position: 'fixed',
     inset: 0,

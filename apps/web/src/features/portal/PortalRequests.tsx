@@ -5,6 +5,7 @@ import { WebSocketService } from '../../lib/websocket';
 import { RefreshButton } from '../../components/RefreshButton';
 import { SkeletonCards } from '@metro-fix/ui';
 import { useAppSettings } from '../../lib/settings';
+import { QuoteBreakdown } from './QuoteBreakdown';
 
 // The stages and their order come from the shared lifecycle; only the customer-facing wording is here.
 const STAGES = JOB_STAGES;
@@ -130,6 +131,7 @@ export function PortalRequests({ refreshKey }: { refreshKey: number }) {
                 </div>
               </>
             )}
+            {job.jobCard && <QuoteBreakdown card={job.jobCard} status={job.status} />}
             <footer style={styles.meta}>
               <span>Raised {new Date(job.createdAt).toLocaleString()}</span>
               {job.worker?.user?.fullName && <span>Technician: {job.worker.user.fullName}</span>}

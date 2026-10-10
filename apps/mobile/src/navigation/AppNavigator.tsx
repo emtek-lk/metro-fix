@@ -9,6 +9,7 @@ import { JobDetail } from '../components/JobDetail';
 import { CustomerTrackingView } from '../components/CustomerTrackingView';
 import { SubscriptionScreen } from '../components/SubscriptionScreen';
 import { CheckoutScreen } from '../components/CheckoutScreen';
+import { ChangePasswordScreen } from '../components/ChangePasswordScreen';
 import { UiGalleryScreen } from '../components/UiGalleryScreen';
 import { UnsupportedRoleScreen } from '../components/UnsupportedRoleScreen';
 import { LoadingState } from '../components/ui/LoadingState';
@@ -51,6 +52,14 @@ function RegisterRoute({ navigation }: Props<'Register'>) {
           await register(values);
         }}
       />
+    </ScreenShell>
+  );
+}
+
+function ChangePasswordRoute({ navigation }: Props<'ChangePassword'>) {
+  return (
+    <ScreenShell safeArea={false}>
+      <ChangePasswordScreen onBack={() => navigation.goBack()} onDone={() => navigation.goBack()} />
     </ScreenShell>
   );
 }
@@ -173,12 +182,23 @@ export function AppNavigator() {
     );
   }
 
+  // An admin-issued one-time password only gets as far as choosing a real one (the API refuses
+  // everything else until then), so this replaces the whole app.
+  if (user.mustChangePassword) {
+    return (
+      <ScreenShell safeArea={false}>
+        <ChangePasswordScreen forced />
+      </ScreenShell>
+    );
+  }
+
   // Each account sees only its own app. Admin / customer-care accounts work from the web dashboard.
   if (user.role === Role.WORKER) {
     return (
       <Stack.Navigator key={`worker-${user.id}`} screenOptions={screenOptions}>
         <Stack.Screen name="Main" component={WorkerMain} />
         <Stack.Screen name="JobDetail" component={JobDetailRoute} />
+        <Stack.Screen name="ChangePassword" component={ChangePasswordRoute} />
         {__DEV__ ? <Stack.Screen name="Gallery" component={GalleryRoute} /> : null}
       </Stack.Navigator>
     );
@@ -201,6 +221,7 @@ export function AppNavigator() {
         <Stack.Screen name="Tracking" component={TrackingRoute} />
         <Stack.Screen name="Plans" component={PlansRoute} />
         <Stack.Screen name="Checkout" component={CheckoutRoute} />
+        <Stack.Screen name="ChangePassword" component={ChangePasswordRoute} />
         {__DEV__ ? <Stack.Screen name="Gallery" component={GalleryRoute} /> : null}
       </Stack.Navigator>
     );

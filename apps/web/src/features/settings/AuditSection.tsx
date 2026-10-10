@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 import { SkeletonCards } from '@metro-fix/ui';
 import { RefreshButton } from '../../components/RefreshButton';
 import { apiJson } from './http';
+import { humanize } from '../../lib/humanize';
 import { SectionCard, StatusLine, inputStyle } from './ui';
 
 interface AuditEntry {
@@ -96,10 +97,10 @@ export function AuditSection() {
                   <td style={{ ...styles.td, whiteSpace: 'nowrap' }}>{new Date(entry.createdAt).toLocaleString()}</td>
                   <td style={styles.td}>
                     <div style={{ fontWeight: 700 }}>{entry.actorName}</div>
-                    <div style={styles.sub}>{entry.actorRole.replace('_', ' ').toLowerCase()}</div>
+                    <div style={styles.sub}>{humanize(entry.actorRole).toLowerCase()}</div>
                   </td>
                   <td style={styles.td}>
-                    <div>{ACTION_LABEL[entry.action] ?? entry.action}</div>
+                    <div>{ACTION_LABEL[entry.action] ?? humanize(entry.action)}</div>
                     {entry.target && <div style={styles.sub}>{entry.target}</div>}
                   </td>
                   <td style={styles.td}>

@@ -39,9 +39,11 @@ export interface ProfileScreenProps {
   onOpenGallery?: () => void;
   /** Customers: opens the plans page to view or change their subscription. */
   onOpenSubscription?: () => void;
+  /** Opens the change-password screen. */
+  onChangePassword?: () => void;
 }
 
-export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onOpenGallery, onOpenSubscription }) => {
+export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onOpenGallery, onOpenSubscription, onChangePassword }) => {
   const insets = useSafeAreaInsets();
   const { scrollY, onScroll } = useCollapsingHeader();
   const { user, logout } = useAuth();
@@ -193,6 +195,21 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onOpenGallery, onO
         ) : null}
 
         {/* Appearance */}
+        {onChangePassword ? (
+          <>
+            <Text style={styles.sectionHeading}>Account</Text>
+            <Card variant="elevated" borderRadius={radius.lg} padding={spacing.md}>
+              <Button
+                title="Change password"
+                onPress={onChangePassword}
+                variant="secondary"
+                size="medium"
+                icon={<Icon name="lock" size={16} color={colors.text} />}
+              />
+            </Card>
+          </>
+        ) : null}
+
         <Text style={styles.sectionHeading}>Appearance</Text>
         <Card variant="elevated" borderRadius={radius.lg} padding={spacing.md}>
           <SegmentedControl

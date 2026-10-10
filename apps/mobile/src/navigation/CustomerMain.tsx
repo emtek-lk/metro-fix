@@ -115,6 +115,7 @@ export function CustomerMain({ navigation }: Props) {
     profile: () => (
       <ProfileScreen
         onOpenGallery={__DEV__ ? () => navigation.navigate('Gallery') : undefined}
+        onChangePassword={() => navigation.navigate('ChangePassword')}
         onOpenSubscription={() => navigation.navigate('Plans')}
       />
     ),

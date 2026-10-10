@@ -114,7 +114,10 @@ export function WorkerMain({ navigation }: Props) {
       />
     ),
     profile: () => (
-      <ProfileScreen onOpenGallery={__DEV__ ? () => navigation.navigate('Gallery') : undefined} />
+      <ProfileScreen
+        onOpenGallery={__DEV__ ? () => navigation.navigate('Gallery') : undefined}
+        onChangePassword={() => navigation.navigate('ChangePassword')}
+      />
     ),
   };
 

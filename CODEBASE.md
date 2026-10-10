@@ -67,6 +67,7 @@ metro-fix/
 | `src/main.ts` | Bootstrap, CORS `origin: '*'`, port from `process.env.PORT` (default 3000) |
 | `src/app.module.ts` | Root module. TypeORM → MSSQL. Global `JwtAuthGuard` via `APP_GUARD`. Imports all feature modules. |
 | `src/common/seed.service.ts` | `OnApplicationBootstrap` seeder. Every boot: migrates legacy values, upserts the plan and catalog reference data, retires pre-spec rows, resets demo user passwords to `Demo123!`. Sample customers/jobs are only created when no jobs exist. |
+| `src/common/temp-password.ts` | `generateTemporaryPassword()`: random letters+digits without look-alike characters; used for new workers. |
 | `src/common/seed-data.ts` | Single source for the 4 subscription plans (LKR) and the 16 catalog services. Used by `SeedService` and `scripts/seed.ts`. |
 
 ### 3.2 Entity Layer (`src/entities/`)
@@ -108,7 +109,7 @@ WebSocket gateway using `@nestjs/websockets` + Socket.io. Requires a JWT in `aut
 
 | File | Purpose |
 |------|---------|
-| `src/auth/jwt.strategy.ts` | Passport JWT strategy. Extracts from `Authorization: Bearer <token>`. Secret from `process.env.JWT_SECRET`. |
+| `src/auth/jwt.strategy.ts` | Passport JWT strategy. Extracts from `Authorization: Bearer <token>`. Secret from `process.env.JWT_SECRET`. Rejects deactivated users, and users still on a one-time password (`mustChangePassword`) from everything except `GET /auth/me` and `POST /auth/change-password` (403 `PASSWORD_CHANGE_REQUIRED`). |
 | `src/auth/jwt-auth.guard.ts` | Global guard. Checks for `@Public()` decorator to skip. |
 | `src/auth/public.decorator.ts` | `@Public()` — sets `isPublic` metadata to bypass JWT guard |
 | `src/auth/roles.decorator.ts` / `roles.guard.ts` | `@Roles(Role.X, ...)` + second global guard. Routes without it allow any authenticated user. |
@@ -121,9 +122,9 @@ WebSocket gateway using `@nestjs/websockets` + Socket.io. Requires a JWT in `aut
 | File / Dir | Purpose |
 |------------|---------|
 | `src/App.tsx` | Root SPA shell. Path-based routing (`pushState`). Sidebar + Top Ribbon layout. |
-| `src/features/portal/` | **Customer portal**: `PortalServices.tsx` (catalog by pillar/group + request modal), `PortalRequests.tsx` (My Requests, live via socket.io) |
+| `src/features/portal/` | **Customer portal**: `PortalServices.tsx` (catalog by pillar/group + request modal), `PortalRequests.tsx` (My Requests, live via socket.io), `QuoteBreakdown.tsx` (itemised quote / final bill shown to the customer) |
 | `src/features/auth/` | `AuthShell.tsx` — Login/Register forms |
-| `src/features/dashboard/` | `CustomerCareView.tsx` (Kanban dispatch board), `ActiveRosterView.tsx` (Worker GPS map) |
+| `src/features/dashboard/` | `CustomerCareView.tsx` (Kanban dispatch board; every stage change goes through a confirmation dialog, `requestMove` / `confirmMove`), `ActiveRosterView.tsx` (Worker GPS map) |
 | `src/features/workers/` | `AddWorkerModal.tsx` — Admin creates worker profiles |
 | `src/features/services/` | `AddServiceModal.tsx` — Service catalog management |
 | `src/features/subscriptions/` | `AddSubscriptionModal.tsx` — Subscription plan CRUD |

@@ -10,8 +10,10 @@ import {
   isFinishedStatus,
   UpdateWorkerLocationDto,
   DEFAULT_APP_SETTINGS,
+  passwordPolicyProblem,
 } from '@metro-fix/core-types';
 
+import { generateTemporaryPassword } from '../common/temp-password';
 import { CreateWorkerDto } from './dto/create-worker.dto';
 import { UpdateWorkerDto } from './dto/update-worker.dto';
 
@@ -92,18 +94,29 @@ export class WorkersService {
     return worker;
   }
 
-  async createWorker(dto: CreateWorkerDto): Promise<WorkerEntity> {
+  /**
+   * Creates the worker's login with a one-time password (the admin's own, or a generated one) and
+   * flags it so the worker must choose their own at first sign-in. The password is returned once in
+   * `temporaryPassword` and never stored in clear.
+   */
+  async createWorker(dto: CreateWorkerDto): Promise<WorkerEntity & { temporaryPassword: string }> {
     const existing = await this.userRepo.findOne({ where: { email: dto.email } });
     if (existing) {
       throw new BadRequestException(`User with email "${dto.email}" already exists.`);
     }
+
+    const minLength = (await this.settings?.get())?.security.passwordMinLength ?? DEFAULT_APP_SETTINGS.security.passwordMinLength;
+    const temporaryPassword = dto.temporaryPassword?.trim() || generateTemporaryPassword(Math.max(10, minLength));
+    const problem = passwordPolicyProblem(temporaryPassword, minLength);
+    if (problem) throw new BadRequestException(problem);
 
     const user = this.userRepo.create({
       fullName: dto.fullName,
       email: dto.email,
       phoneNumber: dto.phoneNumber || undefined,
       role: Role.WORKER,
-      password: process.env.WORKER_DEFAULT_PASSWORD || 'ChangeMe123!',
+      password: temporaryPassword,
+      mustChangePassword: true,
     });
     const savedUser = await this.userRepo.save(user);
 
@@ -123,7 +136,7 @@ export class WorkersService {
     const savedWorker = await this.workerRepo.save(worker);
     savedWorker.user = savedUser;
 
-    return savedWorker;
+    return Object.assign(savedWorker, { temporaryPassword });
   }
 
   async pingAllWorkers() {

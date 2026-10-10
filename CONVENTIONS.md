@@ -254,3 +254,11 @@ Write borders as `borderWidth`, `borderStyle` and `borderColor` whenever any var
 ## Full-screen pages must scroll inside themselves
 
 `html`, `body` and `#root` are a fixed-height box that never scrolls. A full-screen page (sign-in, register, the choose-a-plan step) therefore needs its own `height: 100dvh` and `overflow: auto`; `min-height: 100vh` alone just makes it taller than the box and the extra part is clipped, with no way to scroll.
+
+## One-time passwords, confirmations and labels
+
+- **An admin never chooses a worker's real password.** `WorkersService.createWorker` and an admin reset on a WORKER set `users.mustChangePassword`; `JwtStrategy` then allows only `GET /auth/me` and `POST /auth/change-password` (403 `PASSWORD_CHANGE_REQUIRED` otherwise). The clear-text one-time password is returned once and must never be logged, audited or stored. There is no shared default worker password (`WORKER_DEFAULT_PASSWORD` was removed). If you add a route a worker needs before changing the password (there should be none), add it to `PASSWORD_SETUP_ROUTES`.
+- **Stage changes on the dispatch board must be confirmed.** Route every drag and every Withdraw / Cancel / Approve & Close button through `requestMove` (not straight to the API). The dialog focuses "Keep as is" first on purpose, and `confirmMove` re-checks the card is still in the stage the dispatcher saw.
+- **Never print raw enum values.** Statuses and roles are shown through label maps (`statusLabels` in `CustomerCareView`, `humanize()` in `apps/web/src/lib/humanize.ts` as the fallback), so `ON_ROUTE` reads "On route". Column headers are upper-cased by CSS, so labels are stored in sentence case.
+- **Customers see the whole quote, not just the total.** Render `job.jobCard` with `QuoteBreakdown` (web `features/portal`, mobile `components`); both fall back to `jobCardBillable` (final, else estimate). Do not show the customer anything that is not in the job card.
+- **Jest mocks:** variables used inside `jest.mock(...)` factories must start with `mock` (babel-plugin-jest-hoist).

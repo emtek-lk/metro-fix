@@ -16,6 +16,8 @@ export interface AuthContextType {
   needsPlanChoice: boolean;
   finishPlanChoice: () => void;
   logout: () => Promise<void>;
+  /** The user just replaced their one-time password: lift the "must change" gate. */
+  completePasswordChange: () => Promise<void>;
   setAuthSession: (user: User, token: string) => Promise<void>;
 }
 
@@ -67,6 +69,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     await storage.setItemAsync(USER_KEY, JSON.stringify(newUser));
   };
 
+  const completePasswordChange = async () => {
+    if (!user || !token) return;
+    await setAuthSession({ ...user, mustChangePassword: false }, token);
+  };
+
   const login = async (email: string, pass: string): Promise<User> => {
     const res = await apiClient.post('/auth/login', { email, password: pass });
     const { accessToken, user: authenticatedUser } = res.data;
@@ -108,6 +115,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         isAuthenticated: !!token && !!user,
         login,
         register,
+        completePasswordChange,
         needsPlanChoice,
         finishPlanChoice: () => setNeedsPlanChoice(false),
         logout,

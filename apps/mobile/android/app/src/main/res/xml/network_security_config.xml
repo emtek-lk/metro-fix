@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- TEST BUILDS ONLY: release builds block http:// by default, and the plain-HTTP LAN API
+     used for on-device testing needs it. Remove (and serve the API over https) before
+     any store or production release. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

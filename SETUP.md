@@ -370,3 +370,23 @@ page. Do not import `AdminWorkspace` from the `@metro-fix/ui` barrel; use `@metr
 | `packages/core-types` | `build` | compile the shared types |
 
 ---
+
+---
+
+## Release APK for a test phone on the same network
+
+The API URL is baked into the JS bundle at build time, so rebuild whenever the laptop's LAN IP changes (`hostname -I`).
+
+```bash
+cd apps/mobile/android
+JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 \
+EXPO_PUBLIC_API_URL=http://<laptop-lan-ip>:3000 \
+./gradlew assembleRelease --no-daemon
+# -> apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+```
+
+- Requires JDK 21 (not 25) and the Android SDK (`ANDROID_HOME`). The API must be running and reachable from the phone (`curl http://<ip>:3000/services`).
+- Install: `adb install -r app-release.apk` over USB, or send the file to the phone and open it (allow "install unknown apps").
+- Signed with the **debug keystore**, so it is for testing only. Create a real keystore before any store release.
+- `res/xml/network_security_config.xml` permits plain `http://` so the phone can reach the LAN API. Remove it and serve the API over https before a production release.
+- `hermesCommand` in `app/build.gradle` points at the hoisted `hermes-compiler` package; without it Gradle fails with "Couldn't determine Hermesc location".

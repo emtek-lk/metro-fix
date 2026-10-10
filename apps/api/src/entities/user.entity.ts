@@ -46,6 +46,13 @@ export class UserEntity {
   @Column({ type: 'bit', default: true })
   isActive!: boolean;
 
+  /**
+   * Set when an admin creates or resets a worker's password. The worker must choose their own
+   * before anything else in the API works for them (see JwtStrategy).
+   */
+  @Column({ type: 'bit', default: false })
+  mustChangePassword!: boolean;
+
   @Column({ type: 'int', default: 0 })
   failedLoginCount!: number;
 

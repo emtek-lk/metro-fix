@@ -14,6 +14,31 @@ export interface DashboardLayoutProps {
   onViewProfile?: () => void;
 }
 
+/** One line under each page title, so the ribbon says what the page is for. */
+const PAGE_BLURB: Record<string, string> = {
+  'Dispatch Board': 'Offer jobs to technicians and move every ticket through its stages',
+  'Active Roster': 'Live status of every field technician',
+  Workers: 'Field technicians, the services they cover and their login access',
+  Customers: 'Customer accounts, facilities and subscriptions',
+  'Service Catalog': 'The services customers can request, and their pricing',
+  Subscriptions: 'Plans, allowances and active accounts',
+  Financials: 'Revenue and billing from completed jobs',
+  'Browse Services': 'Pick a service and request a technician',
+  'My Requests': 'Follow your jobs from request to completion',
+  Subscription: 'Your plan, billing and payment history',
+  Settings: 'Platform, team and account preferences',
+};
+
+const SETTINGS_ICON = (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+  </svg>
+);
+
+const formatToday = () =>
+  new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+
 const adminRoutes = new Set([
   'Workers',
   'Customers',
@@ -56,6 +81,17 @@ export function DashboardLayout({
       }))
       .filter((entry) => entry.items.length > 0);
   }, [filterText, userProfile.role]);
+
+  // The page's menu icon and section, so the ribbon title reads as part of the sidebar.
+  const page = useMemo(() => {
+    for (const section of [...sidebarSections, ...portalSections]) {
+      const item = section.items.find((entry) => entry.label === activeRoute);
+      if (item) return { kicker: section.title, icon: item.icon };
+    }
+    if (activeRoute === 'Settings') return { kicker: 'ACCOUNT', icon: SETTINGS_ICON };
+    return { kicker: 'METRO-FIX', icon: null };
+  }, [activeRoute]);
+  const blurb = PAGE_BLURB[activeRoute];
 
   const initials = userProfile.fullName
     .split(' ')
@@ -102,10 +138,20 @@ export function DashboardLayout({
                 </svg>
               </button>
             )}
-            <div style={styles.routeLabel}>{activeRoute}</div>
+            {page.icon && (
+              <span style={styles.pageIcon} aria-hidden="true">
+                {page.icon}
+              </span>
+            )}
+            <div style={styles.pageText}>
+              <div style={styles.pageKicker}>{page.kicker}</div>
+              <div style={styles.routeLabel}>{activeRoute}</div>
+              {blurb && !isMobile && <div style={styles.pageBlurb}>{blurb}</div>}
+            </div>
           </div>
 
           <div style={styles.headerActions}>
+            {!isMobile && <span style={styles.dateChip}>{formatToday()}</span>}
             {headerActions && <div style={styles.dynamicActions}>{headerActions}</div>}
             
             {settingsSlot && <div style={styles.dynamicActions}>{settingsSlot}</div>}
@@ -171,6 +217,7 @@ export function DashboardLayout({
               )}
             </div>
           </div>
+        <span style={styles.headerAccent} aria-hidden="true" />
         </header>
 
         <main className="dashboard-viewPanel" style={styles.main}>
@@ -208,10 +255,62 @@ const styles: Record<string, CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: '16px',
-    padding: '16px 24px 16px 18px',
+    padding: '14px 24px 14px 18px',
     borderBottom: '1px solid var(--border-subtle)',
-    background: 'linear-gradient(180deg, var(--surface-elevated) 0%, var(--surface) 100%)',
+    // A soft brand-orange glow behind the title, over the usual surface gradient.
+    background:
+      'radial-gradient(520px 130px at 0% 0%, rgba(243, 136, 8, 0.14), transparent 70%), linear-gradient(180deg, var(--surface-elevated) 0%, var(--surface) 100%)',
     backdropFilter: 'blur(16px)',
+  },
+  headerAccent: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: -1,
+    height: '2px',
+    background: 'linear-gradient(90deg, #f38808 0%, rgba(243, 136, 8, 0.35) 22%, transparent 60%)',
+    pointerEvents: 'none',
+  },
+  pageIcon: {
+    width: '42px',
+    height: '42px',
+    flexShrink: 0,
+    display: 'grid',
+    placeItems: 'center',
+    borderRadius: '13px',
+    color: '#ffffff',
+    background: 'linear-gradient(135deg, #f38808, #d37105)',
+    boxShadow: '0 8px 18px rgba(243, 136, 8, 0.32)',
+  },
+  pageText: {
+    minWidth: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1px',
+  },
+  pageKicker: {
+    fontSize: '0.66rem',
+    fontWeight: 800,
+    letterSpacing: '0.16em',
+    textTransform: 'uppercase',
+    color: '#f38808',
+  },
+  pageBlurb: {
+    fontSize: '0.78rem',
+    color: 'var(--text-secondary)',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  dateChip: {
+    padding: '6px 12px',
+    borderRadius: '999px',
+    fontSize: '0.76rem',
+    fontWeight: 700,
+    color: 'var(--text-secondary)',
+    background: 'var(--surface-strong)',
+    border: '1px solid var(--border-subtle)',
+    whiteSpace: 'nowrap',
   },
   headerActions: {
     display: 'flex',
@@ -232,8 +331,11 @@ const styles: Record<string, CSSProperties> = {
     placeItems: 'center',
   },
   routeLabel: {
-    fontSize: '1.25rem',
+    margin: 0,
+    fontSize: '1.3rem',
+    lineHeight: 1.2,
     fontWeight: 800,
+    letterSpacing: '-0.01em',
     color: 'var(--color-text-primary)',
   },
   profileChip: {

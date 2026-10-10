@@ -415,21 +415,22 @@ export default function App() {
       case '/active-roster':
         return <ActiveRosterView />;
       case '/workers':
-        return <AdminWorkspace activeView="workers" />;
+        return <AdminWorkspace activeView="workers" refreshSignal={refreshKey} />;
       case '/customers':
         return (
           <AdminWorkspace
             activeView="customers"
+            refreshSignal={refreshKey}
             isCustomerModalOpen={isAddCustomerOpen}
             onCloseCustomerModal={() => setIsAddCustomerOpen(false)}
           />
         );
       case '/service-catalog':
-        return <AdminWorkspace activeView="service-catalog" />;
+        return <AdminWorkspace activeView="service-catalog" refreshSignal={refreshKey} />;
       case '/subscriptions':
-        return <AdminWorkspace activeView="subscriptions" />;
+        return <AdminWorkspace activeView="subscriptions" refreshSignal={refreshKey} />;
       case '/financials':
-        return <AdminWorkspace activeView="financials" />;
+        return <AdminWorkspace activeView="financials" refreshSignal={refreshKey} />;
       case '/portal/services':
         return <PortalServices onNeedSubscription={() => navigateTo('/portal/subscription')} onRequested={() => { setPortalRefresh((k) => k + 1); showToast('Request sent! Dispatch will assign a technician shortly.', 'success'); navigateTo('/portal/requests'); }} />;
       case '/portal/requests':

@@ -147,6 +147,8 @@ export class AdminUsersService {
     await this.assertPassword(password);
     await this.userRepo.update(user.id, {
       password: await bcrypt.hash(password, 10),
+      // A worker's reset password is one-time: they choose their own at next sign-in.
+      mustChangePassword: user.role === Role.WORKER,
       failedLoginCount: 0,
       lockedUntil: null,
     });

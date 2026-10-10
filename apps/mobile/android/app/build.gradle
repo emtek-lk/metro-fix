@@ -23,6 +23,10 @@ react {
     entryFile = file(["node", "-e", "require('expo/scripts/resolveAppEntry')", rootDir.getAbsoluteFile().getParentFile().getAbsolutePath(), "android", "absolute"].execute(null, rootDir).text.trim())
     cliFile = new File(["node", "--print", "require.resolve('@expo/cli')"].execute(null, rootDir).text.trim())
     bundleCommand = "export:embed"
+
+    // The hoisted hermes-compiler package keeps its binaries under hermesc/<os>-bin/, one level
+    // deeper than the gradle plugin's default lookup. %OS-BIN% is substituted per platform.
+    hermesCommand = file("../../../../node_modules/hermes-compiler/hermesc/%OS-BIN%/hermesc").path
 }
 
 /**

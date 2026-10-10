@@ -3,20 +3,25 @@
 > **Living document.** Humans and AI agents MUST update this file in the same change as any feature, fix, decision or discovered problem. Newest changelog entries go on top. Keep it short and factual; link to code with relative paths.
 > Product definition: `PRODUCT.md` · Rules: `AGENTS.md` · File map: `CODEBASE.md` · API: `API.md` · Pitfalls: `CONVENTIONS.md`
 
-**Last updated:** 2026-10-03 · **Branch:** `feature/dev-shamil` · **State:** spec alignment implemented and tested locally, **not yet committed or merged**.
+**Last updated:** 2026-10-04 · **Branch:** `feature/dev-shamil` · **State:** spec alignment implemented and tested locally, **not yet committed or merged**.
 
 ## 1. Snapshot
 
 | Area | Status | Notes |
 |---|---|---|
 | Shared types (`packages/core-types`) | Done | New 7+1 lifecycle, 4 tiers, `ServiceGroup`. |
-| API (`apps/api`) | Working | Role-gated; offers, job cards, subscriptions with demo card payments, live financials, photo uploads. 169 jest tests pass. |
+| API (`apps/api`) | Working | Role-gated; offers, job cards, subscriptions with demo card payments, live financials, photo uploads. 178 jest tests pass. |
 | Web dispatch dashboard (`apps/web`) | Working | Kanban uses new states; Approve & Close; live updates via socket.io; plans and catalog pages updated. |
 | Web customer portal (`/portal/*`) | Working (MVP) | Browse by pillar/group, request, track live. Verified in headless browser. |
-| Mobile apps (`apps/mobile`) | Working | Worker and customer apps run on iOS and Android; 158 jest tests pass. Checked in browser and simulators; photo upload and card checkout still want a real-device pass. |
+| Mobile apps (`apps/mobile`) | Working | Worker and customer apps run on iOS and Android; 165 jest tests pass. Checked in browser and simulators; photo upload and card checkout still want a real-device pass. |
 | Docs | Updated 2026-10-03 | This file and `PRODUCT.md` added. |
 
 ## 2. Done (spec alignment, 2026-10-03)
+
+- Worker access (2026-10-04): admin creates a worker and gets a generated one-time password (shown once, copyable); the worker must choose their own at first sign-in (mobile forced screen) and can change it from Profile > Change password. Admin Edit worker has *Login access*: issue a new one-time password, unlock, deactivate / reactivate. Enforced server-side (`mustChangePassword`, 403 `PASSWORD_CHANGE_REQUIRED`). The shared default password is gone.
+- Dispatch board (2026-10-04): every stage change (drag, Withdraw offer, Cancel job, Approve & Close) asks first in a *Confirm stage change* dialog; the card stays put until confirmed. Stage names show without underscores (Requested, Pending acceptance, On route, In progress...).
+- Customers see the itemised quote (lines, tax, total, hours, note; *Final bill* after completion) in web My requests and on the mobile request screen.
+- Top ribbon redesigned: page icon tile, section kicker, title with a one-line description, brand glow and accent line, date chip.
 
 - Lifecycle is `REQUESTED, PENDING_ACCEPTANCE, ASSIGNED, ON_ROUTE, INSPECTION, IN_PROGRESS, COMPLETED, CLOSED` plus `CANCELLED` (defined once in `core-types`). Dispatch offers a job (`POST /jobs/:id/offer`); the worker accepts or declines (`/accept`, `/decline`); an unanswered offer lapses after 9 hours; customers/dispatch can `POST /jobs/:id/cancel`. Jobs reach a worker only after dispatch offers them. The dispatch board has a Refresh button and refetches when its socket reconnects; the mobile apps and board hold no hardcoded jobs.
 - Job card: the quote is an itemised card (labour / material / other lines, hours, notes, LKR, tax rate); the API computes totals. The worker confirms or corrects it at completion (`finalCard` on `POST /jobs/:id/proof`); dispatch can edit the final with `PATCH /jobs/:id/job-card` until the ticket is closed. Invoicing should read `jobCardBillable(job.jobCard)` (final, else estimate). No invoice document is generated yet.
@@ -61,6 +66,7 @@
 - Push notifications are not wired (`expo-notifications` not installed); customers get in-app toasts while the app is open.
 - Schema changes (job card, subscriptions, `closedAt`, address) rely on dev `synchronize`; production needs migrations.
 - Admin tables still list `Retired` rows.
+- The mobile jest suite failed 3 tests once when run straight after the API suite on a loaded machine (`customerScreens`), then passed 5 runs in a row; treat as timing flakiness unless it repeats.
 - `docker compose` is MSSQL based; `README.md` and `SETUP.md` were written before some changes, verify before relying on them.
 
 ## 6. Open decisions for the product owner
@@ -79,6 +85,8 @@
 `docker compose up -d` (SQL Server, API :3000, web :5173) · customer website `http://metrofix.localhost:5173`, staff website `http://admin.metrofix.localhost:5173` · mobile: `cd apps/mobile && npm run dev` (Metro :8081) then iOS simulator, Android emulator or Expo web. Full guide, including iOS/Android steps and troubleshooting: `SETUP.md`.
 
 ## 9. Changelog (newest first)
+
+- **2026-10-04**: Five dashboard / access fixes: worker access self-service with one-time passwords (API `mustChangePassword` + `JwtStrategy` gate, `generateTemporaryPassword`, Edit worker *Login access*, mobile forced Choose-your-password and Profile > Change password); confirmation before any dispatch stage change; itemised quote visible to customers (`QuoteBreakdown`, web and mobile); underscores removed from stage names (`humanize`); redesigned top ribbon. Tests: API 178, mobile 165 (7 new). Verified in a browser and against the live API (create worker, forced change, reset re-flags, deactivate). Also fixed: admin tables never reloaded after a pop-up added a record (App's `refreshKey` was set but never read; `AdminWorkspace` now takes `refreshSignal`). Test data left in the shared dev DB: four deactivated QA workers (`qa.worker.<timestamp>@demo.local`, names "QA Worker" ... "QA Worker Four"); the new `users.mustChangePassword` column was added by `synchronize`. A mobile APK built before this change has none of the new screens: rebuild it (SETUP.md).
 
 - **2026-10-04**: Fixed the register and choose-a-plan screens not scrolling on phones (they were taller than the non-scrolling page root and clipped); both now scroll inside themselves.
 

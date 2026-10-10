@@ -11,6 +11,7 @@ import {
 } from '@metro-fix/core-types';
 
 import { Button } from './ui/Button';
+import { QuoteBreakdown } from './QuoteBreakdown';
 import { Icon } from './ui/Icon';
 import { IconButton } from './ui/IconButton';
 import { ScreenHeader } from './ui/ScreenHeader';
@@ -241,7 +242,9 @@ export const CustomerTrackingView: React.FC<CustomerTrackingViewProps> = ({
           </View>
         ) : null}
 
-        {quote ? (
+        {currentJob.jobCard ? (
+          <QuoteBreakdown card={currentJob.jobCard} />
+        ) : quote ? (
           <View style={styles.workerCard}>
             <Text style={styles.workerCardTitle}>Quote from your technician</Text>
             <Text style={styles.workerName}>{quote}</Text>

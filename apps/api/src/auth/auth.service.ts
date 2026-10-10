@@ -96,6 +96,7 @@ export class AuthService {
         email: user.email,
         role: user.role,
         phoneNumber: user.phoneNumber,
+        mustChangePassword: user.mustChangePassword === true,
       },
     };
   }
@@ -181,7 +182,10 @@ export class AuthService {
       throw new BadRequestException('Choose a password different from the current one.');
     }
     await this.assertPasswordPolicy(newPassword);
-    await this.userRepository.update(user.id, { password: await bcrypt.hash(newPassword, 10) });
+    await this.userRepository.update(user.id, {
+      password: await bcrypt.hash(newPassword, 10),
+      mustChangePassword: false,
+    });
     await this.audit?.record({
       actor: { id: user.id, fullName: user.fullName, email: user.email, role: user.role },
       action: 'auth.change-password',

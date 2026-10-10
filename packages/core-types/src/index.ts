@@ -237,6 +237,8 @@ export const userSchema = z.object({
   phoneNumber: z.string().optional(),
   avatarUrl: z.string().optional(),
   pushToken: z.string().optional().nullable(),
+  /** True while the account still has an admin-issued one-time password (workers). */
+  mustChangePassword: z.boolean().optional(),
   createdAt: z.union([z.string(), z.date()]),
   updatedAt: z.union([z.string(), z.date()]).optional(),
 });

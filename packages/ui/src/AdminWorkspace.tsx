@@ -555,6 +555,8 @@ export interface AdminWorkspaceProps {
   onCloseCustomerModal?: () => void;
   workersList?: WorkerRecord[];
   onWorkerCreated?: (worker: WorkerRecord) => void;
+  /** Bump this to reload the current table (the host does after a pop-up adds a record). */
+  refreshSignal?: number;
 }
 
 export function AdminWorkspace({
@@ -563,6 +565,7 @@ export function AdminWorkspace({
   onCloseCustomerModal,
   workersList,
   onWorkerCreated,
+  refreshSignal = 0,
 }: AdminWorkspaceProps) {
   const [customers, setCustomers] = useState<CustomerRecord[]>([]);
   const [workers, setWorkers] = useState<WorkerRecord[]>([]);
@@ -680,6 +683,10 @@ export function AdminWorkspace({
               rating: item.rating ?? 5,
               servicePillars: Array.isArray(item.servicePillars) ? item.servicePillars : [],
               isAvailable: item.isAvailable !== false,
+              userId: item.user?.id ?? item.userId,
+              accountActive: item.user?.isActive !== false,
+              accountLocked: Boolean(item.user?.lockedUntil && new Date(item.user.lockedUntil).getTime() > Date.now()),
+              mustChangePassword: item.user?.mustChangePassword === true,
             },
           }));
           setWorkers(mappedWorkers);
@@ -768,7 +775,7 @@ export function AdminWorkspace({
     return () => {
       isMounted = false;
     };
-  }, [activeView, reloadKey]);
+  }, [activeView, reloadKey, refreshSignal]);
 
   const handleCustomerCreated = (newCustomer: CustomerRecord) => {
     setCustomers((prev) => [newCustomer, ...prev]);

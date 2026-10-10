@@ -86,7 +86,7 @@ export function ActiveRosterView() {
     const q = searchQuery.toLowerCase().trim();
     if (!q) return rosterData;
     return rosterData.filter((w) =>
-      [w.name, w.zone, w.currentTask, w.status.replace('_', ' ')].some((v) =>
+      [w.name, w.zone, w.currentTask, w.status.replace(/_/g, ' ')].some((v) =>
         v.toLowerCase().includes(q)
       )
     );
