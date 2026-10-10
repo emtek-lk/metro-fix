@@ -1,6 +1,7 @@
 import React from 'react';
 import { Platform, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { colors } from '../../theme/colors';
 import { elevation } from '../../theme/elevation';
@@ -79,6 +80,7 @@ export const GlassSurface: React.FC<GlassSurfaceProps> = ({
           />
           <View style={[StyleSheet.absoluteFill, styles.wash, tintColor ? { backgroundColor: tintColor } : null]} />
           <View style={[StyleSheet.absoluteFill, styles.rim, shape, styles.passThrough]} />
+          <TopHighlight />
           {children}
         </View>
       </View>
@@ -90,13 +92,32 @@ export const GlassSurface: React.FC<GlassSurfaceProps> = ({
   return (
     <View style={[outer, styles.tonal, webBlur, shape]}>
       {tintColor ? <View style={[StyleSheet.absoluteFill, shape, { backgroundColor: tintColor }]} /> : null}
+      <TopHighlight />
       {children}
     </View>
   );
 };
 
+/** A hairline that fades out toward the corners, like light catching the top rim of the glass. */
+const TopHighlight: React.FC = () => (
+  <LinearGradient
+    colors={['transparent', colors.glassHighlight, 'transparent']}
+    start={{ x: 0, y: 0 }}
+    end={{ x: 1, y: 0 }}
+    style={styles.highlight}
+  />
+);
+
 const styles = themedStyles(() =>
   StyleSheet.create({
+    highlight: {
+      position: 'absolute',
+      top: 0,
+      left: 12,
+      right: 12,
+      height: StyleSheet.hairlineWidth * 2,
+      pointerEvents: 'none',
+    },
     outer: {
       backgroundColor: 'transparent',
     },

@@ -1,10 +1,11 @@
 import React from 'react';
-import { Pressable, StyleSheet, ViewStyle, StyleProp } from 'react-native';
+import { StyleSheet, ViewStyle, StyleProp } from 'react-native';
 import { Text } from './AppText';
 import { colors } from '../../theme/colors';
 import { layout } from '../../theme/layout';
 import { elevation } from '../../theme/elevation';
 import { themedStyles } from '../../theme/themedStyles';
+import { PressableScale } from './PressableScale';
 
 export interface IconButtonProps {
   onPress: () => void;
@@ -35,7 +36,7 @@ export const IconButton: React.FC<IconButtonProps> = ({
   const box = Math.max(size, layout.minTap);
 
   return (
-    <Pressable
+    <PressableScale
       style={({ pressed }) => [
         styles.circle,
         {
@@ -59,7 +60,7 @@ export const IconButton: React.FC<IconButtonProps> = ({
       ) : symbol ? (
         <Text style={[styles.symbolText, { color, fontSize: box * 0.42 }]}>{symbol}</Text>
       ) : null}
-    </Pressable>
+    </PressableScale>
   );
 };
 

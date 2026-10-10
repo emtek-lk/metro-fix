@@ -15,6 +15,7 @@ import { typography } from '../../theme/typography';
 import { spacing, radius, layout } from '../../theme/layout';
 import { themedStyles } from '../../theme/themedStyles';
 import { useReduceMotion } from '../../theme/useReduceMotion';
+import { spring } from '../../theme/motion';
 import { haptics } from '../../lib/haptics';
 import { Icon, type FeatherIconName } from './Icon';
 import { GlassSurface } from './GlassSurface';
@@ -116,8 +117,7 @@ export const ToastHost: React.FC = () => {
     else
       Animated.spring(progress, {
         toValue: 1,
-        damping: 15,
-        stiffness: 220,
+        ...spring.settle,
         useNativeDriver: true,
       }).start();
 

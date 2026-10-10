@@ -1,6 +1,9 @@
 export { Button } from './Button';
 export type { ButtonProps } from './Button';
 
+export { PressableScale } from './PressableScale';
+export type { PressableScaleProps } from './PressableScale';
+
 export { Card } from './Card';
 export type { CardProps } from './Card';
 

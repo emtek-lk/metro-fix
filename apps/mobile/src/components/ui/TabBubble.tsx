@@ -1,5 +1,6 @@
 import React from 'react';
-import { Animated, Platform, StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
+import Animated, { useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { colors } from '../../theme/colors';
@@ -9,7 +10,7 @@ import { useTheme } from '../../theme/ThemeProvider';
 
 export interface TabBubbleProps {
   /** Shifts the highlight against the drag direction, so it seems to lag behind the lens. */
-  lean?: Animated.Value;
+  lean?: SharedValue<number>;
 }
 
 /**
@@ -20,6 +21,7 @@ export interface TabBubbleProps {
  */
 export const TabBubble: React.FC<TabBubbleProps> = ({ lean }) => {
   const { scheme, reduceTransparency } = useTheme();
+  const leanStyle = useAnimatedStyle(() => ({ transform: [{ translateX: lean ? lean.get() : 0 }] }));
 
   // Android: Material 3 style. A solid tonal capsule behind the active tab; no gloss, no blur.
   if (Platform.OS === 'android') {
@@ -44,9 +46,7 @@ export const TabBubble: React.FC<TabBubbleProps> = ({ lean }) => {
 
       {/* Native glass already has its own specular highlight; only draw ours where it doesn't. */}
       {nativeGlass ? null : (
-        <Animated.View
-          style={[styles.highlightWrap, lean ? { transform: [{ translateX: lean }] } : null]}
-        >
+        <Animated.View style={[styles.highlightWrap, lean ? leanStyle : null]}>
           <LinearGradient colors={[colors.bubbleHighlight, 'transparent']} style={styles.highlight} />
         </Animated.View>
       )}

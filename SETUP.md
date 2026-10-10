@@ -349,6 +349,7 @@ page. Do not import `AdminWorkspace` from the `@metro-fix/ui` barrel; use `@metr
 | Mobile: blank or old screen | Restart Metro with `--clear`; for icon / splash / permission changes rebuild the native app. |
 | Mobile: network error / cannot reach the API | Check the address for where it runs (section 5.2). Android emulator: `10.0.2.2`, or `adb reverse tcp:3000 tcp:3000`. A real phone needs your computer's IP, same Wi-Fi. |
 | Android: "Unable to load script" | `adb reverse tcp:8081 tcp:8081` and make sure Metro is running. |
+| Metro: `Unable to resolve module` for a file that exists | Stale watcher after `node_modules` changed. `watchman watch-del-all`, then restart Metro with `--reset-cache`. |
 | iOS build fails after dependency changes | `cd apps/mobile/ios && bundle exec pod install` (or `pod install`), then rebuild. |
 | `npm run ios`: "Simulator.app does not exist" | Use the `xcodebuild` + `simctl` commands in section 5.3, or run from Xcode. |
 | Port already in use | API 3000 (`PORT`), web 5173 (`--port`), Metro 8081, SQL Server 1433 (`compose.yml`). |

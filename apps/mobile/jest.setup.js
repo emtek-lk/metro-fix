@@ -1,3 +1,7 @@
+// Gesture Handler and Reanimated have native cores; use their official Jest stand-ins.
+require('react-native-gesture-handler/jestSetup');
+jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
+
 // Native modules have no implementation under Jest, so stub the ones the app imports.
 jest.mock('expo-secure-store', () => ({
   getItemAsync: jest.fn(async () => null),

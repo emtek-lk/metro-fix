@@ -1,11 +1,12 @@
 import React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Text } from './AppText';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { spacing, radius, layout } from '../../theme/layout';
 import { themedStyles } from '../../theme/themedStyles';
 import { Icon, type FeatherIconName } from './Icon';
+import { PressableScale } from './PressableScale';
 
 export interface QuickActionProps {
   icon: FeatherIconName;
@@ -24,7 +25,7 @@ export const QuickAction: React.FC<QuickActionProps> = ({
   dimmed = false,
   accessibilityHint,
 }) => (
-  <Pressable
+  <PressableScale
     onPress={onPress}
     style={({ pressed }) => [styles.action, pressed && styles.pressed, dimmed && styles.dimmed]}
     accessibilityRole="button"
@@ -38,7 +39,7 @@ export const QuickAction: React.FC<QuickActionProps> = ({
     <Text style={[styles.label, dimmed && styles.labelDimmed]} numberOfLines={1}>
       {label}
     </Text>
-  </Pressable>
+  </PressableScale>
 );
 
 const styles = themedStyles(() =>
