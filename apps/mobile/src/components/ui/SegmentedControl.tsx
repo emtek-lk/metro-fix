@@ -1,11 +1,12 @@
 import React from 'react';
-import { Pressable, View, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { Text } from './AppText';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { spacing, radius, layout } from '../../theme/layout';
 import { themedStyles } from '../../theme/themedStyles';
 import { haptics } from '../../lib/haptics';
+import { PressableScale } from './PressableScale';
 
 export interface SegmentOption<T extends string> {
   id: T;
@@ -31,7 +32,7 @@ export function SegmentedControl<T extends string>({
       {options.map((option) => {
         const selected = option.id === value;
         return (
-          <Pressable
+          <PressableScale
             key={option.id}
             style={({ pressed }) => [
               styles.segment,
@@ -53,7 +54,7 @@ export function SegmentedControl<T extends string>({
             >
               {option.label}
             </Text>
-          </Pressable>
+          </PressableScale>
         );
       })}
     </View>

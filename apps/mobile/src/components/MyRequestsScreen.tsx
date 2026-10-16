@@ -1,10 +1,11 @@
 import React from 'react';
-import { Animated, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
+import { Animated, RefreshControl, StyleSheet, View } from 'react-native';
 import { Text } from './ui/AppText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ServiceRequest } from '@metro-fix/core-types';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
+import { PressableScale } from './ui/PressableScale';
 import { EmptyState } from './ui/EmptyState';
 import { ErrorState } from './ui/ErrorState';
 import { SkeletonCard } from './ui/SkeletonCard';
@@ -42,7 +43,8 @@ const RequestCard: React.FC<{ request: ServiceRequest; onOpen: (request: Service
 }) => {
   const technician = workerNameOf(request);
   return (
-    <Pressable
+    <PressableScale
+      scaleTo={0.985}
       onPress={() => onOpen(request)}
       accessibilityRole="button"
       accessibilityLabel={`Open request ${request.title}`}
@@ -80,7 +82,7 @@ const RequestCard: React.FC<{ request: ServiceRequest; onOpen: (request: Service
           </View>
         </View>
       </Card>
-    </Pressable>
+    </PressableScale>
   );
 };
 

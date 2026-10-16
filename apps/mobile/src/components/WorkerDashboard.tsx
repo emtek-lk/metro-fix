@@ -1,11 +1,12 @@
 import React, { useMemo, useState } from 'react';
-import { Animated, View, StyleSheet, Pressable, RefreshControl } from 'react-native';
+import { Animated, View, StyleSheet, RefreshControl } from 'react-native';
 import { Text } from './ui/AppText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { JobStatus, ServiceRequest } from '@metro-fix/core-types';
 import { customerNameOf, coordinatesOf } from '../lib/jobs';
 
 import { Card } from './ui/Card';
+import { PressableScale } from './ui/PressableScale';
 import { Button } from './ui/Button';
 import { IconButton } from './ui/IconButton';
 import { Icon } from './ui/Icon';
@@ -53,7 +54,8 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({
   // 2. Render each assigned job inside our Soft UI Card primitive
   const renderJobItem = ({ item }: { item: ServiceRequest }) => {
     return (
-      <Pressable
+      <PressableScale
+        scaleTo={0.985}
         onPress={() => onSelectJob(item)}
         style={({ pressed }) => [styles.cardContainer, pressed && styles.cardPressed]}
         accessibilityRole="button"
@@ -126,7 +128,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({
             </View>
           </View>
         </Card>
-      </Pressable>
+      </PressableScale>
     );
   };
 

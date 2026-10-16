@@ -48,6 +48,8 @@ export const darkPalette = {
   /** Tint laid over blurred content on floating glass surfaces. */
   glassTint: 'rgba(30, 41, 59, 0.55)',
   glassBorder: 'rgba(255, 255, 255, 0.10)',
+  /** Bright rim along a glass surface's top edge: light catching the material. */
+  glassHighlight: 'rgba(255, 255, 255, 0.34)',
   /** Opaque stand-in for glass when transparency is reduced. */
   glassSolid: '#1E293B',
   /** Android has no blur material, so its glass stand-in is nearly opaque to keep text legible. */
@@ -109,6 +111,7 @@ export const lightPalette: ThemeColors = {
   // ── Glass & ambient background ──
   glassTint: 'rgba(255, 255, 255, 0.62)',
   glassBorder: 'rgba(255, 255, 255, 0.75)',
+  glassHighlight: 'rgba(255, 255, 255, 0.95)',
   glassSolid: '#FFFFFF',
   glassAndroid: 'rgba(255, 255, 255, 0.985)',
   glassStrong: 'rgba(255, 255, 255, 0.90)',

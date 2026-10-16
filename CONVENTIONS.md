@@ -136,6 +136,11 @@ All mobile components follow these rules:
 - **Brand accent:** `#F97316` (orange) for active states, focus borders, badges
 - **Focus states:** Input borders change to `#F97316` on focus
 - **Text scale:** `#F8FAFC` (titles), `#CBD5E1` (body), `#94A3B8` (labels), `#64748B` (muted)
+- **Press feedback:** tappable controls use `PressableScale` (`components/ui`), which shrinks to 0.97 (0.985 for large cards) on press-in and returns on release, skipped under Reduce Motion. Use it instead of a bare `Pressable` for buttons, chips and list cards. It resolves a function `style` itself, because an animated component cannot take one.
+- **Motion tokens:** curves, durations and springs live in `theme/motion.ts` (`EASE_OUT`, `duration`, `appleSpring(response, dampingRatio)`, `spring`). Springs default to a damping ratio of 1 (no overshoot); bounce only where a gesture carried momentum. No `ease-in` on UI, and animate `transform` / `opacity` only.
+- **Gesture-driven motion runs on the UI thread** with `react-native-gesture-handler` + `react-native-reanimated` (the floating tab bar is the reference: `Gesture.Pan()` + shared values + `useAnimatedStyle`). Never `setState` from a gesture handler; cross to React only when a value crosses a threshold (`useAnimatedReaction` + `scheduleOnRN` from `react-native-worklets`). Use `.get()` / `.set()` on shared values, mark helper functions called from a worklet with `'worklet'`, and keep `PanResponder` out. Simple press / fade / toggle motion stays on core `Animated` with the native driver. The app root is wrapped in `GestureHandlerRootView` (without it gestures silently do nothing). Jest uses the libraries' official mocks (`jest.setup.js`, the Worklets resolver in `jest.config.js`).
+- **Glass:** only for the controls layer (tab bar, headers, sheets, toasts) through `GlassSurface`, which adds a bright top-edge highlight (`glassHighlight`) and falls back to an opaque surface under Reduce Transparency. Content cards stay opaque.
+- **Type tracking is size-specific** (`theme/typography.ts`): large text tightens, small text opens slightly, body stays at 0.
 
 ### 3.6 Navigation Architecture
 The app uses manual state-based routing (no React Navigation library):

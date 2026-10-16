@@ -3,18 +3,19 @@ import type { TextStyle } from 'react-native';
 /**
  * METRO-FIX mobile — type scale.
  *
+ * Tracking is size-specific: large text tightens, small text opens slightly, body stays at 0.
  * Replaces ad-hoc font sizes (10→26) and normalises weights to 500/600/700/800.
  * Spread a token into a StyleSheet entry: `title: { ...typography.h1 }`.
  */
 export const typography = {
-  display: { fontSize: 28, lineHeight: 34, fontWeight: '800' },
-  h1: { fontSize: 22, lineHeight: 28, fontWeight: '800' },
-  h2: { fontSize: 18, lineHeight: 24, fontWeight: '700' },
-  h3: { fontSize: 16, lineHeight: 22, fontWeight: '700' },
+  display: { fontSize: 28, lineHeight: 34, fontWeight: '800', letterSpacing: -0.5 },
+  h1: { fontSize: 22, lineHeight: 28, fontWeight: '800', letterSpacing: -0.35 },
+  h2: { fontSize: 18, lineHeight: 24, fontWeight: '700', letterSpacing: -0.2 },
+  h3: { fontSize: 16, lineHeight: 22, fontWeight: '700', letterSpacing: -0.1 },
   body: { fontSize: 15, lineHeight: 22, fontWeight: '500' },
   bodyStrong: { fontSize: 15, lineHeight: 22, fontWeight: '700' },
   label: { fontSize: 13, lineHeight: 18, fontWeight: '600' },
-  caption: { fontSize: 12, lineHeight: 16, fontWeight: '500' },
+  caption: { fontSize: 12, lineHeight: 16, fontWeight: '500', letterSpacing: 0.1 },
   overline: {
     fontSize: 11,
     lineHeight: 14,

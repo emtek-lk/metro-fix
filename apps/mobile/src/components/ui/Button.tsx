@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, StyleSheet, ActivityIndicator, StyleProp, ViewStyle, TextStyle } from 'react-native';
+import { StyleSheet, ActivityIndicator, StyleProp, ViewStyle, TextStyle } from 'react-native';
 import { Text } from './AppText';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
@@ -7,6 +7,7 @@ import { spacing, radius, layout } from '../../theme/layout';
 import { elevation } from '../../theme/elevation';
 import { themedStyles } from '../../theme/themedStyles';
 import { haptics } from '../../lib/haptics';
+import { PressableScale } from './PressableScale';
 
 export interface ButtonProps {
   title: string;
@@ -34,7 +35,7 @@ export const Button: React.FC<ButtonProps> = ({
   const isDisabled = disabled || isLoading;
 
   return (
-    <Pressable
+    <PressableScale
       style={({ pressed }) => [
         styles.baseButton,
         variantStyles[variant],
@@ -68,7 +69,7 @@ export const Button: React.FC<ButtonProps> = ({
           </Text>
         </>
       )}
-    </Pressable>
+    </PressableScale>
   );
 };
 
