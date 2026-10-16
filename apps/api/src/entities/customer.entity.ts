@@ -7,7 +7,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { FacilityType, SubscriptionTier } from '@metro-fix/core-types';
+import { FacilityType, type BillingCycle, type SubscriptionTier } from '@metro-fix/core-types';
 import { UserEntity } from './user.entity';
 
 @Entity('customers')
@@ -15,7 +15,7 @@ export class CustomerEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'uuid' })
+  @Column({ type: 'uniqueidentifier' })
   userId: string;
 
   @OneToOne(() => UserEntity, { onDelete: 'CASCADE', eager: true })
@@ -23,26 +23,35 @@ export class CustomerEntity {
   user: UserEntity;
 
   @Column({
-    type: 'enum',
-    enum: FacilityType,
+    type: 'varchar',
+    length: 50,
     default: FacilityType.RESIDENTIAL,
   })
   facilityType: FacilityType;
 
-  @Column({
-    type: 'enum',
-    enum: SubscriptionTier,
-    default: SubscriptionTier.BASIC,
-  })
-  subscriptionTier: SubscriptionTier;
+  /** Null until the customer picks and pays for a plan. Without one they cannot raise requests. */
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  subscriptionTier?: SubscriptionTier | null;
 
-  @Column({
-    type: 'geometry',
-    spatialFeatureType: 'Point',
-    srid: 4326,
-    nullable: true,
-  })
-  facilityLocation?: { type: 'Point'; coordinates: [number, number] };
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  billingCycle?: BillingCycle | null;
+
+  @Column({ type: 'datetime', nullable: true })
+  subscribedAt?: Date | null;
+
+  /** Optional site / billing address given at sign-up. */
+  @Column({ type: 'varchar', length: 300, nullable: true })
+  address?: string | null;
+
+  /** The business or household name shown to dispatch (optional). */
+  @Column({ type: 'varchar', length: 200, nullable: true })
+  companyName?: string | null;
+
+  @Column({ type: 'float', nullable: true })
+  latitude?: number | null;
+
+  @Column({ type: 'float', nullable: true })
+  longitude?: number | null;
 
   @CreateDateColumn()
   createdAt: Date;

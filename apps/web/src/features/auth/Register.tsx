@@ -1,10 +1,11 @@
 import { useState, type CSSProperties, type FormEvent } from 'react';
 import { Role, registrationSchema, type RegistrationInput } from '@metro-fix/core-types';
 import { useMediaQuery } from '@metro-fix/ui';
-import { BrandLogo } from '@metro-fix/ui';
+import { useAppSettings } from '../../lib/settings';
 
 export interface RegisterProps {
-  onSubmit: (values: RegistrationInput) => void;
+  /** Resolves to an error message to show, or null when the account was created. */
+  onSubmit: (values: RegistrationInput, address: string) => Promise<string | null>;
 }
 
 const initialState: RegistrationInput = {
@@ -21,32 +22,44 @@ const initialState: RegistrationInput = {
 export function Register({ onSubmit }: RegisterProps) {
   const [form, setForm] = useState<RegistrationInput>(initialState);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const app = useAppSettings();
+  const [address, setAddress] = useState('');
+  const [busy, setBusy] = useState(false);
   const isCompact = useMediaQuery('(max-width: 820px)');
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const result = registrationSchema.safeParse(form);
+    const phoneDigits = (form.phoneNumber ?? '').replace(/\D/g, '').length;
 
+    const found: Record<string, string> = {};
     if (!result.success) {
-      setErrors(
-        result.error.issues.reduce<Record<string, string>>((collection, issue) => {
-          const key = issue.path.join('.') || 'form';
-          collection[key] = issue.message;
-          return collection;
-        }, {})
-      );
+      for (const issue of result.error.issues) {
+        const key = issue.path.join('.') || 'form';
+        if (!found[key]) found[key] = issue.message;
+      }
+    }
+    if (phoneDigits < 7 || phoneDigits > 15) found.phoneNumber = 'Enter a valid phone number.';
+    if (form.password.length < app.passwordMinLength) {
+      found.password = `Use at least ${app.passwordMinLength} characters.`;
+    } else if (!/[A-Za-z]/.test(form.password) || !/\d/.test(form.password)) {
+      found.password = found.password ?? 'Include both letters and numbers.';
+    }
+    if (!result.success || Object.keys(found).length > 0) {
+      setErrors(found);
       return;
     }
 
     setErrors({});
-    onSubmit(result.data);
+    setBusy(true);
+    const problem = await onSubmit(result.data, address.trim());
+    setBusy(false);
+    if (problem) setErrors({ form: problem });
   };
 
   return (
     <form onSubmit={handleSubmit} style={styles.form}>
-      <img src={BrandLogo} alt="Metro-Fix" style={styles.logo} />
-
       <div style={{ ...styles.row, ...(isCompact ? styles.rowCompact : undefined) }}>
         <div style={styles.fieldGroup}>
           <label style={styles.label} htmlFor="register-full-name">
@@ -62,23 +75,6 @@ export function Register({ onSubmit }: RegisterProps) {
           {errors.fullName && <span style={styles.errorText}>{errors.fullName}</span>}
         </div>
 
-        <div style={styles.fieldGroup}>
-          <label style={styles.label} htmlFor="register-role">
-            Role
-          </label>
-          <select
-            id="register-role"
-            value={form.role}
-            onChange={(event) => setForm((current) => ({ ...current, role: event.target.value as Role }))}
-            style={styles.input}
-          >
-            {Object.values(Role).map((role) => (
-              <option key={role} value={role}>
-                {role}
-              </option>
-            ))}
-          </select>
-        </div>
       </div>
 
       <div style={styles.fieldGroup}>
@@ -107,22 +103,27 @@ export function Register({ onSubmit }: RegisterProps) {
             value={form.phoneNumber ?? ''}
             onChange={(event) => setForm((current) => ({ ...current, phoneNumber: event.target.value }))}
             style={styles.input}
-            placeholder="+1 555 0100"
+            placeholder="+94 77 123 4567"
+            autoComplete="tel"
           />
+          {errors.phoneNumber && <span style={styles.errorText}>{errors.phoneNumber}</span>}
         </div>
 
-        <div style={styles.fieldGroup}>
-          <label style={styles.label} htmlFor="register-company">
-            Company
-          </label>
-          <input
-            id="register-company"
-            value={form.companyName ?? ''}
-            onChange={(event) => setForm((current) => ({ ...current, companyName: event.target.value }))}
-            style={styles.input}
-            placeholder="MetroFix Group"
-          />
-        </div>
+      </div>
+
+      <div style={styles.fieldGroup}>
+        <label style={styles.label} htmlFor="register-address">
+          Address <span style={styles.optional}>(optional)</span>
+        </label>
+        <input
+          id="register-address"
+          autoComplete="street-address"
+          value={address}
+          onChange={(event) => setAddress(event.target.value)}
+          style={styles.input}
+          placeholder="Street, city"
+          maxLength={300}
+        />
       </div>
 
       <div style={{ ...styles.row, ...(isCompact ? styles.rowCompact : undefined) }}>
@@ -137,7 +138,7 @@ export function Register({ onSubmit }: RegisterProps) {
             value={form.password}
             onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
             style={styles.input}
-            placeholder="Minimum 8 characters"
+            placeholder={`Minimum ${app.passwordMinLength} characters`}
           />
           {errors.password && <span style={styles.errorText}>{errors.password}</span>}
         </div>
@@ -172,8 +173,10 @@ export function Register({ onSubmit }: RegisterProps) {
       </label>
       {errors.acceptTerms && <span style={styles.errorText}>{errors.acceptTerms}</span>}
 
-      <button type="submit" style={styles.submitButton}>
-        Create account
+      {errors.form && <span style={styles.errorText} role="alert">{errors.form}</span>}
+
+      <button type="submit" style={{ ...styles.submitButton, ...(busy ? { opacity: 0.7, cursor: 'wait' } : undefined) }} disabled={busy}>
+        {busy ? 'Creating account…' : 'Create account'}
       </button>
     </form>
   );
@@ -184,12 +187,6 @@ const styles: Record<string, CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     gap: '18px',
-  },
-  logo: {
-    display: 'block',
-    maxWidth: '180px',
-    height: 'auto',
-    margin: '0 auto 24px auto',
   },
   row: {
     display: 'grid',
@@ -213,7 +210,7 @@ const styles: Record<string, CSSProperties> = {
     width: '100%',
     boxSizing: 'border-box',
     border: '1px solid var(--border-subtle)',
-    background: 'var(--surface)',
+    background: 'var(--surface-elevated)',
     color: 'var(--text-primary)',
     borderRadius: '14px',
     padding: '13px 14px',
@@ -226,8 +223,12 @@ const styles: Record<string, CSSProperties> = {
     color: 'var(--text-secondary)',
     fontSize: '0.92rem',
   },
+  optional: {
+    fontWeight: 400,
+    color: 'var(--text-secondary)',
+  },
   errorText: {
-    color: '#b14f4f',
+    color: '#d37105',
     fontSize: '0.84rem',
   },
   submitButton: {

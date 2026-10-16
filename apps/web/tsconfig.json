@@ -1,9 +1,10 @@
 {
   "extends": "@metro-fix/ts-config/base.json",
   "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
     "jsx": "react-jsx",
-    "baseUrl": ".",
-    "ignoreDeprecations": "6.0",
+    "noEmit": true,
     "paths": {
       "@/*": ["./src/*"]
     }

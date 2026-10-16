@@ -1,0 +1,235 @@
+import React from 'react';
+import { createNativeStackNavigator, type NativeStackNavigationOptions } from '@react-navigation/native-stack';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { Role, type SubscriptionTier } from '@metro-fix/core-types';
+import { useAuth } from '../context/AuthContext';
+import { MobileLoginScreen } from '../components/MobileLoginScreen';
+import { RegisterScreen } from '../components/RegisterScreen';
+import { JobDetail } from '../components/JobDetail';
+import { CustomerTrackingView } from '../components/CustomerTrackingView';
+import { SubscriptionScreen } from '../components/SubscriptionScreen';
+import { CheckoutScreen } from '../components/CheckoutScreen';
+import { ChangePasswordScreen } from '../components/ChangePasswordScreen';
+import { UiGalleryScreen } from '../components/UiGalleryScreen';
+import { UnsupportedRoleScreen } from '../components/UnsupportedRoleScreen';
+import { LoadingState } from '../components/ui/LoadingState';
+import { useRealtimeSync } from '../hooks/useRealtimeSync';
+import { colors } from '../theme/colors';
+import { ScreenShell } from './ScreenShell';
+import { WorkerMain } from './WorkerMain';
+import { CustomerMain } from './CustomerMain';
+import type { RootStackParamList } from './types';
+
+const Stack = createNativeStackNavigator<RootStackParamList>();
+
+type Props<Name extends keyof RootStackParamList> = NativeStackScreenProps<RootStackParamList, Name>;
+
+// Screens draw their own headers, so the native header is off. Each screen paints its own opaque
+// background (see ScreenShell); the stack's own is only visible for a frame during a transition.
+const screenOptions = (): NativeStackNavigationOptions => ({
+  headerShown: false,
+  contentStyle: { backgroundColor: colors.bg },
+  // On iOS, let a swipe from anywhere on the screen go back, not just from the left edge.
+  fullScreenGestureEnabled: true,
+});
+
+function LoginRoute({ navigation }: Props<'Login'>) {
+  return (
+    <ScreenShell safeArea={false}>
+      <MobileLoginScreen onRegister={() => navigation.navigate('Register')} />
+    </ScreenShell>
+  );
+}
+
+function RegisterRoute({ navigation }: Props<'Register'>) {
+  const { register } = useAuth();
+  return (
+    <ScreenShell safeArea={false}>
+      <RegisterScreen
+        onBack={() => navigation.goBack()}
+        // Creates the account and signs it in; the navigator then switches to the customer app.
+        onSubmit={async (values) => {
+          await register(values);
+        }}
+      />
+    </ScreenShell>
+  );
+}
+
+function ChangePasswordRoute({ navigation }: Props<'ChangePassword'>) {
+  return (
+    <ScreenShell safeArea={false}>
+      <ChangePasswordScreen onBack={() => navigation.goBack()} onDone={() => navigation.goBack()} />
+    </ScreenShell>
+  );
+}
+
+function JobDetailRoute({ navigation, route }: Props<'JobDetail'>) {
+  const { user } = useAuth();
+  if (!user) return null;
+  return (
+    // Edge to edge: the hero runs under the status bar and JobDetail manages its own insets.
+    <ScreenShell safeArea={false}>
+      <JobDetail
+        job={route.params.job}
+        workerId={user.id}
+        onBack={() => navigation.goBack()}
+        onJobUpdated={(job) => navigation.setParams({ job })}
+      />
+    </ScreenShell>
+  );
+}
+
+function TrackingRoute({ navigation, route }: Props<'Tracking'>) {
+  return (
+    <ScreenShell>
+      <CustomerTrackingView
+        job={route.params.job}
+        onBack={() => navigation.goBack()}
+        // Back to the booking tab (the wizard was already reset when this request was raised).
+        onNewBooking={() => navigation.popToTop()}
+      />
+    </ScreenShell>
+  );
+}
+
+function PlansRoute({ navigation, route }: Props<'Plans'>) {
+  const { finishPlanChoice } = useAuth();
+  const onboarding = Boolean(route.params?.onboarding);
+  return (
+    <ScreenShell>
+      <SubscriptionScreen
+        onboarding={onboarding}
+        onBack={() => navigation.goBack()}
+        onSkip={finishPlanChoice}
+        onChoose={(plan, cycle, intent) =>
+          navigation.navigate('Checkout', {
+            tier: plan.tierName,
+            cycle,
+            amountLkr: (cycle === 'ANNUAL' ? plan.annualFeeLkr : plan.monthlyFeeLkr) ?? 0,
+            intent,
+            onboarding,
+          })
+        }
+      />
+    </ScreenShell>
+  );
+}
+
+function CheckoutRoute({ navigation, route }: Props<'Checkout'>) {
+  const { finishPlanChoice } = useAuth();
+  const { tier, cycle, amountLkr, intent, onboarding } = route.params;
+  return (
+    <ScreenShell>
+      <CheckoutScreen
+        tier={tier as SubscriptionTier}
+        cycle={cycle}
+        amountLkr={amountLkr}
+        intent={intent}
+        onBack={() => navigation.goBack()}
+        onPaid={() => {
+          // After sign-up, paying lands on the app home; otherwise return to the plans page.
+          if (onboarding) finishPlanChoice();
+          else navigation.popTo('Plans');
+        }}
+      />
+    </ScreenShell>
+  );
+}
+
+function GalleryRoute({ navigation }: Props<'Gallery'>) {
+  return (
+    <ScreenShell>
+      <UiGalleryScreen onClose={() => navigation.goBack()} />
+    </ScreenShell>
+  );
+}
+
+function UnsupportedRoute() {
+  const { user } = useAuth();
+  return (
+    <ScreenShell>
+      <UnsupportedRoleScreen role={user?.role ?? ''} />
+    </ScreenShell>
+  );
+}
+
+/**
+ * The app's screens, chosen by who is signed in. Each signed-in account gets its own navigator
+ * (keyed by user), so switching accounts starts from a clean stack and never leaks the previous
+ * account's screens or state.
+ */
+export function AppNavigator() {
+  const { user, token, isLoading, isAuthenticated, needsPlanChoice } = useAuth();
+
+  // While signed in, keep the app live: connect the socket and refresh data as jobs change.
+  useRealtimeSync(isAuthenticated ? token : null);
+
+  if (isLoading) {
+    return (
+      <ScreenShell>
+        <LoadingState message="Preparing your workspace…" />
+      </ScreenShell>
+    );
+  }
+
+  if (!isAuthenticated || !user) {
+    return (
+      <Stack.Navigator key="signed-out" screenOptions={screenOptions}>
+        <Stack.Screen name="Login" component={LoginRoute} />
+        <Stack.Screen name="Register" component={RegisterRoute} />
+      </Stack.Navigator>
+    );
+  }
+
+  // An admin-issued one-time password only gets as far as choosing a real one (the API refuses
+  // everything else until then), so this replaces the whole app.
+  if (user.mustChangePassword) {
+    return (
+      <ScreenShell safeArea={false}>
+        <ChangePasswordScreen forced />
+      </ScreenShell>
+    );
+  }
+
+  // Each account sees only its own app. Admin / customer-care accounts work from the web dashboard.
+  if (user.role === Role.WORKER) {
+    return (
+      <Stack.Navigator key={`worker-${user.id}`} screenOptions={screenOptions}>
+        <Stack.Screen name="Main" component={WorkerMain} />
+        <Stack.Screen name="JobDetail" component={JobDetailRoute} />
+        <Stack.Screen name="ChangePassword" component={ChangePasswordRoute} />
+        {__DEV__ ? <Stack.Screen name="Gallery" component={GalleryRoute} /> : null}
+      </Stack.Navigator>
+    );
+  }
+
+  // Right after sign-up: choose a plan or skip, then on to the app home.
+  if (user.role === Role.CUSTOMER && needsPlanChoice) {
+    return (
+      <Stack.Navigator key={`onboarding-${user.id}`} screenOptions={screenOptions}>
+        <Stack.Screen name="Plans" component={PlansRoute} initialParams={{ onboarding: true }} />
+        <Stack.Screen name="Checkout" component={CheckoutRoute} />
+      </Stack.Navigator>
+    );
+  }
+
+  if (user.role === Role.CUSTOMER) {
+    return (
+      <Stack.Navigator key={`customer-${user.id}`} screenOptions={screenOptions}>
+        <Stack.Screen name="Main" component={CustomerMain} />
+        <Stack.Screen name="Tracking" component={TrackingRoute} />
+        <Stack.Screen name="Plans" component={PlansRoute} />
+        <Stack.Screen name="Checkout" component={CheckoutRoute} />
+        <Stack.Screen name="ChangePassword" component={ChangePasswordRoute} />
+        {__DEV__ ? <Stack.Screen name="Gallery" component={GalleryRoute} /> : null}
+      </Stack.Navigator>
+    );
+  }
+
+  return (
+    <Stack.Navigator key="unsupported" screenOptions={screenOptions}>
+      <Stack.Screen name="Unsupported" component={UnsupportedRoute} />
+    </Stack.Navigator>
+  );
+}

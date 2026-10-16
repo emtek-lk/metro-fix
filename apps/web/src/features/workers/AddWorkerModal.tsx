@@ -1,0 +1,445 @@
+import { useState, type CSSProperties } from 'react';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { ServicePillar } from '@metro-fix/core-types';
+import { API_BASE_URL } from '../../lib/api';
+
+import { useModalAccessibility } from '../../hooks/useModalAccessibility';
+
+export const addWorkerSchema = z.object({
+  fullName: z.string().trim().min(2, 'Full name must be at least 2 characters'),
+  email: z.string().trim().email('Enter a valid email address'),
+  phoneNumber: z.string().trim().optional(),
+  coverageZone: z.string().trim().optional(),
+  servicePillars: z.array(z.nativeEnum(ServicePillar)).min(1, 'Select at least one service pillar'),
+});
+
+export type AddWorkerInput = z.infer<typeof addWorkerSchema>;
+
+export interface AddWorkerModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onWorkerAdded: (newWorker: any) => void;
+}
+
+export function AddWorkerModal({ isOpen, onClose, onWorkerAdded }: AddWorkerModalProps) {
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  // After creation the one-time password is shown once; the list refreshes when this is dismissed.
+  const [created, setCreated] = useState<{ worker: any; password: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const dismiss = () => {
+    if (created) onWorkerAdded(created.worker);
+    setCreated(null);
+    setCopied(false);
+    onClose();
+  };
+  const modalRef = useModalAccessibility(isOpen, dismiss);
+
+  const {
+    register,
+    handleSubmit,
+    control,
+    reset,
+    formState: { errors },
+  } = useForm<AddWorkerInput>({
+    resolver: zodResolver(addWorkerSchema),
+    defaultValues: {
+      fullName: '',
+      email: '',
+      phoneNumber: '',
+      coverageZone: 'Colombo Central',
+      servicePillars: [ServicePillar.HARD],
+    },
+  });
+
+  if (!isOpen) return null;
+
+  const onSubmit = async (values: AddWorkerInput) => {
+    setIsLoading(true);
+    setSubmitError(null);
+
+    const token = localStorage.getItem('metrofix_token');
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/users`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(values),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => null);
+        throw new Error(errData?.message || 'Failed to register worker in database.');
+      }
+
+      const createdWorker = await response.json();
+      reset();
+      const { temporaryPassword, ...worker } = createdWorker;
+      setCreated({ worker, password: temporaryPassword ?? '' });
+    } catch (err: any) {
+      setSubmitError(err.message || 'Network error occurred while creating worker.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div style={styles.overlay} onClick={dismiss} className="metro-modal-overlay">
+      <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-worker-title"
+        tabIndex={-1}
+        style={styles.modal}
+        className="metro-modal-card"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={styles.header}>
+          <div>
+            <h2 id="add-worker-title" style={styles.title}>{created ? 'Technician registered' : 'Register New Field Technician'}</h2>
+            <p style={styles.subtitle}>{created ? `${created.worker.user?.fullName ?? 'The worker'} can now sign in to the mobile app` : 'Add a new worker to the active dispatch roster'}</p>
+          </div>
+          <button type="button" aria-label="Close modal" className="metro-ghost-btn" style={styles.closeBtn} onClick={dismiss}>
+            ✕
+          </button>
+        </div>
+
+        {created ? (
+          <div style={styles.form}>
+            <p style={{ margin: 0, lineHeight: 1.5 }}>
+              Give them this one-time password privately (in person or by phone). It is shown only now and is not stored in readable form.
+              At first sign-in the app makes them choose their own password, so you never need to know it.
+            </p>
+            <div style={styles.passwordBox}>
+              <code style={styles.passwordCode}>{created.password}</code>
+              <button
+                type="button"
+                className="metro-ghost-btn"
+                style={styles.cancelBtn}
+                onClick={() => navigator.clipboard?.writeText(created.password).then(() => setCopied(true), () => undefined)}
+              >
+                {copied ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+            <div style={styles.actions}>
+              <button type="button" style={styles.submitBtn} onClick={dismiss}>Done</button>
+            </div>
+          </div>
+        ) : (
+          <>
+
+        {submitError && (
+          <div style={styles.errorBanner}>
+            <span>⚠️ {submitError}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit(onSubmit)} style={styles.form} noValidate>
+          <div style={styles.fieldGroup}>
+            <label style={styles.label} htmlFor="worker-fullName">
+              Full Name *
+            </label>
+            <input
+              id="worker-fullName"
+              type="text"
+              {...register('fullName')}
+              placeholder="e.g. Priyantha Jayasinghe"
+              style={{
+                ...styles.input,
+                ...(errors.fullName ? styles.inputError : undefined),
+              }}
+            />
+            {errors.fullName && <span style={styles.fieldError}>{errors.fullName.message}</span>}
+          </div>
+
+          <div style={styles.row}>
+            <div style={styles.fieldGroup}>
+              <label style={styles.label} htmlFor="worker-email">
+                Email Address *
+              </label>
+              <input
+                id="worker-email"
+                type="email"
+                {...register('email')}
+                placeholder="worker@metro-fix.com"
+                style={{
+                  ...styles.input,
+                  ...(errors.email ? styles.inputError : undefined),
+                }}
+              />
+              {errors.email && <span style={styles.fieldError}>{errors.email.message}</span>}
+            </div>
+
+            <div style={styles.fieldGroup}>
+              <label style={styles.label} htmlFor="worker-phone">
+                Phone Number
+              </label>
+              <input
+                id="worker-phone"
+                type="text"
+                {...register('phoneNumber')}
+                placeholder="+94 77 123 4567"
+                style={styles.input}
+              />
+            </div>
+          </div>
+
+          <div style={styles.fieldGroup}>
+            <label style={styles.label} htmlFor="worker-zone">
+              Coverage Zone / Primary Location
+            </label>
+            <input
+              id="worker-zone"
+              type="text"
+              {...register('coverageZone')}
+              placeholder="e.g. Colombo 03 / Port City Zone"
+              style={styles.input}
+            />
+          </div>
+
+          <div style={styles.fieldGroup}>
+            <label style={styles.label}>Pillar Capabilities *</label>
+            <Controller
+              name="servicePillars"
+              control={control}
+              render={({ field }) => (
+                <div style={styles.pillarOptions}>
+                  {[
+                    { value: ServicePillar.HARD, label: 'Hard Services (Electrical, Mechanical, HVAC)' },
+                    { value: ServicePillar.SOFT, label: 'Soft Services (Sanitization, Janitorial)' },
+                    { value: ServicePillar.STRATEGIC, label: 'Strategic (Compliance, Audits, Safety)' },
+                  ].map((pillar) => {
+                    const isChecked = field.value?.includes(pillar.value);
+                    return (
+                      <label
+                        key={pillar.value}
+                        style={{
+                          ...styles.pillarChip,
+                          ...(isChecked ? styles.pillarChipActive : undefined),
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          value={pillar.value}
+                          checked={isChecked}
+                          onChange={(e) => {
+                            const newVals = e.target.checked
+                              ? [...(field.value || []), pillar.value]
+                              : field.value.filter((val: ServicePillar) => val !== pillar.value);
+                            field.onChange(newVals);
+                          }}
+                          style={{ display: 'none' }}
+                        />
+                        <span>{isChecked ? '✓' : '+'}</span> {pillar.label}
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            />
+            {errors.servicePillars && (
+              <span style={styles.fieldError}>{errors.servicePillars.message}</span>
+            )}
+          </div>
+
+          <div style={styles.actions}>
+            <button type="button" className="metro-ghost-btn" style={styles.cancelBtn} onClick={onClose}>
+              Cancel
+            </button>
+            <button type="submit" disabled={isLoading} style={styles.submitBtn}>
+              {isLoading ? 'Creating Worker...' : 'Register Worker'}
+            </button>
+          </div>
+        </form>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const styles: Record<string, CSSProperties> = {
+  overlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.72)',
+    backdropFilter: 'blur(6px)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 99999,
+    padding: '20px',
+  },
+  modal: {
+    backgroundColor: 'var(--surface)',
+    color: 'var(--text-primary)',
+    borderRadius: '22px',
+    padding: '24px',
+    width: '100%',
+    maxWidth: '560px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-subtle)',
+    boxShadow: '0 30px 72px rgba(0, 0, 0, 0.32)',
+    maxHeight: '90vh',
+    overflowY: 'auto',
+    scrollbarWidth: 'none',
+  },
+  header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: '20px',
+  },
+  title: {
+    margin: '0 0 4px',
+    fontSize: '1.25rem',
+    fontWeight: 800,
+    color: 'var(--text-primary)',
+  },
+  subtitle: {
+    margin: 0,
+    fontSize: '0.84rem',
+    color: 'var(--text-secondary)',
+  },
+  closeBtn: {
+    background: 'none',
+    border: 'none',
+    color: 'var(--text-secondary)',
+    fontSize: '1.2rem',
+    cursor: 'pointer',
+    padding: '6px 8px',
+    borderRadius: '8px',
+    lineHeight: 1,
+  },
+  errorBanner: {
+    backgroundColor: 'rgba(243, 136, 8, 0.08)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(243, 136, 8, 0.28)',
+    color: 'var(--text-primary)',
+    padding: '10px 14px',
+    borderRadius: '12px',
+    fontSize: '0.85rem',
+    marginBottom: '16px',
+    fontWeight: 600,
+  },
+  form: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '14px',
+  },
+  row: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+    gap: '12px',
+  },
+  fieldGroup: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+  },
+  label: {
+    fontSize: '0.84rem',
+    fontWeight: 600,
+    color: 'var(--text-primary)',
+  },
+  input: {
+    padding: '10px 12px',
+    borderRadius: '10px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-subtle)',
+    background: 'var(--surface-strong)',
+    color: 'var(--text-primary)',
+    boxSizing: 'border-box',
+    fontSize: '0.9rem',
+    outline: 'none',
+  },
+  inputError: {
+    borderColor: '#d37105',
+    boxShadow: '0 0 0 1px #d37105',
+  },
+  fieldError: {
+    color: '#d37105',
+    fontSize: '0.78rem',
+  },
+  pillarOptions: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+  },
+  pillarChip: {
+    padding: '8px 12px',
+    borderRadius: '10px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-subtle)',
+    background: 'var(--surface-strong)',
+    color: 'var(--text-secondary)',
+    fontSize: '0.84rem',
+    fontWeight: 600,
+    cursor: 'pointer',
+    userSelect: 'none',
+    transition: 'all 0.15s ease',
+  },
+  pillarChipActive: {
+    background: 'rgba(243, 136, 8, 0.14)',
+    borderColor: '#f38808',
+    color: 'var(--text-primary)',
+  },
+  passwordBox: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '12px',
+    padding: '14px 16px',
+    borderRadius: '14px',
+    border: '1px solid rgba(243, 136, 8, 0.45)',
+    background: 'rgba(243, 136, 8, 0.1)',
+  },
+  passwordCode: {
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+    fontSize: '1.3rem',
+    letterSpacing: '0.1em',
+    userSelect: 'all',
+  },
+  actions: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    gap: '10px',
+    marginTop: '12px',
+  },
+  cancelBtn: {
+    background: 'transparent',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-subtle)',
+    color: 'var(--text-primary)',
+    padding: '10px 16px',
+    borderRadius: '10px',
+    cursor: 'pointer',
+    fontWeight: 700,
+  },
+  submitBtn: {
+    background: 'linear-gradient(135deg, #f38808, #d37105)',
+    border: 'none',
+    color: '#ffffff',
+    padding: '10px 20px',
+    borderRadius: '10px',
+    cursor: 'pointer',
+    fontWeight: 700,
+    boxShadow: '0 4px 14px rgba(243, 136, 8, 0.4)',
+  },
+};
+
+export default AddWorkerModal;

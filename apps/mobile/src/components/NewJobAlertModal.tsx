@@ -1,256 +1,335 @@
-import React, { useState } from 'react';
-import {
-  Modal,
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-} from 'react-native';
-import { JobStatus, ServiceRequest } from '@metro-fix/core-types';
-import { apiService } from '../services/api';
+import React, { useEffect, useState } from 'react';
+import { AccessibilityInfo, Modal, View, StyleSheet } from 'react-native';
+import { Text } from './ui/AppText';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ServiceRequest, OFFER_TIMEOUT_SECONDS } from '@metro-fix/core-types';
+import { offerWindowSeconds } from '../lib/countdown';
+import { haptics } from '../lib/haptics';
+import { getErrorMessage } from '../lib/errors';
+import { customerNameOf, coordinatesOf } from '../lib/jobs';
+import { formatCountdown, fractionLeft, secondsUntil } from '../lib/countdown';
+import { useCountdown } from '../hooks/useCountdown';
+import { useAcceptOffer, useDeclineOffer } from '../hooks/useJobs';
+
+import { Button } from './ui/Button';
+import { Icon } from './ui/Icon';
+import { MetaChip } from './ui/MetaChip';
+import { GlassSurface } from './ui/GlassSurface';
+import { ToastHost, useToast } from './ui/Toast';
+import { colors } from '../theme/colors';
+import { typography } from '../theme/typography';
+import { spacing, radius, layout } from '../theme/layout';
+import { PILLAR_ICON, FACILITY_ICON } from '../theme/status';
+import { themedStyles } from '../theme/themedStyles';
 
 interface NewJobAlertModalProps {
   visible: boolean;
+  /** The job on offer (status PENDING_ACCEPTANCE, with `offerExpiresAt`). */
   job: ServiceRequest | null;
-  distanceKm?: number;
-  workerId: string;
-  onAccept: (updatedJob: ServiceRequest) => void;
-  onReject: () => void;
+  /** The worker accepted; the job is theirs now. */
+  onAccepted: (job: ServiceRequest) => void;
+  /** The worker declined; the job went back to dispatch. */
+  onDeclined: () => void;
+  /** The time ran out, or the offer was withdrawn or taken; there is nothing left to answer. */
+  onExpired: () => void;
+  /**
+   * The sheet was dismissed without answering (Android Back). The offer stays open on the roster
+   * until it is answered or lapses, so this must never decline it.
+   */
+  onDismiss: () => void;
 }
 
+/**
+ * The sheet a worker sees when dispatch offers them a job. It counts down the time they have,
+ * and accepting or declining calls the API directly. If the offer lapses while the sheet is open
+ * it closes itself, because the server has already put the job back in the queue.
+ */
 export const NewJobAlertModal: React.FC<NewJobAlertModalProps> = ({
   visible,
   job,
-  distanceKm = 3.2,
-  workerId,
-  onAccept,
-  onReject,
+  onAccepted,
+  onDeclined,
+  onExpired,
+  onDismiss,
 }) => {
-  const [loadingAction, setLoadingAction] = useState<'accept' | 'reject' | null>(
-    null,
-  );
+  const insets = useSafeAreaInsets();
+  const toast = useToast();
+  const accept = useAcceptOffer();
+  const decline = useDeclineOffer();
+  const [action, setAction] = useState<'accept' | 'decline' | null>(null);
+
+  const open = visible && !!job;
+  const secondsLeft = useCountdown(open ? job?.offerExpiresAt : null, onExpired);
+  const timedOut = open && secondsLeft <= 0;
+
+  // A new offer is time-sensitive, so nudge the worker when it appears.
+  const offerId = job?.id;
+  useEffect(() => {
+    if (!open || !job) return;
+    haptics.warning();
+    AccessibilityInfo.announceForAccessibility?.(
+      `New job offer: ${job.title}. You have ${secondsUntil(job.offerExpiresAt)} seconds to respond.`,
+    );
+    setAction(null);
+    // Only when a different offer arrives.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, offerId]);
 
   if (!job) return null;
 
   const handleAccept = async () => {
-    setLoadingAction('accept');
+    setAction('accept');
     try {
-      const updated = await apiService.updateJobStatus(
-        job.id,
-        JobStatus.ASSIGNED,
-        workerId,
-      );
-      onAccept(updated);
+      const accepted = await accept.mutateAsync(job.id);
+      haptics.success();
+      onAccepted(accepted);
     } catch (error) {
-      console.error('Failed to accept job:', error);
+      haptics.error();
+      toast.error(getErrorMessage(error, 'Could not accept this job.'), 'Offer unavailable');
+      // The usual reasons (expired, withdrawn, someone else) all mean there is nothing to answer.
+      onExpired();
     } finally {
-      setLoadingAction(null);
+      setAction(null);
     }
   };
 
-  const handleReject = async () => {
-    setLoadingAction('reject');
+  const handleDecline = async () => {
+    setAction('decline');
     try {
-      await apiService.updateJobStatus(job.id, JobStatus.REQUESTED, null);
-      onReject();
+      await decline.mutateAsync({ jobId: job.id });
+      onDeclined();
     } catch (error) {
-      console.error('Failed to reject job:', error);
-      onReject();
+      toast.error(getErrorMessage(error, 'Could not decline this job.'), 'Decline failed');
+      onExpired();
     } finally {
-      setLoadingAction(null);
+      setAction(null);
     }
   };
+
+  const coordinates = coordinatesOf(job);
+  const urgent = secondsLeft <= 15;
 
   return (
-    <Modal visible={visible} animationType="slide" transparent={false}>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onDismiss}>
       <View style={styles.overlay}>
-        <View style={styles.card}>
-          <View style={styles.badgeRow}>
-            <View style={styles.alertBadge}>
-              <Text style={styles.alertBadgeText}>⚡ DISPATCH INCOMING</Text>
-            </View>
-            <Text style={styles.distanceText}>{distanceKm} km away</Text>
-          </View>
+        <ToastHost />
+        <GlassSurface
+          borderRadius={radius.xxl + 4}
+          tintColor={colors.glassStrong}
+          style={[styles.card, { marginBottom: insets.bottom + spacing.sm }]}
+        >
+          <View style={styles.cardInner}>
+            <View style={styles.handle} />
 
-          <Text style={styles.title}>{job.title}</Text>
-          <Text style={styles.description}>{job.description}</Text>
-
-          <View style={styles.detailGrid}>
-            <View style={styles.detailItem}>
-              <Text style={styles.detailLabel}>SERVICE PILLAR</Text>
-              <Text style={styles.detailValue}>{job.servicePillar}</Text>
+            <View style={styles.badgeRow}>
+              <View style={styles.alertBadge}>
+                <Icon name="zap" size={13} color={colors.white} />
+                <Text style={styles.alertBadgeText}>New job offer</Text>
+              </View>
+              <View
+                style={styles.timerGroup}
+                accessibilityRole="timer"
+                accessibilityLabel={`${secondsLeft} seconds left to respond`}
+              >
+                <Icon name="clock" size={13} color={urgent ? colors.danger : colors.textSecondary} />
+                <Text style={[styles.timerText, urgent && styles.timerTextUrgent]}>
+                  {timedOut ? 'Expired' : formatCountdown(secondsLeft)}
+                </Text>
+              </View>
             </View>
-            <View style={styles.detailItem}>
-              <Text style={styles.detailLabel}>FACILITY TYPE</Text>
-              <Text style={styles.detailValue}>{job.facilityType}</Text>
-            </View>
-          </View>
 
-          <View style={styles.locationBox}>
-            <Text style={styles.locationLabel}>LOCATION</Text>
-            <Text style={styles.locationValue}>
-              {job.location?.latitude?.toFixed(4)}, {job.location?.longitude?.toFixed(4)}
+            <View style={styles.progressTrack}>
+              <View
+                style={[
+                  styles.progressFill,
+                  urgent && styles.progressFillUrgent,
+                  { width: `${fractionLeft(secondsLeft, offerWindowSeconds(job, OFFER_TIMEOUT_SECONDS)) * 100}%` },
+                ]}
+              />
+            </View>
+
+            <Text style={styles.title}>{job.title}</Text>
+            <Text style={styles.description} numberOfLines={4}>
+              {job.description}
             </Text>
-          </View>
 
-          {/* Action Buttons */}
-          <View style={styles.buttonGroup}>
-            <TouchableOpacity
-              style={[styles.btn, styles.btnAccept]}
-              onPress={handleAccept}
-              disabled={loadingAction !== null}
-              activeOpacity={0.8}
-            >
-              {loadingAction === 'accept' ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <Text style={styles.btnAcceptText}>ACCEPT JOB</Text>
-              )}
-            </TouchableOpacity>
+            <View style={styles.detailGrid}>
+              <View style={styles.detailItem}>
+                <Text style={styles.detailLabel}>Service pillar</Text>
+                <MetaChip
+                  icon={PILLAR_ICON[job.servicePillar] ?? 'tool'}
+                  label={job.servicePillar}
+                  tint={colors.brand}
+                />
+              </View>
+              <View style={styles.detailItem}>
+                <Text style={styles.detailLabel}>Facility type</Text>
+                <MetaChip
+                  icon={FACILITY_ICON[job.facilityType] ?? 'home'}
+                  label={job.facilityType}
+                />
+              </View>
+            </View>
 
-            <TouchableOpacity
-              style={[styles.btn, styles.btnReject]}
-              onPress={handleReject}
-              disabled={loadingAction !== null}
-              activeOpacity={0.8}
-            >
-              {loadingAction === 'reject' ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <Text style={styles.btnRejectText}>DECLINE</Text>
-              )}
-            </TouchableOpacity>
+            <View style={styles.locationBox}>
+              <Icon name="navigation" size={16} color={colors.info} />
+              <View style={styles.locationTextCol}>
+                <Text style={styles.locationLabel}>{customerNameOf(job)}</Text>
+                <Text style={styles.locationValue}>{coordinates ?? 'Location to be confirmed'}</Text>
+              </View>
+            </View>
+
+            <View style={styles.buttonGroup}>
+              <Button
+                title="Accept job"
+                onPress={handleAccept}
+                isLoading={action === 'accept'}
+                disabled={action !== null || timedOut}
+                variant="primary"
+                size="large"
+              />
+              <Button
+                title="Decline"
+                onPress={handleDecline}
+                isLoading={action === 'decline'}
+                disabled={action !== null || timedOut}
+                variant="danger"
+                size="large"
+              />
+            </View>
           </View>
-        </View>
+        </GlassSurface>
       </View>
     </Modal>
   );
 };
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: '#1c2d40',
-    justifyContent: 'center',
-    padding: 20,
+    backgroundColor: colors.overlay,
+    justifyContent: 'flex-end',
   },
   card: {
-    backgroundColor: '#2b435f',
-    borderRadius: 24,
-    padding: 24,
-    borderWidth: 2,
-    borderColor: '#f38808',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
+    marginHorizontal: spacing.sm,
   },
+  cardInner: {
+    paddingHorizontal: layout.screenPadding,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xxl,
+  },
+  handle: {
+    width: 40,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: colors.borderStrong,
+    alignSelf: 'center',
+    marginBottom: spacing.xl,
+  },
+
+  // ── Badges ──
   badgeRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    marginBottom: spacing.lg,
   },
   alertBadge: {
-    backgroundColor: 'rgba(243, 136, 8, 0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#f38808',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + 2,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: radius.pill,
+    backgroundColor: colors.brand,
   },
   alertBadgeText: {
-    color: '#f38808',
+    ...typography.caption,
     fontWeight: '800',
-    fontSize: 13,
-    letterSpacing: 0.5,
+    color: colors.white,
   },
-  distanceText: {
-    color: '#81b1b3',
-    fontWeight: '700',
-    fontSize: 14,
+  timerGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + 2,
   },
+  timerText: {
+    ...typography.bodyStrong,
+    fontVariant: ['tabular-nums'],
+    color: colors.textSecondary,
+  },
+  timerTextUrgent: {
+    color: colors.danger,
+  },
+  progressTrack: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.border,
+    overflow: 'hidden',
+    marginBottom: spacing.lg,
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 2,
+    backgroundColor: colors.brand,
+  },
+  progressFillUrgent: {
+    backgroundColor: colors.danger,
+  },
+
+  // ── Content ──
   title: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#ffffff',
-    marginBottom: 10,
+    ...typography.h1,
+    color: colors.text,
   },
   description: {
-    fontSize: 15,
-    color: 'rgba(255, 255, 255, 0.8)',
-    lineHeight: 22,
-    marginBottom: 20,
+    ...typography.body,
+    color: colors.textSecondary,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xl,
   },
   detailGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 16,
+    gap: spacing.lg,
+    marginBottom: spacing.lg,
   },
   detailItem: {
     flex: 1,
+    gap: spacing.sm,
   },
   detailLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#81b1b3',
-    marginBottom: 4,
-    letterSpacing: 0.8,
+    ...typography.overline,
+    color: colors.textMuted,
   },
-  detailValue: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#ffffff',
-  },
+
+  // ── Location ──
   locationBox: {
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.bg,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  locationTextCol: {
+    flex: 1,
+    minWidth: 0,
   },
   locationLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#81b1b3',
-    marginBottom: 4,
-    letterSpacing: 0.8,
+    ...typography.overline,
+    color: colors.textMuted,
   },
   locationValue: {
-    fontSize: 14,
-    color: '#ffffff',
-    fontWeight: '600',
+    ...typography.bodyStrong,
+    color: colors.text,
+    marginTop: 2,
   },
+
   buttonGroup: {
-    gap: 12,
+    gap: spacing.md,
+    marginTop: spacing.xxl,
   },
-  btn: {
-    height: 56,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  btnAccept: {
-    backgroundColor: '#f38808',
-  },
-  btnAcceptText: {
-    color: '#ffffff',
-    fontSize: 17,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  btnReject: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  btnRejectText: {
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-});
+}));

@@ -1,187 +1,66 @@
-import React, { useState } from 'react';
-import { StatusBar, StyleSheet, View, Text, TouchableOpacity } from 'react-native';
-import {
-  SafeAreaProvider,
-  SafeAreaView,
-} from 'react-native-safe-area-context';
-import { JobStatus, ServiceRequest, ServicePillar, FacilityType } from '@metro-fix/core-types';
-import { ActiveJobDashboard } from './src/components/ActiveJobDashboard';
-import { NewJobAlertModal } from './src/components/NewJobAlertModal';
-import { CustomerBookingWizard } from './src/components/CustomerBookingWizard';
-import { CustomerTrackingView } from './src/components/CustomerTrackingView';
+import React from 'react';
+import { StyleSheet } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { DefaultTheme, NavigationContainer, type Theme } from '@react-navigation/native';
 
-const MOCK_CUSTOMER_ID = 'cust_metro_101';
-const MOCK_WORKER_ID = 'wrk_demo_88';
-const MOCK_WORKER_NAME = 'Alex Rivers (Field Tech #88)';
+import { AuthProvider } from './src/context/AuthContext';
+import { ToastProvider } from './src/components/ui/Toast';
+import { AppNavigator } from './src/navigation/AppNavigator';
+import { colors } from './src/theme/colors';
+import { ThemeProvider, ThemeBoundary, ThemedStatusBar, useTheme } from './src/theme/ThemeProvider';
 
-const SAMPLE_INCOMING_JOB: ServiceRequest = {
-  id: 'job_dispatch_909',
-  title: 'Commercial HVAC Roof Chiller Fault',
-  description: 'Primary compressor circuit pressure drop detected. Requires diagnostic inspection and quote.',
-  servicePillar: ServicePillar.HARD,
-  facilityType: FacilityType.COMMERCIAL,
-  status: JobStatus.PENDING_ACCEPTANCE,
-  customerId: MOCK_CUSTOMER_ID,
-  workerId: MOCK_WORKER_ID,
-  location: { latitude: 37.7749, longitude: -122.4194 },
-  createdAt: new Date().toISOString(),
-};
-
-function App() {
-  const [appRoleMode, setAppRoleMode] = useState<'customer' | 'worker'>('customer');
-
-  // Customer Portal State
-  const [customerActiveJob, setCustomerActiveJob] = useState<ServiceRequest | null>(null);
-
-  // Worker Portal State
-  const [workerActiveJob, setWorkerActiveJob] = useState<ServiceRequest | null>(null);
-  const [alertVisible, setAlertVisible] = useState<boolean>(false);
-  const [incomingJob, setIncomingJob] = useState<ServiceRequest | null>(null);
-
-  // Handlers
-  const handleBookingComplete = (newJob: ServiceRequest) => {
-    setCustomerActiveJob(newJob);
-  };
-
-  const handleSimulateAlert = () => {
-    setIncomingJob(SAMPLE_INCOMING_JOB);
-    setAlertVisible(true);
-  };
-
-  const handleAcceptAlert = (acceptedJob: ServiceRequest) => {
-    setAlertVisible(false);
-    setWorkerActiveJob(acceptedJob);
-  };
-
-  const handleRejectAlert = () => {
-    setAlertVisible(false);
-    setIncomingJob(null);
-  };
-
-  const handleWorkerJobStatusChange = (updatedJob: ServiceRequest) => {
-    setWorkerActiveJob(updatedJob);
-    // Sync with customer tracking if tracking same job
-    if (customerActiveJob && customerActiveJob.id === updatedJob.id) {
-      setCustomerActiveJob(updatedJob);
-    }
-  };
-
-  return (
-    <SafeAreaProvider>
-      <StatusBar barStyle="light-content" backgroundColor="#1c2d40" />
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.container}>
-          {/* Top Role Mode Switcher Bar */}
-          <View style={styles.roleBar}>
-            <TouchableOpacity
-              style={[
-                styles.roleTab,
-                appRoleMode === 'customer' && styles.roleTabActive,
-              ]}
-              onPress={() => setAppRoleMode('customer')}
-              activeOpacity={0.8}
-            >
-              <Text
-                style={[
-                  styles.roleTabText,
-                  appRoleMode === 'customer' && styles.roleTabTextActive,
-                ]}
-              >
-                📱 CUSTOMER APP
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.roleTab,
-                appRoleMode === 'worker' && styles.roleTabActive,
-              ]}
-              onPress={() => setAppRoleMode('worker')}
-              activeOpacity={0.8}
-            >
-              <Text
-                style={[
-                  styles.roleTabText,
-                  appRoleMode === 'worker' && styles.roleTabTextActive,
-                ]}
-              >
-                👨‍🔧 WORKER APP
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Render Active View */}
-          {appRoleMode === 'customer' ? (
-            customerActiveJob ? (
-              <CustomerTrackingView
-                job={customerActiveJob}
-                onNewBooking={() => setCustomerActiveJob(null)}
-              />
-            ) : (
-              <CustomerBookingWizard
-                customerId={MOCK_CUSTOMER_ID}
-                onBookingComplete={handleBookingComplete}
-              />
-            )
-          ) : (
-            <ActiveJobDashboard
-              workerId={MOCK_WORKER_ID}
-              workerName={MOCK_WORKER_NAME}
-              activeJob={workerActiveJob}
-              onJobStatusChange={handleWorkerJobStatusChange}
-              onSimulateDispatchAlert={handleSimulateAlert}
-            />
-          )}
-
-          {/* Global Dispatch Alert Modal */}
-          <NewJobAlertModal
-            visible={alertVisible}
-            job={incomingJob}
-            distanceKm={2.4}
-            workerId={MOCK_WORKER_ID}
-            onAccept={handleAcceptAlert}
-            onReject={handleRejectAlert}
-          />
-        </View>
-      </SafeAreaView>
-    </SafeAreaProvider>
-  );
-}
-
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#1c2d40',
-  },
-  container: {
-    flex: 1,
-    backgroundColor: '#1c2d40',
-  },
-  roleBar: {
-    flexDirection: 'row',
-    backgroundColor: '#2b435f',
-    padding: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  roleTab: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  roleTabActive: {
-    backgroundColor: '#f38808',
-  },
-  roleTabText: {
-    color: '#81b1b3',
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  roleTabTextActive: {
-    color: '#ffffff',
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
   },
 });
 
-export default App;
+/** Navigation chrome that follows the app theme (read after the scheme is set, per mount). */
+function ThemedNavigation({ children }: { children: React.ReactNode }) {
+  const { scheme } = useTheme();
+  const navigationTheme: Theme = {
+    ...DefaultTheme,
+    dark: scheme === 'dark',
+    colors: {
+      ...DefaultTheme.colors,
+      primary: colors.brand,
+      background: colors.bg,
+      card: colors.surface,
+      text: colors.text,
+      border: colors.border,
+      notification: colors.brand,
+    },
+  };
+  return <NavigationContainer theme={navigationTheme}>{children}</NavigationContainer>;
+}
+
+export default function App() {
+  return (
+    <GestureHandlerRootView style={styles.root}>
+      <QueryClientProvider client={queryClient}>
+        <SafeAreaProvider>
+          <ThemeProvider>
+            <ThemedStatusBar />
+            <AuthProvider>
+              {/* Remounts the UI when the theme changes; auth and the query cache stay above it. */}
+              <ThemeBoundary>
+                <ToastProvider>
+                  <ThemedNavigation>
+                    <AppNavigator />
+                  </ThemedNavigation>
+                </ToastProvider>
+              </ThemeBoundary>
+            </AuthProvider>
+          </ThemeProvider>
+        </SafeAreaProvider>
+      </QueryClientProvider>
+    </GestureHandlerRootView>
+  );
+}
+
+const styles = StyleSheet.create({ root: { flex: 1 } });

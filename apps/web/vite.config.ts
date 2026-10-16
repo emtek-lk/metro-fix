@@ -1,22 +1,51 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
 
 export default defineConfig({
   plugins: [react()],
   server: {
+    // Listen on every interface and accept any Host header, so metrofix.localhost, admin.metrofix.localhost
+    // (and a real domain behind a proxy) all reach the dev server.
+    host: true,
+    allowedHosts: true,
     watch: {
       usePolling: true,
       interval: 250,
       // Keep workspace packages hot-reloadable without relying on inotify limits.
-      ignored: ['!**/packages/ui/**', '!**/packages/core-types/**']
-    }
+      ignored: ['!**/packages/ui/**', '!**/packages/core-types/**'],
+    },
   },
   resolve: {
     alias: {
-      // Prevents multiple conflicting copies of React from loading in the dependency graph
-      'react': path.resolve(__dirname, '../../node_modules/react'),
-      'react-dom': path.resolve(__dirname, '../../node_modules/react-dom')
-    }
-  }
+      // Force exact single resolution of React and React-DOM across workspace
+      react: path.dirname(require.resolve('react/package.json')),
+      'react-dom': path.dirname(require.resolve('react-dom/package.json')),
+    },
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom') || id.includes('scheduler')) {
+              return 'vendor-react';
+            }
+            if (id.includes('@tanstack/react-table')) {
+              return 'vendor-tanstack';
+            }
+            if (id.includes('@hello-pangea/dnd')) {
+              return 'vendor-dnd';
+            }
+            if (id.includes('zod') || id.includes('react-hook-form') || id.includes('@hookform/resolvers')) {
+              return 'vendor-forms';
+            }
+          }
+        },
+      },
+    },
+  },
 });

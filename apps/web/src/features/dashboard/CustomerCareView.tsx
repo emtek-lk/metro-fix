@@ -1,27 +1,66 @@
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { DragDropContext, Draggable, Droppable, type DropResult } from '@hello-pangea/dnd';
-import { JobStatus, ServiceType } from '@metro-fix/core-types';
+import {
+  JobStatus,
+  ServiceType,
+  JOB_STATUSES_IN_ORDER,
+  formatCountdown,
+  canTransition,
+  ticketRef,
+  jobCardBillable,
+  type JobCard,
+} from '@metro-fix/core-types';
 import { useMediaQuery } from '@metro-fix/ui';
+import { API_BASE_URL } from '../../lib/api';
+import { WebSocketService } from '../../lib/websocket';
+import { CreateRequestModal } from './CreateRequestModal';
+import { RefreshButton } from '../../components/RefreshButton';
+import { describeHours, useAppSettings } from '../../lib/settings';
+import { JobCardModal } from './JobCardModal';
+import { useModalAccessibility } from '../../hooks/useModalAccessibility';
 
-const boardOrder = [
-  JobStatus.Requested,
-  JobStatus.PendingAcceptance,
-  JobStatus.Assigned,
-  JobStatus.OnRoute,
-  JobStatus.Inspection,
-  JobStatus.InProgress,
-  JobStatus.Completed,
-] as const;
+// Column order and the rules for moving between columns come from the shared lifecycle in
+// @metro-fix/core-types, the same definition the API enforces and the mobile apps use.
+const boardOrder = JOB_STATUSES_IN_ORDER;
 
 const statusLabels: Record<JobStatus, string> = {
-  [JobStatus.Requested]: 'REQUESTED',
-  [JobStatus.PendingAcceptance]: 'PENDING_ACCEPTANCE',
-  [JobStatus.Assigned]: 'ASSIGNED',
-  [JobStatus.OnRoute]: 'ON_ROUTE',
-  [JobStatus.Inspection]: 'INSPECTION',
-  [JobStatus.InProgress]: 'IN_PROGRESS',
-  [JobStatus.Completed]: 'COMPLETED',
+  [JobStatus.Requested]: 'Requested',
+  [JobStatus.PendingAcceptance]: 'Pending acceptance',
+  [JobStatus.Assigned]: 'Assigned',
+  [JobStatus.OnRoute]: 'On route',
+  [JobStatus.Inspection]: 'Inspection',
+  [JobStatus.InProgress]: 'In progress',
+  [JobStatus.Completed]: 'Completed',
+  [JobStatus.Closed]: 'Closed',
+  [JobStatus.Cancelled]: 'Cancelled',
 };
+
+/** What a stage change does, in words, for the confirmation dialog. */
+function describeMove(from: JobStatus, to: JobStatus): { title: string; body: string; confirm: string; danger: boolean } {
+  const fromLabel = statusLabels[from];
+  const toLabel = statusLabels[to];
+  if (to === JobStatus.Cancelled) {
+    return { title: 'Cancel this job?', body: 'The customer and any assigned worker will be notified. A cancelled job cannot be restarted.', confirm: 'Yes, cancel job', danger: true };
+  }
+  if (to === JobStatus.Closed) {
+    return { title: 'Approve and close this job?', body: 'Only do this after reviewing the photos, signature and hours. The ticket is archived and can no longer be changed.', confirm: 'Approve & close', danger: false };
+  }
+  if (from === JobStatus.PendingAcceptance && to === JobStatus.Requested) {
+    return { title: 'Withdraw the offer?', body: 'The worker is no longer asked to accept it and the job goes back to the queue.', confirm: 'Withdraw offer', danger: false };
+  }
+  if (to === JobStatus.Requested) {
+    return { title: 'Send this job back to the queue?', body: 'The assigned worker is removed from the job and it needs to be dispatched again.', confirm: 'Back to queue', danger: true };
+  }
+  return {
+    title: `Move this job to ${toLabel}?`,
+    body: `It is currently ${fromLabel}. The customer and the worker see the new stage straight away.`,
+    confirm: `Move to ${toLabel}`,
+    danger: false,
+  };
+}
+
+/** A stage change the dispatcher has asked for but not yet confirmed. */
+type PendingMove = { cardId: string; from: JobStatus; to: JobStatus; index: number };
 
 type UrgencyLevel = 'Low' | 'Medium' | 'High' | 'Critical';
 
@@ -33,6 +72,17 @@ type WorkerCandidate = {
   rating: number;
   proximityKm: number;
   isAvailable: boolean;
+  /** Accepted unfinished jobs plus open offers, counted by the API. */
+  activeJobs: number;
+  /** Set by the API when the worker cannot take this job right now. */
+  unavailableReason: 'OFF_DUTY' | 'AT_CAPACITY' | 'DECLINED_THIS_JOB' | null;
+  score: number;
+};
+
+const UNAVAILABLE_LABEL: Record<NonNullable<WorkerCandidate['unavailableReason']>, string> = {
+  OFF_DUTY: 'Off duty',
+  AT_CAPACITY: 'At capacity',
+  DECLINED_THIS_JOB: 'Declined this job',
 };
 
 type AssignedWorker = {
@@ -53,191 +103,284 @@ type DispatchCard = {
   status: JobStatus;
   summary: string;
   createdAt: string;
+  /** While pending acceptance: when the offer lapses and returns to the queue. */
+  offerExpiresAt?: string | null;
+  cancelReason?: string | null;
+  jobCard?: JobCard | null;
 };
 
-const mockWorkers: WorkerCandidate[] = [
-  {
-    id: 'wrk-01',
-    fullName: 'Amina Yusuf',
-    serviceTypes: [ServiceType.Hard, ServiceType.Strategic],
-    coverageZone: 'North District',
-    rating: 4.9,
-    proximityKm: 1.2,
-    isAvailable: true,
-  },
-  {
-    id: 'wrk-02',
-    fullName: 'Malik Thompson',
-    serviceTypes: [ServiceType.Soft],
-    coverageZone: 'Central Business',
-    rating: 4.7,
-    proximityKm: 2.6,
-    isAvailable: true,
-  },
-  {
-    id: 'wrk-03',
-    fullName: 'Nadia Khan',
-    serviceTypes: [ServiceType.Hard, ServiceType.Soft],
-    coverageZone: 'East Park',
-    rating: 4.8,
-    proximityKm: 3.1,
-    isAvailable: true,
-  },
-  {
-    id: 'wrk-04',
-    fullName: 'Omar Silva',
-    serviceTypes: [ServiceType.Strategic],
-    coverageZone: 'Harbor Loop',
-    rating: 4.5,
-    proximityKm: 4.4,
-    isAvailable: true,
-  },
-];
+const asIso = (value: unknown): string =>
+  typeof value === 'string' ? value : value instanceof Date ? value.toISOString() : new Date().toISOString();
 
-const mockCards: DispatchCard[] = [
-  {
-    id: 'req-1001',
-    title: 'Chiller room maintenance',
-    customerName: 'Skyline Towers',
-    serviceType: ServiceType.Hard,
-    urgency: 'Critical',
-    location: 'Building A · Basement',
-    assignedWorker: null,
-    status: JobStatus.Requested,
-    summary: 'Primary chilled water pump vibration needs immediate triage.',
-    createdAt: '2026-07-22T07:00:00.000Z',
-  },
-  {
-    id: 'req-1002',
-    title: 'Lobby deep clean',
-    customerName: 'Tower One Management',
-    serviceType: ServiceType.Soft,
-    urgency: 'High',
-    location: 'Tower Lobby',
-    assignedWorker: null,
-    status: JobStatus.PendingAcceptance,
-    summary: 'Worker ping sent and awaiting a response before dispatch lock-in.',
-    createdAt: '2026-07-22T08:10:00.000Z',
-  },
-  {
-    id: 'req-1003',
-    title: 'Security SOP review',
-    customerName: 'Metro Logistics',
-    serviceType: ServiceType.Strategic,
-    urgency: 'Medium',
-    location: 'Operations Room',
-    assignedWorker: {
-      id: 'wrk-07',
-      fullName: 'Jamal Reed',
-      rating: 4.7,
-      proximityKm: 2.9,
-    },
-    status: JobStatus.Assigned,
-    summary: 'Supervisor accepted the assignment and is being prepared for route start.',
-    createdAt: '2026-07-22T09:15:00.000Z',
-  },
-  {
-    id: 'req-1004',
-    title: 'Electrical outlet audit',
-    customerName: 'Northpoint Residences',
-    serviceType: ServiceType.Hard,
-    urgency: 'Medium',
-    location: 'Unit 14B',
-    assignedWorker: {
-      id: 'wrk-02',
-      fullName: 'Malik Thompson',
-      rating: 4.7,
-      proximityKm: 2.6,
-    },
-    status: JobStatus.OnRoute,
-    summary: 'Technician is traveling to site and background GPS is active.',
-    createdAt: '2026-07-22T10:00:00.000Z',
-  },
-  {
-    id: 'req-1005',
-    title: 'Fire suppression inspection',
-    customerName: 'Greenfield Mall',
-    serviceType: ServiceType.Strategic,
-    urgency: 'High',
-    location: 'Service Corridor',
-    assignedWorker: {
-      id: 'wrk-01',
-      fullName: 'Amina Yusuf',
-      rating: 4.9,
-      proximityKm: 1.2,
-    },
-    status: JobStatus.Inspection,
-    summary: 'Worker has arrived and is validating scope and estimated work time.',
-    createdAt: '2026-07-22T10:35:00.000Z',
-  },
-  {
-    id: 'req-1006',
-    title: 'Retail floor restoration',
-    customerName: 'Crescent Retail',
-    serviceType: ServiceType.Soft,
-    urgency: 'Low',
-    location: 'Hallway C',
-    assignedWorker: {
-      id: 'wrk-03',
-      fullName: 'Nadia Khan',
-      rating: 4.8,
-      proximityKm: 3.1,
-    },
-    status: JobStatus.InProgress,
-    summary: 'Cleanup and repair work is actively under way on site.',
-    createdAt: '2026-07-22T11:20:00.000Z',
-  },
-  {
-    id: 'req-1007',
-    title: 'Generator compliance wrap-up',
-    customerName: 'Harbor Offices',
-    serviceType: ServiceType.Hard,
-    urgency: 'Medium',
-    location: 'Roof Access',
-    assignedWorker: {
-      id: 'wrk-04',
-      fullName: 'Omar Silva',
-      rating: 4.5,
-      proximityKm: 4.4,
-    },
-    status: JobStatus.Completed,
-    summary: 'Job closed, payment cleared, and invoice issued.',
-    createdAt: '2026-07-22T12:05:00.000Z',
-  },
-];
+/** One place that turns an API job into a board card (fetch, job.created and job.updated all use it). */
+function jobToCard(job: any): DispatchCard {
+  return {
+    id: job.id,
+    title: job.title || 'Service Request',
+    customerName: job.customer?.companyName
+      ? `${job.customer.companyName} · ${job.customer.user?.fullName ?? ''}`
+      : job.customer?.user?.fullName || 'Customer Site',
+    serviceType: (job.servicePillar as ServiceType) || ServiceType.Hard,
+    urgency: toUrgency(job.urgency),
+    location: job.facilityType || 'Site Location',
+    assignedWorker: job.worker
+      ? {
+          id: job.worker.id,
+          fullName: job.worker.user?.fullName || 'Assigned Worker',
+          rating: job.worker.rating || 5.0,
+          proximityKm: 1.5,
+        }
+      : null,
+    status: (job.status as JobStatus) || JobStatus.Requested,
+    summary: job.description || 'Service request description',
+    createdAt: asIso(job.createdAt),
+    offerExpiresAt: job.offerExpiresAt ? asIso(job.offerExpiresAt) : null,
+    cancelReason: job.cancelReason ?? null,
+    jobCard: job.jobCard ?? null,
+  };
+}
 
-function createInitialColumns(): Record<JobStatus, DispatchCard[]> {
+function emptyColumns(): Record<JobStatus, DispatchCard[]> {
   return boardOrder.reduce(
     (collection, status) => {
-      collection[status] = mockCards.filter((card) => card.status === status);
+      collection[status] = [];
       return collection;
     },
-    {} as Record<JobStatus, DispatchCard[]>
+    {} as Record<JobStatus, DispatchCard[]>,
   );
 }
 
-function calculateWorkerScore(worker: WorkerCandidate) {
-  const availabilityBonus = worker.isAvailable ? 12 : -12;
-  return worker.rating * 25 + availabilityBonus - worker.proximityKm * 4;
+/** Error text from a failed API call, preferring the server's own message. */
+async function apiErrorMessage(response: Response, fallback: string): Promise<string> {
+  try {
+    const body = await response.json();
+    const message = Array.isArray(body?.message) ? body.message.join(', ') : body?.message;
+    return message || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/** m:ss left until an offer lapses, ticking every second. Shows "expiring…" once the time is up. */
+function OfferCountdown({ expiresAt, workerName }: { expiresAt: string; workerName?: string }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const remaining = Math.max(0, Math.ceil((new Date(expiresAt).getTime() - now) / 1000));
+  const label =
+    remaining > 0
+      ? formatCountdown(remaining)
+      : 'expiring…';
+  return (
+    <div style={styles.offerChip} role="timer" aria-live="off" aria-label={`Offer expires in ${label}`}>
+      <span style={styles.offerChipLabel}>{workerName ? `Awaiting ${workerName}` : 'Awaiting answer'}</span>
+      <span style={{ ...styles.offerChipTime, ...(remaining <= 15 ? styles.offerChipTimeUrgent : undefined) }}>
+        {label}
+      </span>
+    </div>
+  );
+}
+
+const toUrgency = (value?: string): UrgencyLevel => {
+  const normalized = (value ?? 'MEDIUM').toUpperCase();
+  return (normalized.charAt(0) + normalized.slice(1).toLowerCase()) as UrgencyLevel;
+};
+
+function timeAgo(iso: string): string {
+  const minutes = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
 }
 
 function getWorkerBadgeLabel(worker: WorkerCandidate) {
-  return `${worker.rating.toFixed(1)} rating · ${worker.proximityKm.toFixed(1)}km`;
+  return `${worker.rating.toFixed(1)} rating · ${worker.proximityKm.toFixed(1)} km away · ${worker.activeJobs} active`;
 }
 
 export function CustomerCareView() {
-  const [columns, setColumns] = useState<Record<JobStatus, DispatchCard[]>>(createInitialColumns);
+  const appSettings = useAppSettings();
+  const [columns, setColumns] = useState<Record<JobStatus, DispatchCard[]>>(emptyColumns);
+  const [workersList, setWorkersList] = useState<WorkerCandidate[]>([]);
   const [isDispatchModalOpen, setDispatchModalOpen] = useState(false);
+  const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
+  const closeMoveDialog = useCallback(() => setPendingMove(null), []);
+  const moveDialogRef = useModalAccessibility(pendingMove !== null, closeMoveDialog);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
+  const [ariaAnnouncement, setAriaAnnouncement] = useState<string>('');
   const isCompact = useMediaQuery('(max-width: 980px)');
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [workerQuery, setWorkerQuery] = useState('');
+  const [serviceFilter, setServiceFilter] = useState<'ALL' | 'HARD' | 'SOFT' | 'STRATEGIC'>('ALL');
+  const [urgencyFilter, setUrgencyFilter] = useState<'ALL' | 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'>('ALL');
+  const [sortBy, setSortBy] = useState<'NEWEST' | 'OLDEST' | 'URGENCY'>('NEWEST');
+  const [isCreateOpen, setCreateOpen] = useState(false);
+  const [jobCardCardId, setJobCardCardId] = useState<string | null>(null);
+  const [includeUnavailable, setIncludeUnavailable] = useState(false);
+  const [workersLoading, setWorkersLoading] = useState(false);
+
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ message, type });
+    setTimeout(() => {
+      setToast((cur) => (cur?.message === message ? null : cur));
+    }, 4000);
+  };
+
+  const loadJobs = useCallback((isMounted: () => boolean) => {
+    setFetchError(null);
+    setIsRefreshing(true);
+
+    const token = localStorage.getItem('metrofix_token');
+    fetch(`${API_BASE_URL}/jobs`, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    })
+      .then((res) => {
+        if (res.status === 401) {
+          // The saved login is no longer valid (expired, or the API was reset): sign in again.
+          try {
+            localStorage.removeItem('metrofix_token');
+            localStorage.removeItem('metrofix_user');
+          } catch {
+            // Storage safety
+          }
+          window.location.assign('/login');
+          throw new Error('Session expired');
+        }
+        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+        return res.json();
+      })
+      .then((data: any[]) => {
+        if (!isMounted()) return;
+        setIsLoading(false);
+        setIsRefreshing(false);
+        if (!Array.isArray(data)) return;
+        const newCols = emptyColumns();
+        data.forEach((job) => {
+          const card = jobToCard(job);
+          (newCols[card.status] ?? newCols[JobStatus.Requested]).push(card);
+        });
+        setColumns(newCols);
+      })
+      .catch((err) => {
+        if (!isMounted()) return;
+        setIsLoading(false);
+        setIsRefreshing(false);
+        setFetchError('Unable to reach the API. Showing the last loaded jobs; press Refresh to retry.');
+        console.warn('Could not load jobs:', err);
+      });
+
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    setIsLoading(true);
+    loadJobs(() => mounted);
+    return () => {
+      mounted = false;
+    };
+  }, [loadJobs]);
+
+  // Setup WebSocket for real-time job updates
+  useEffect(() => {
+    const wsService = new WebSocketService(API_BASE_URL);
+    wsService.connect(localStorage.getItem('metrofix_token'));
+
+    // Listen for new jobs
+    const unsubscribeCreate = wsService.on('job.created', (newJob) => {
+      setColumns((prevColumns) => {
+        const card = jobToCard(newJob);
+        if (Object.values(prevColumns).some((cards) => cards.some((existing) => existing.id === card.id))) {
+          return prevColumns;
+        }
+        // Newest first, matching the fetched order, so a fresh request is seen without scrolling.
+        return { ...prevColumns, [card.status]: [card, ...(prevColumns[card.status] || [])] };
+      });
+      showToast('New service request received!', 'success');
+    });
+
+    // Listen for job updates
+    const unsubscribeUpdate = wsService.on('job.updated', (updatedJob) => {
+      setColumns((prevColumns) => {
+        const updated = { ...prevColumns };
+        // Remove from wherever the card was, then place it in its new column.
+        (Object.keys(updated) as JobStatus[]).forEach((status) => {
+          updated[status] = updated[status].filter((card) => card.id !== updatedJob.id);
+        });
+        const newCard = jobToCard(updatedJob);
+        updated[newCard.status] = [newCard, ...(updated[newCard.status] || [])];
+        return updated;
+      });
+    });
+
+    // Refetch after a dropped connection so nothing raised in the meantime is missed.
+    const unsubscribeReconnect = wsService.onReconnect(() => loadJobs(() => true));
+
+    return () => {
+      unsubscribeReconnect();
+      unsubscribeCreate();
+      unsubscribeUpdate();
+      wsService.disconnect();
+    };
+  }, [loadJobs]);
 
   const grouped = useMemo(() => boardOrder.map((status) => ({ status, items: columns[status] })), [columns]);
 
-  const sortedWorkers = useMemo(
-    () => [...mockWorkers].sort((left, right) => calculateWorkerScore(right) - calculateWorkerScore(left)),
-    []
-  );
+  // Filter cards across all columns by the search box and the service / urgency filters, then sort.
+  const filteredGrouped = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    const urgencyRank: Record<string, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+    return grouped.map((col) => {
+      const items = col.items.filter((card) => {
+        if (serviceFilter !== 'ALL' && card.serviceType.toUpperCase() !== serviceFilter) return false;
+        if (urgencyFilter !== 'ALL' && card.urgency.toUpperCase() !== urgencyFilter) return false;
+        if (!q) return true;
+        return (
+          card.title.toLowerCase().includes(q) ||
+          card.customerName.toLowerCase().includes(q) ||
+          card.location.toLowerCase().includes(q) ||
+          card.serviceType.toLowerCase().includes(q) ||
+          card.urgency.toLowerCase().includes(q) ||
+          ticketRef(card.id).toLowerCase().includes(q) ||
+          (card.assignedWorker?.fullName.toLowerCase().includes(q) ?? false)
+        );
+      });
+      const sorted = [...items].sort((a, b) => {
+        if (sortBy === 'OLDEST') return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        if (sortBy === 'URGENCY') {
+          return (
+            (urgencyRank[a.urgency.toUpperCase()] ?? 9) - (urgencyRank[b.urgency.toUpperCase()] ?? 9) ||
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+        }
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
+      return { ...col, items: sorted };
+    });
+  }, [grouped, searchQuery, serviceFilter, urgencyFilter, sortBy]);
+
+  // The API returns workers ranked for this job (available first, then nearest and best rated).
+  const sortedWorkers = workersList;
+
+  const visibleWorkers = useMemo(() => {
+    const q = workerQuery.toLowerCase().trim();
+    const pool = includeUnavailable ? sortedWorkers : sortedWorkers.filter((worker) => !worker.unavailableReason);
+    if (!q) return pool;
+    return pool.filter((worker) =>
+      [worker.fullName, worker.coverageZone, getWorkerBadgeLabel(worker)].some((text) => text.toLowerCase().includes(q)),
+    );
+  }, [sortedWorkers, workerQuery, includeUnavailable]);
+  const hiddenUnavailableCount = sortedWorkers.filter((worker) => worker.unavailableReason).length;
 
   const selectedCard = useMemo(() => {
     if (!selectedCardId) {
@@ -249,11 +392,42 @@ export function CustomerCareView() {
 
   const openDispatchModal = (cardId: string) => {
     setSelectedCardId(cardId);
-    setSelectedWorkerId(sortedWorkers[0]?.id ?? null);
     setDispatchModalOpen(true);
+
+    setWorkersList([]);
+    setSelectedWorkerId(null);
+    setWorkersLoading(true);
+    const token = localStorage.getItem('metrofix_token');
+    // Ranked for this job: real distance, rating, on-duty flag and live workload.
+    fetch(`${API_BASE_URL}/workers/dispatch-search?jobId=${encodeURIComponent(cardId)}&radius=0&includeUnavailable=true`, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: any[]) => {
+        const mapped: WorkerCandidate[] = (Array.isArray(data) ? data : []).map((item) => ({
+          id: item.worker.id,
+          fullName: item.worker.user?.fullName || 'Field Worker',
+          serviceTypes: (item.worker.servicePillars as ServiceType[]) ?? [],
+          coverageZone: (item.worker.servicePillars ?? []).join(' · ') || 'All services',
+          rating: item.worker.rating ?? 5,
+          proximityKm: item.distanceKm ?? 0,
+          isAvailable: item.available,
+          activeJobs: item.activeJobs ?? 0,
+          unavailableReason: item.unavailableReason ?? null,
+          score: item.dispatchScore ?? 0,
+        }));
+        setWorkersList(mapped);
+        setSelectedWorkerId(mapped.find((worker) => !worker.unavailableReason)?.id ?? null);
+      })
+      .catch(() => showToast('Could not load workers. Close and try again.', 'error'))
+      .finally(() => setWorkersLoading(false));
   };
 
   const closeDispatchModal = () => {
+    setWorkerQuery('');
+    setIncludeUnavailable(false);
     setDispatchModalOpen(false);
     setSelectedCardId(null);
     setSelectedWorkerId(null);
@@ -301,7 +475,8 @@ export function CustomerCareView() {
       const sourceCards = [...currentColumns[sourceStatus]];
       const [removedCard] = sourceCards.splice(currentLocation.index, 1);
       const nextCard = mutate ? mutate({ ...removedCard }) : { ...removedCard, status: destinationStatus };
-      const destinationCards = [...currentColumns[destinationStatus]];
+      // The live socket update may already have put the card in its destination column.
+      const destinationCards = destinationStatus === sourceStatus ? sourceCards : [...currentColumns[destinationStatus]];
 
       if (destinationIndex === undefined) {
         destinationCards.unshift(nextCard);
@@ -317,46 +492,160 @@ export function CustomerCareView() {
     });
   };
 
-  const confirmDispatch = () => {
+  /** Offers the job to the chosen worker. They have OFFER_TIMEOUT_SECONDS to accept or it returns here. */
+  const confirmDispatch = async () => {
     if (!selectedCardId || !selectedWorkerId) {
       return;
     }
 
     const worker = sortedWorkers.find((entry) => entry.id === selectedWorkerId);
-    if (!worker) {
-      return;
-    }
+    const fallbackName = worker ? worker.fullName : 'Field Worker';
+    const token = localStorage.getItem('metrofix_token');
 
-    moveCard(
-      selectedCardId,
-      JobStatus.PendingAcceptance,
-      (card) => ({
-        ...card,
-        status: JobStatus.PendingAcceptance,
-        assignedWorker: {
-          id: worker.id,
-          fullName: worker.fullName,
-          rating: worker.rating,
-          proximityKm: worker.proximityKm,
+    try {
+      const response = await fetch(`${API_BASE_URL}/jobs/${selectedCardId}/offer`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-      }),
-      0
-    );
+        body: JSON.stringify({ workerId: selectedWorkerId }),
+      });
 
-    closeDispatchModal();
+      if (!response.ok) {
+        throw new Error(await apiErrorMessage(response, 'Failed to send the offer.'));
+      }
+
+      const updatedJob = await response.json();
+      const offered = jobToCard(updatedJob);
+      const workerName = offered.assignedWorker?.fullName || fallbackName;
+
+      moveCard(selectedCardId, offered.status, () => offered, 0);
+      showToast(`Offer sent to ${workerName}. They have ${describeHours(appSettings.offerTimeoutHours)} to accept.`, 'success');
+      closeDispatchModal();
+    } catch (err: any) {
+      // Keep the modal open and the card where it is: a failed offer must not look like a success.
+      showToast(err?.message || 'Could not send the offer.', 'error');
+    }
   };
 
-  const handleRejectSimulation = (cardId: string) => {
-    moveCard(
-      cardId,
-      JobStatus.Requested,
-      (card) => ({
-        ...card,
-        status: JobStatus.Requested,
-        assignedWorker: null,
-      }),
-      0
-    );
+  /** Dispatcher sign-off: reviewed proof of work, archive the ticket (COMPLETED -> CLOSED). */
+  const handleCloseJob = async (cardId: string) => {
+    const token = localStorage.getItem('metrofix_token');
+    try {
+      const response = await fetch(`${API_BASE_URL}/jobs/${cardId}/close`, {
+        method: 'POST',
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      moveCard(cardId, JobStatus.Closed, (card) => ({ ...card, status: JobStatus.Closed }), 0);
+      showToast('Job closed and archived.', 'success');
+    } catch (err) {
+      showToast('Could not close the job. Please try again.', 'error');
+      console.warn('Failed to close job:', err);
+    }
+  };
+
+  /** Asks the API to move a job; resolves to an error message, or null when it worked. */
+  const requestStatusChange = async (cardId: string, status: JobStatus): Promise<string | null> => {
+    const token = localStorage.getItem('metrofix_token');
+    try {
+      const response = await fetch(`${API_BASE_URL}/jobs/${cardId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ status }),
+      });
+      if (!response.ok) {
+        return await apiErrorMessage(response, `Request failed (HTTP ${response.status}).`);
+      }
+      return null;
+    } catch {
+      return 'Could not reach the server.';
+    }
+  };
+
+  /** Pulls a pending offer back to the queue. */
+  const handleWithdrawOffer = async (cardId: string) => {
+    const error = await requestStatusChange(cardId, JobStatus.Requested);
+    if (error) {
+      showToast(error, 'error');
+      return;
+    }
+    moveCard(cardId, JobStatus.Requested, (card) => ({
+      ...card,
+      status: JobStatus.Requested,
+      assignedWorker: null,
+      offerExpiresAt: null,
+    }), 0);
+    showToast('Offer withdrawn. The job is back in the queue.', 'success');
+  };
+
+  /** Cancels a job that has not started work (the confirmation dialog has already been answered). */
+  const cancelJob = async (cardId: string) => {
+    const error = await requestStatusChange(cardId, JobStatus.Cancelled);
+    if (error) {
+      showToast(error, 'error');
+      return;
+    }
+    moveCard(cardId, JobStatus.Cancelled, (card) => ({ ...card, status: JobStatus.Cancelled, offerExpiresAt: null }), 0);
+    showToast('Job cancelled.', 'success');
+  };
+
+  // Every stage change (drag, Withdraw, Cancel, Approve & Close) waits for a click on Confirm, so a
+  // slip of the mouse cannot notify a customer or archive a ticket. The card stays put until then.
+  const requestMove = (cardId: string, to: JobStatus, index = 0) => {
+    const location = findCardLocation(cardId);
+    if (!location || location.status === to) return;
+    setPendingMove({ cardId, from: location.status, to, index });
+  };
+
+  const executeMove = async ({ cardId, from, to, index }: PendingMove) => {
+    if (to === JobStatus.Closed) return handleCloseJob(cardId);
+    if (to === JobStatus.Cancelled) return cancelJob(cardId);
+    if (from === JobStatus.PendingAcceptance && to === JobStatus.Requested) return handleWithdrawOffer(cardId);
+
+    const sourceCards = [...columns[from]];
+    const sourceIndex = sourceCards.findIndex((card) => card.id === cardId);
+    if (sourceIndex === -1) return;
+
+    const [movedItem] = sourceCards.splice(sourceIndex, 1);
+    const updatedItem: DispatchCard = {
+      ...movedItem,
+      status: to,
+      offerExpiresAt: null,
+      assignedWorker: to === JobStatus.Requested ? null : movedItem.assignedWorker,
+    };
+    const destinationCards = [...columns[to]];
+    destinationCards.splice(index, 0, updatedItem);
+
+    const previousColumns = columns;
+    setColumns((current) => ({ ...current, [from]: sourceCards, [to]: destinationCards }));
+    setAriaAnnouncement(`Moved job card ${movedItem.title || movedItem.id} to ${statusLabels[to]}`);
+
+    const error = await requestStatusChange(cardId, to);
+    if (error) {
+      setColumns(previousColumns);
+      showToast(error, 'error');
+    } else {
+      showToast(`Job moved to ${statusLabels[to]}.`, 'success');
+    }
+  };
+
+  const confirmMove = () => {
+    if (!pendingMove) return;
+    const move = pendingMove;
+    setPendingMove(null);
+    // A live update may have moved the job while the dialog was open; do not act on stale intent.
+    if (findCardLocation(move.cardId)?.status !== move.from) {
+      showToast('This job changed while you were deciding. Check its new stage and try again.', 'error');
+      return;
+    }
+    void executeMove(move);
   };
 
   const handleDragEnd = (result: DropResult) => {
@@ -373,50 +662,138 @@ export function CustomerCareView() {
     const sourceStatus = source.droppableId as JobStatus;
     const destinationStatus = destination.droppableId as JobStatus;
 
+    // Reordering inside one column is just a local change.
+    if (sourceStatus === destinationStatus) {
+      setColumns((current) => {
+        const cards = [...current[sourceStatus]];
+        const [moved] = cards.splice(source.index, 1);
+        cards.splice(destination.index, 0, moved);
+        return { ...current, [sourceStatus]: cards };
+      });
+      return;
+    }
+
+    // The lifecycle decides what is allowed (same table the API enforces); say no right away.
+    if (!canTransition(sourceStatus, destinationStatus)) {
+      showToast(`A job can't move from ${statusLabels[sourceStatus]} to ${statusLabels[destinationStatus]}.`, 'error');
+      return;
+    }
+
+    // Dragging a queued job onto Pending acceptance means "offer it": pick the worker first.
     if (sourceStatus === JobStatus.Requested && destinationStatus === JobStatus.PendingAcceptance) {
       openDispatchModal(draggableId);
       return;
     }
 
-    const location = findCardLocation(draggableId);
-    if (!location) {
-      return;
-    }
-
-    const sourceCards = [...columns[sourceStatus]];
-    const sourceIndex = sourceCards.findIndex((card) => card.id === draggableId);
-    if (sourceIndex === -1) {
-      return;
-    }
-
-    const [movedItem] = sourceCards.splice(sourceIndex, 1);
-    const updatedItem = { ...movedItem, status: destinationStatus };
-
-    if (sourceStatus === destinationStatus) {
-      sourceCards.splice(destination.index, 0, updatedItem);
-      setColumns((current) => ({
-        ...current,
-        [sourceStatus]: sourceCards,
-      }));
-      return;
-    }
-
-    const destinationCards = [...columns[destinationStatus]];
-    destinationCards.splice(destination.index, 0, updatedItem);
-
-    setColumns((current) => ({
-      ...current,
-      [sourceStatus]: sourceCards,
-      [destinationStatus]: destinationCards,
-    }));
+    // Everything else is a stage change: ask first (see requestMove).
+    requestMove(draggableId, destinationStatus, destination.index);
   };
 
   return (
-    <section style={styles.view}>
+    <section style={styles.view} aria-label="Customer Care Managed Dispatch Kanban Board">
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {ariaAnnouncement}
+      </div>
+      {toast && (
+        <div
+          style={{
+            ...styles.toastNotification,
+            background: toast.type === 'success' ? '#2b435f' : '#8b0000',
+            borderColor: toast.type === 'success' ? '#f38808' : '#ff4d4d',
+          }}
+        >
+          <span>{toast.type === 'success' ? '✓' : '✕'} {toast.message}</span>
+        </div>
+      )}
+
       <DragDropContext onDragEnd={handleDragEnd}>
+        {/* Modern Board-level search bar */}
+        {(() => {
+          const totalCards = grouped.reduce((acc, col) => acc + col.items.length, 0);
+          const filteredCards = filteredGrouped.reduce((acc, col) => acc + col.items.length, 0);
+          const isFiltering = searchQuery.trim().length > 0 || serviceFilter !== 'ALL' || urgencyFilter !== 'ALL';
+          return (
+            <div className="metro-search-row">
+              <div className="metro-search-wrap">
+                <div className="metro-search-container">
+                  <div className="metro-search-icon" aria-hidden="true">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="11" cy="11" r="8" />
+                      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    </svg>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Search dispatch board..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="metro-search-input"
+                    aria-label="Search dispatch jobs"
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                  {isFiltering && (
+                    <button
+                      type="button"
+                      aria-label="Clear search"
+                      className="metro-search-clear"
+                      onClick={() => setSearchQuery('')}
+                    >
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              </div>
+              <RefreshButton onClick={() => loadJobs(() => true)} loading={isRefreshing} subject="dispatch board" />
+              <select aria-label="Filter by service" value={serviceFilter} onChange={(e) => setServiceFilter(e.target.value as typeof serviceFilter)} style={styles.filterSelect}>
+                <option value="ALL">All services</option>
+                <option value="HARD">Hard FM</option>
+                <option value="SOFT">Soft FM</option>
+                <option value="STRATEGIC">Strategic FM</option>
+              </select>
+              <select aria-label="Filter by urgency" value={urgencyFilter} onChange={(e) => setUrgencyFilter(e.target.value as typeof urgencyFilter)} style={styles.filterSelect}>
+                <option value="ALL">All urgencies</option>
+                <option value="CRITICAL">Critical</option>
+                <option value="HIGH">High</option>
+                <option value="MEDIUM">Medium</option>
+                <option value="LOW">Low</option>
+              </select>
+              <select aria-label="Sort cards" value={sortBy} onChange={(e) => setSortBy(e.target.value as typeof sortBy)} style={styles.filterSelect}>
+                <option value="NEWEST">Newest first</option>
+                <option value="OLDEST">Oldest first</option>
+                <option value="URGENCY">Most urgent first</option>
+              </select>
+              {(serviceFilter !== 'ALL' || urgencyFilter !== 'ALL') && (
+                <button type="button" style={styles.clearFilters} onClick={() => { setServiceFilter('ALL'); setUrgencyFilter('ALL'); }}>
+                  Clear filters
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setCreateOpen(true)}
+                aria-label="Create a service request for a customer"
+                style={styles.newRequestButton}
+              >
+                + New request
+              </button>
+              {fetchError && <span style={styles.fetchError} role="alert">{fetchError}</span>}
+              {isFiltering && (
+                <div className="metro-search-count-pill">
+                  {filteredCards === 0
+                    ? 'No matches'
+                    : `${filteredCards} of ${totalCards}`}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         <div style={{ ...styles.boardShell, ...(isCompact ? styles.boardShellCompact : undefined) }}>
           <div style={{ ...styles.board, ...(isCompact ? styles.boardCompact : undefined) }}>
-            {grouped.map(({ status, items }) => (
+            {filteredGrouped.map(({ status, items }) => (
               <article key={status} style={styles.column}>
                 <div style={styles.columnHeader}>
                   <span>{statusLabels[status]}</span>
@@ -448,7 +825,7 @@ export function CustomerCareView() {
                             >
                               <div style={styles.cardTopRow}>
                                 <span style={styles.serviceChip}>{item.serviceType}</span>
-                                <span style={styles.cardId}>{item.id}</span>
+                                <span style={styles.cardId} title={`Full ID: ${item.id}`}>#{ticketRef(item.id)} · {timeAgo(item.createdAt)}</span>
                               </div>
                               <h3 style={styles.cardTitle}>{item.title}</h3>
                               <p style={styles.cardMeta}>{item.customerName}</p>
@@ -460,11 +837,22 @@ export function CustomerCareView() {
                                 <span style={styles.cardFooter}>{item.location}</span>
                               </div>
 
-                              {item.assignedWorker && (
-                                <div style={styles.workerChip}>
-                                  <span style={styles.workerChipLabel}>Worker</span>
-                                  <span>{item.assignedWorker.fullName}</span>
-                                </div>
+                              {status === JobStatus.PendingAcceptance && item.offerExpiresAt ? (
+                                <OfferCountdown
+                                  expiresAt={item.offerExpiresAt}
+                                  workerName={item.assignedWorker?.fullName}
+                                />
+                              ) : (
+                                item.assignedWorker && (
+                                  <div style={styles.workerChip}>
+                                    <span style={styles.workerChipLabel}>Worker</span>
+                                    <span>{item.assignedWorker.fullName}</span>
+                                  </div>
+                                )
+                              )}
+
+                              {status === JobStatus.Cancelled && item.cancelReason && (
+                                <p style={styles.cardCopy}>Reason: {item.cancelReason}</p>
                               )}
 
                               <div style={styles.cardActions}>
@@ -477,20 +865,61 @@ export function CustomerCareView() {
                                       openDispatchModal(item.id);
                                     }}
                                   >
-                                    Dispatch Worker
+                                    Offer to Worker
                                   </button>
                                 )}
 
                                 {status === JobStatus.PendingAcceptance && (
                                   <button
                                     type="button"
-                                    style={styles.rejectButton}
+                                    style={styles.secondaryActionButton}
                                     onClick={(event) => {
                                       event.stopPropagation();
-                                      handleRejectSimulation(item.id);
+                                      requestMove(item.id, JobStatus.Requested);
                                     }}
                                   >
-                                    Simulate Reject
+                                    Withdraw offer
+                                  </button>
+                                )}
+
+                                {canTransition(status, JobStatus.Cancelled) && (
+                                  <button
+                                    type="button"
+                                    style={styles.linkActionButton}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      requestMove(item.id, JobStatus.Cancelled);
+                                    }}
+                                  >
+                                    Cancel job
+                                  </button>
+                                )}
+
+                                {(item.jobCard || status === JobStatus.InProgress || status === JobStatus.Completed) && (
+                                  <button
+                                    type="button"
+                                    style={styles.linkActionButton}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      setJobCardCardId(item.id);
+                                    }}
+                                  >
+                                    {item.jobCard
+                                      ? `Job card · ${Math.round(jobCardBillable(item.jobCard)?.total ?? 0).toLocaleString()} ${item.jobCard.currency}`
+                                      : 'Job card'}
+                                  </button>
+                                )}
+
+                                {status === JobStatus.Completed && (
+                                  <button
+                                    type="button"
+                                    style={styles.secondaryActionButton}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      requestMove(item.id, JobStatus.Closed);
+                                    }}
+                                  >
+                                    Approve &amp; Close
                                   </button>
                                 )}
                               </div>
@@ -510,13 +939,100 @@ export function CustomerCareView() {
         </div>
       </DragDropContext>
 
+      {jobCardCardId && (() => {
+        const target = Object.values(columns).flat().find((card) => card.id === jobCardCardId);
+        if (!target) return null;
+        return (
+          <JobCardModal
+            key={target.id + (target.jobCard?.final?.savedAt ?? target.jobCard?.estimate?.savedAt ?? '')}
+            jobId={target.id}
+            title={target.title}
+            status={target.status}
+            jobCard={target.jobCard}
+            onClose={() => setJobCardCardId(null)}
+            onSaved={(job) => {
+              setColumns((prev) => {
+                const updated = { ...prev };
+                (Object.keys(updated) as JobStatus[]).forEach((status) => {
+                  updated[status] = updated[status].filter((card) => card.id !== job.id);
+                });
+                const card = jobToCard(job);
+                updated[card.status] = [card, ...(updated[card.status] || [])];
+                return updated;
+              });
+              showToast('Job card saved.', 'success');
+            }}
+          />
+        );
+      })()}
+
+      {isCreateOpen && (
+        <CreateRequestModal
+          onClose={() => setCreateOpen(false)}
+          onCreated={(job) => {
+            setColumns((prev) => {
+              const card = jobToCard(job);
+              if (Object.values(prev).some((cards) => cards.some((existing) => existing.id === card.id))) return prev;
+              return { ...prev, [card.status]: [card, ...(prev[card.status] || [])] };
+            });
+            showToast('Request created. It is in the Requested column.', 'success');
+          }}
+        />
+      )}
+
+      {pendingMove && (() => {
+        const info = describeMove(pendingMove.from, pendingMove.to);
+        const card = columns[pendingMove.from].find((entry) => entry.id === pendingMove.cardId);
+        return (
+          <div style={styles.modalOverlay} className="metro-modal-overlay" onClick={closeMoveDialog}>
+            <div
+              ref={moveDialogRef}
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="move-confirm-title"
+              aria-describedby="move-confirm-body"
+              tabIndex={-1}
+              style={{ ...styles.modalCard, width: 'min(460px, 100%)' }}
+              className="metro-modal-card"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div style={styles.kicker}>Confirm stage change</div>
+              <h3 id="move-confirm-title" style={styles.modalTitle}>{info.title}</h3>
+              {card && (
+                <div style={styles.moveJob}>
+                  <div style={styles.moveJobTitle}>{card.title}</div>
+                  <div style={styles.moveJobMeta}>#{ticketRef(card.id)}{card.customerName ? ` · ${card.customerName}` : ''}</div>
+                </div>
+              )}
+              <div style={styles.moveStages} aria-label={`From ${statusLabels[pendingMove.from]} to ${statusLabels[pendingMove.to]}`}>
+                <span style={styles.moveChip}>{statusLabels[pendingMove.from]}</span>
+                <span aria-hidden="true">→</span>
+                <span style={{ ...styles.moveChip, ...styles.moveChipTarget, ...(info.danger ? styles.moveChipDanger : undefined) }}>{statusLabels[pendingMove.to]}</span>
+              </div>
+              <p id="move-confirm-body" style={styles.moveBody}>{info.body}</p>
+              <div style={styles.moveActions}>
+                {/* Keep first: the dialog focuses the first button, so a stray Enter keeps things as they were. */}
+                <button type="button" style={styles.closeButton} onClick={closeMoveDialog}>Keep as is</button>
+                <button
+                  type="button"
+                  style={info.danger ? { ...styles.primaryButton, ...styles.dangerButton } : styles.primaryButton}
+                  onClick={confirmMove}
+                >
+                  {info.confirm}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {isDispatchModalOpen && (
-        <div style={styles.modalOverlay} role="dialog" aria-modal="true" aria-label="Worker dispatch modal">
-          <div style={styles.modalCard}>
+        <div style={styles.modalOverlay} role="dialog" aria-modal="true" aria-label="Worker dispatch modal" className="metro-modal-overlay">
+          <div style={styles.modalCard} className="metro-modal-card">
             <div style={styles.modalHeader}>
               <div>
                 <div style={styles.kicker}>Dispatch Workflow</div>
-                <h3 style={styles.modalTitle}>Assign worker for job</h3>
+                <h3 style={styles.modalTitle}>Offer job to a worker</h3>
               </div>
               <button type="button" style={styles.closeButton} onClick={closeDispatchModal}>
                 Close
@@ -535,33 +1051,76 @@ export function CustomerCareView() {
 
             <div style={styles.dispatchGrid}>
               <div style={styles.workerList}>
-                <div style={styles.dispatchLaneTitle}>Available workers</div>
-                {sortedWorkers.map((worker) => {
+                <div style={styles.dispatchLaneTitle}>
+                  {includeUnavailable ? 'All workers' : 'Available workers'} ({visibleWorkers.length})
+                </div>
+                <label style={styles.workerToggle}>
+                  <input
+                    type="checkbox"
+                    checked={includeUnavailable}
+                    onChange={(e) => setIncludeUnavailable(e.target.checked)}
+                  />
+                  <span>
+                    Include unavailable{hiddenUnavailableCount > 0 ? ` (${hiddenUnavailableCount})` : ''}
+                  </span>
+                </label>
+                <input
+                  type="search"
+                  value={workerQuery}
+                  onChange={(e) => setWorkerQuery(e.target.value)}
+                  placeholder="Search workers by name or zone…"
+                  aria-label="Search workers"
+                  className="metro-worker-search"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                <div style={styles.workerScroll}>
+                {visibleWorkers.length === 0 && (
+                  <div style={styles.workerEmpty}>
+                    {workersLoading
+                      ? 'Finding the best workers…'
+                      : sortedWorkers.length === 0
+                        ? 'No workers found.'
+                        : workerQuery.trim()
+                          ? 'No workers match your search.'
+                          : 'No one is available for this job right now. Tick “Include unavailable” to override.'}
+                  </div>
+                )}
+                {visibleWorkers.map((worker) => {
                   const isSelected = worker.id === selectedWorkerId;
 
                   return (
                     <button
                       key={worker.id}
                       type="button"
+                      className="metro-worker-row"
+                      aria-pressed={isSelected}
                       style={{ ...styles.workerRow, ...(isSelected ? styles.workerRowSelected : undefined) }}
                       onClick={() => setSelectedWorkerId(worker.id)}
                     >
                       <div style={styles.workerTopRow}>
                         <strong style={styles.workerName}>{worker.fullName}</strong>
-                        <span style={styles.workerScore}>{calculateWorkerScore(worker).toFixed(0)}</span>
+                        {worker.unavailableReason ? (
+                          <span style={styles.workerUnavailable}>{UNAVAILABLE_LABEL[worker.unavailableReason]}</span>
+                        ) : (
+                          <span style={styles.workerScore}>{worker.score.toFixed(0)}</span>
+                        )}
                       </div>
                       <div style={styles.workerMeta}>{worker.coverageZone}</div>
                       <div style={styles.workerMeta}>{getWorkerBadgeLabel(worker)}</div>
                     </button>
                   );
                 })}
+                </div>
               </div>
 
               <div style={styles.dispatchPreview}>
                 <div style={styles.dispatchLaneTitle}>Dispatch summary</div>
-                <div style={styles.dispatchDropZone}>Move job to PENDING_ACCEPTANCE with selected worker.</div>
+                <div style={styles.dispatchDropZone}>
+                  The selected worker has {describeHours(appSettings.offerTimeoutHours)} to accept. If they decline or do not answer, the job returns to the queue.
+                </div>
                 <button type="button" style={styles.primaryButton} onClick={confirmDispatch} disabled={!selectedWorkerId}>
-                  Confirm dispatch
+                  Send offer
                 </button>
               </div>
             </div>
@@ -581,6 +1140,67 @@ const styles: Record<string, CSSProperties> = {
     color: 'var(--text-primary)',
     minWidth: 0,
     overflow: 'hidden',
+    gap: '10px',
+  },
+  /* ─── Board search bar ─── */
+  boardSearchRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    flexShrink: 0,
+  },
+  boardSearchBox: {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '10px 14px',
+    borderRadius: '14px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-subtle)',
+    background: 'var(--surface-strong)',
+    boxShadow: '0 2px 8px rgba(14, 20, 21, 0.04)',
+  },
+  boardSearchIcon: {
+    color: 'var(--text-secondary)',
+    fontSize: '1.2rem',
+    lineHeight: 1,
+    flexShrink: 0,
+    userSelect: 'none',
+  },
+  boardSearchInput: {
+    flex: 1,
+    border: 'none',
+    background: 'transparent',
+    color: 'var(--text-primary)',
+    fontSize: '0.92rem',
+    outline: 'none',
+    minWidth: 0,
+  },
+  boardSearchClear: {
+    background: 'none',
+    border: 'none',
+    color: 'var(--text-secondary)',
+    cursor: 'pointer',
+    fontSize: '0.88rem',
+    padding: '2px 4px',
+    borderRadius: '6px',
+    flexShrink: 0,
+    lineHeight: 1,
+  },
+  boardSearchCount: {
+    flexShrink: 0,
+    fontSize: '0.82rem',
+    fontWeight: 600,
+    whiteSpace: 'nowrap',
+    padding: '6px 12px',
+    borderRadius: '10px',
+    background: 'rgba(243, 136, 8, 0.08)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(243, 136, 8, 0.2)',
+    color: '#f38808',
   },
   kicker: {
     color: '#f38808',
@@ -590,7 +1210,9 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 700,
   },
   primaryButton: {
-    border: '1px solid #d37105',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#d37105',
     background: 'linear-gradient(135deg, #f38808, #d37105)',
     color: '#ffffff',
     padding: '12px 16px',
@@ -608,6 +1230,7 @@ const styles: Record<string, CSSProperties> = {
     overflowX: 'auto',
     overflowY: 'hidden',
     boxSizing: 'border-box',
+    paddingBottom: '2px',
   },
   boardShellCompact: {
     overflowX: 'visible',
@@ -635,10 +1258,13 @@ const styles: Record<string, CSSProperties> = {
     maxHeight: '100%',
     overflow: 'hidden',
     padding: '14px',
-    borderRadius: '18px',
+    borderRadius: '22px',
     background: 'var(--surface-strong)',
-    border: '1px solid var(--border-subtle)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-subtle)',
     boxSizing: 'border-box',
+    boxShadow: '0 12px 28px rgba(14, 20, 21, 0.06)',
   },
   columnHeader: {
     display: 'flex',
@@ -680,18 +1306,23 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: '12px',
   },
   card: {
-    padding: '12px 14px',
-    borderRadius: '14px',
+    padding: '14px 14px 13px',
+    borderRadius: '16px',
     background: 'var(--surface)',
     color: 'var(--text-primary)',
     boxShadow: 'var(--shadow-elevated)',
-    border: '1px solid var(--border-subtle)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-subtle)',
     cursor: 'grab',
     boxSizing: 'border-box',
     flexShrink: 0,
+    transition: 'box-shadow 140ms ease, border-color 140ms ease',
   },
   cardDragging: {
     cursor: 'grabbing',
+    boxShadow: '0 18px 38px rgba(0, 0, 0, 0.18)',
+    borderColor: 'rgba(243, 136, 8, 0.45)',
   },
   cardTopRow: {
     display: 'flex',
@@ -756,7 +1387,7 @@ const styles: Record<string, CSSProperties> = {
     marginTop: '10px',
     padding: '8px 10px',
     borderRadius: '10px',
-    background: 'rgba(43, 67, 95, 0.08)',
+    background: 'var(--surface-strong)',
     color: 'var(--text-primary)',
     fontSize: '0.82rem',
   },
@@ -767,6 +1398,97 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: '0.08em',
     color: '#f38808',
   },
+  filterSelect: {
+    height: 36,
+    borderRadius: 999,
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-subtle)',
+    background: 'var(--surface)',
+    color: 'var(--text-primary)',
+    fontSize: 13,
+    padding: '0 12px',
+    cursor: 'pointer',
+  } as CSSProperties,
+  clearFilters: {
+    border: 'none',
+    background: 'transparent',
+    color: '#f38808',
+    fontWeight: 700,
+    fontSize: 13,
+    cursor: 'pointer',
+  } as CSSProperties,
+  newRequestButton: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    height: 36,
+    padding: '0 14px',
+    borderRadius: 999,
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#d37105',
+    background: 'linear-gradient(135deg, #f38808, #d37105)',
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: 'pointer',
+  } as CSSProperties,
+  refreshButton: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    height: 36,
+    padding: '0 14px',
+    borderRadius: 999,
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(243, 136, 8, 0.55)',
+    background: 'transparent',
+    color: '#f38808',
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: 'pointer',
+  } as CSSProperties,
+  fetchError: {
+    color: '#ff8a80',
+    fontSize: 13,
+  } as CSSProperties,
+  offerChip: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '8px',
+    marginTop: '10px',
+    padding: '8px 10px',
+    borderRadius: '10px',
+    background: 'var(--surface-strong)',
+    color: 'var(--text-primary)',
+    fontSize: '0.82rem',
+    border: '1px dashed #f38808',
+  },
+  offerChipLabel: {
+    fontSize: '0.78rem',
+    fontWeight: 600,
+    color: 'var(--text-secondary)',
+  },
+  offerChipTime: {
+    fontVariantNumeric: 'tabular-nums',
+    fontWeight: 800,
+    color: '#f38808',
+  },
+  offerChipTimeUrgent: {
+    color: '#e5484d',
+  },
+  linkActionButton: {
+    border: 'none',
+    background: 'transparent',
+    color: 'var(--text-muted)',
+    padding: '8px 4px',
+    fontWeight: 600,
+    fontSize: '0.78rem',
+    textDecoration: 'underline',
+    cursor: 'pointer',
+  },
   cardActions: {
     display: 'flex',
     flexWrap: 'wrap',
@@ -774,7 +1496,9 @@ const styles: Record<string, CSSProperties> = {
     marginTop: '10px',
   },
   secondaryActionButton: {
-    border: '1px solid #f38808',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#f38808',
     background: 'transparent',
     color: '#f38808',
     padding: '8px 10px',
@@ -784,7 +1508,9 @@ const styles: Record<string, CSSProperties> = {
     cursor: 'pointer',
   },
   rejectButton: {
-    border: '1px solid #d37105',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#d37105',
     background: '#d37105',
     color: '#ffffff',
     padding: '8px 10px',
@@ -801,6 +1527,43 @@ const styles: Record<string, CSSProperties> = {
     textAlign: 'center',
     fontSize: '0.84rem',
   },
+  moveJob: {
+    marginTop: '12px',
+    padding: '10px 12px',
+    borderRadius: '12px',
+    background: 'var(--surface-strong)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-subtle)',
+  },
+  moveJobTitle: { fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.95rem' },
+  moveJobMeta: { marginTop: '2px', color: 'var(--text-secondary)', fontSize: '0.8rem' },
+  moveStages: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    margin: '14px 0 4px',
+    color: 'var(--text-secondary)',
+    flexWrap: 'wrap',
+  },
+  moveChip: {
+    padding: '4px 10px',
+    borderRadius: '999px',
+    background: 'var(--surface-strong)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-subtle)',
+    color: 'var(--text-primary)',
+    fontSize: '0.74rem',
+    fontWeight: 700,
+    textTransform: 'uppercase',
+    letterSpacing: '0.08em',
+  },
+  moveChipTarget: { background: 'rgba(243, 136, 8, 0.14)', borderColor: 'rgba(243, 136, 8, 0.5)', color: '#f38808' },
+  moveChipDanger: { background: 'rgba(255, 77, 77, 0.14)', borderColor: 'rgba(255, 77, 77, 0.5)', color: '#ff7a7a' },
+  moveBody: { margin: '10px 0 0', color: 'var(--text-secondary)', fontSize: '0.88rem', lineHeight: 1.5 },
+  moveActions: { display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '18px' },
+  dangerButton: { background: 'linear-gradient(135deg, #e5484d, #b3262b)', borderColor: '#b3262b' },
   modalOverlay: {
     position: 'fixed',
     inset: 0,
@@ -812,13 +1575,16 @@ const styles: Record<string, CSSProperties> = {
   },
   modalCard: {
     width: 'min(680px, 100%)',
-    borderRadius: '20px',
+    borderRadius: '24px',
     background: 'var(--surface)',
-    border: '1px solid var(--border-subtle)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-subtle)',
     padding: '20px',
     boxSizing: 'border-box',
     maxHeight: '85vh',
     overflowY: 'auto',
+    boxShadow: '0 30px 72px rgba(0, 0, 0, 0.32)',
   },
   modalHeader: {
     display: 'flex',
@@ -834,7 +1600,9 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 700,
   },
   closeButton: {
-    border: '1px solid var(--border-subtle)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-subtle)',
     background: 'var(--surface-strong)',
     color: '#f38808',
     borderRadius: '10px',
@@ -859,22 +1627,57 @@ const styles: Record<string, CSSProperties> = {
     background: 'var(--surface-strong)',
     borderRadius: '14px',
     padding: '14px',
-    border: '1px solid var(--border-subtle)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-subtle)',
+  },
+  workerToggle: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    marginBottom: '10px',
+    fontSize: '0.82rem',
+    color: 'var(--text-secondary)',
+    cursor: 'pointer',
+  },
+  workerUnavailable: {
+    borderRadius: '999px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(255, 138, 128, 0.6)',
+    color: '#ff8a80',
+    padding: '1px 8px',
+    fontSize: '0.7rem',
+    fontWeight: 700,
+  },
+  workerScroll: {
+    maxHeight: '46vh',
+    overflowY: 'auto',
+    paddingRight: '2px',
+  },
+  workerEmpty: {
+    color: 'var(--text-secondary)',
+    fontSize: '0.85rem',
+    padding: '10px 2px',
   },
   workerRow: {
     width: '100%',
     textAlign: 'left',
-    border: '1px solid var(--border-subtle)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-subtle)',
     background: 'var(--surface)',
     color: 'var(--text-primary)',
     borderRadius: '12px',
     padding: '10px 12px',
     marginBottom: '8px',
     cursor: 'pointer',
+    transition: 'border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease',
   },
   workerRowSelected: {
     borderColor: '#f38808',
-    boxShadow: '0 0 0 1px #f38808 inset',
+    boxShadow: '0 0 0 1px #f38808 inset, 0 10px 22px rgba(243, 136, 8, 0.12)',
+    transform: 'translateY(-1px)',
   },
   workerTopRow: {
     display: 'flex',
@@ -903,7 +1706,9 @@ const styles: Record<string, CSSProperties> = {
     background: 'var(--surface-strong)',
     borderRadius: '14px',
     padding: '14px',
-    border: '1px solid var(--border-subtle)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-subtle)',
     display: 'flex',
     flexDirection: 'column',
     gap: '12px',
@@ -912,7 +1717,9 @@ const styles: Record<string, CSSProperties> = {
     marginTop: '12px',
     borderRadius: '14px',
     padding: '12px 14px',
-    border: '1px solid var(--border-subtle)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-subtle)',
     background: 'rgba(43, 67, 95, 0.08)',
   },
   dispatchContextLabel: {
@@ -940,10 +1747,57 @@ const styles: Record<string, CSSProperties> = {
     display: 'grid',
     placeItems: 'center',
     color: 'var(--text-secondary)',
-    background: 'var(--surface-strong)',
-    fontSize: '0.84rem',
     padding: '12px',
     textAlign: 'center',
+  },
+  loadingBanner: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '8px 16px',
+    marginBottom: '10px',
+    background: '#2b435f',
+    color: '#ffffff',
+    borderRadius: '8px',
+    fontSize: '0.85rem',
+    fontWeight: 500,
+  },
+  spinner: {
+    width: '14px',
+    height: '14px',
+    borderWidth: '2px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    borderTopColor: '#f38808',
+    borderRadius: '50%',
+    animation: 'spin 0.8s linear infinite',
+  },
+  errorBanner: {
+    padding: '8px 16px',
+    marginBottom: '10px',
+    background: '#8b0000',
+    color: '#ffffff',
+    borderRadius: '8px',
+    fontSize: '0.85rem',
+    fontWeight: 500,
+  },
+  toastNotification: {
+    position: 'fixed',
+    bottom: '24px',
+    right: '24px',
+    zIndex: 9999,
+    padding: '12px 20px',
+    borderRadius: '8px',
+    color: '#ffffff',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#f38808',
+    boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+    fontSize: '0.9rem',
+    fontWeight: 600,
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
   },
 };
 

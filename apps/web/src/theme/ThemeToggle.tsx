@@ -2,20 +2,24 @@ import type { CSSProperties } from 'react';
 import { useTheme } from './ThemeProvider';
 
 export function ThemeToggle({ compact = false }: { compact?: boolean }) {
-  const { theme, setTheme, resolvedTheme } = useTheme();
-  const modeLabel = theme === 'system' ? `System (${resolvedTheme})` : theme[0].toUpperCase() + theme.slice(1);
+  const { resolvedTheme, setTheme } = useTheme();
   const icon = resolvedTheme === 'dark' ? '☾' : '☼';
+  const label = resolvedTheme === 'dark' ? 'dark' : 'light';
 
+  // Always flip to the opposite of the *resolved* (visible) theme.
+  // This means one click is always responsive regardless of whether
+  // the previous setting was 'system'.
   const cycleTheme = () => {
-    setTheme(theme === 'light' ? 'dark' : theme === 'dark' ? 'system' : 'light');
+    setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
   };
 
   return (
     <button
       type="button"
-      aria-label={`Theme: ${modeLabel}. Click to cycle theme.`}
-      title={`Theme: ${modeLabel}`}
+      aria-label={`Theme: ${label}. Click to switch theme.`}
+      title={`Theme: ${label}`}
       onClick={cycleTheme}
+      className="metro-theme-btn"
       style={styles.iconButton}
     >
       <span aria-hidden="true" style={styles.iconGlyph}>
@@ -32,11 +36,11 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: '12px',
     border: '1px solid var(--border-subtle)',
     background: 'var(--surface-strong)',
-    color: 'var(--text-primary)',
+    color: 'var(--sidebar-accent)',
     display: 'grid',
     placeItems: 'center',
     cursor: 'pointer',
-    boxShadow: 'var(--shadow-elevated)',
+    boxShadow: '0 2px 6px rgba(14, 20, 21, 0.1)',
   },
   iconGlyph: {
     fontSize: '1rem',

@@ -1,13 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  ActivityIndicator,
-  Alert,
-} from 'react-native';
+import { View, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { Text } from './ui/AppText';
 import { JobStatus, ServiceRequest, LocationCoordinates } from '@metro-fix/core-types';
 import { apiService } from '../services/api';
 import { openNativeNavigation } from '../services/linking';

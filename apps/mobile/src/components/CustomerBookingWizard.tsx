@@ -1,87 +1,155 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  TextInput,
-  StyleSheet,
-  ScrollView,
-  ActivityIndicator,
-  Alert,
-} from 'react-native';
+import { getErrorMessage, isSubscriptionRequired } from '../lib/errors';
+import { LocationMapPicker } from './LocationMapPicker';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Pressable, StyleSheet, Animated, ActivityIndicator, Platform } from 'react-native';
+import { Text } from './ui/AppText';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ServicePillar, FacilityType, ServiceRequest } from '@metro-fix/core-types';
 import { apiService } from '../services/api';
-import { getCurrentWorkerLocation } from '../services/location';
+import { getCurrentPositionOrNull, describeCoordinates } from '../services/location';
+
+import { Button } from './ui/Button';
+import { Input } from './ui/Input';
+import { Icon, type FeatherIconName } from './ui/Icon';
+import { ScreenHeader } from './ui/ScreenHeader';
+import { colors } from '../theme/colors';
+import { typography } from '../theme/typography';
+import { spacing, radius, layout, tabBarClearance } from '../theme/layout';
+import { themedStyles } from '../theme/themedStyles';
+import { shortRef } from '../lib/ticket';
+import { GlassHeader, useCollapsingHeader } from './ui/GlassHeader';
+import { useToast } from './ui/Toast';
+import { haptics } from '../lib/haptics';
 
 interface CustomerBookingWizardProps {
   customerId: string;
   onBookingComplete: (job: ServiceRequest) => void;
+  /** The API refused because the customer has no plan: take them to the plans. */
+  onNeedSubscription?: () => void;
 }
+
+const PILLAR_OPTIONS: {
+  value: ServicePillar;
+  icon: FeatherIconName;
+  title: string;
+  desc: string;
+}[] = [
+  {
+    value: ServicePillar.HARD,
+    icon: 'tool',
+    title: 'HARD FM',
+    desc: 'HVAC, electrical, plumbing, mechanical & structural repairs',
+  },
+  {
+    value: ServicePillar.SOFT,
+    icon: 'droplet',
+    title: 'SOFT FM',
+    desc: 'Deep cleaning, sanitation, reception, groundskeeping & security',
+  },
+  {
+    value: ServicePillar.STRATEGIC,
+    icon: 'shield',
+    title: 'STRATEGIC FM',
+    desc: 'Energy audits, compliance inspections & vendor governance',
+  },
+];
+
+const TOTAL_STEPS = 4;
+const STEP_NAMES = ['Service', 'Location', 'Details', 'Review'] as const;
+
+type Step = 1 | 2 | 3 | 4;
+type LocationStatus = 'idle' | 'detecting' | 'found' | 'failed';
+type Urgency = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+
+const parseCoords = (latitude: string, longitude: string) => {
+  const lat = parseFloat(latitude);
+  const lng = parseFloat(longitude);
+  const valid = !isNaN(lat) && lat >= -90 && lat <= 90 && !isNaN(lng) && lng >= -180 && lng <= 180;
+  return { lat, lng, valid };
+};
 
 export const CustomerBookingWizard: React.FC<CustomerBookingWizardProps> = ({
   customerId,
   onBookingComplete,
+  onNeedSubscription,
 }) => {
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const insets = useSafeAreaInsets();
+  const toast = useToast();
+  const { scrollY, onScroll } = useCollapsingHeader();
+  const [step, setStep] = useState<Step>(1);
 
   // Form State
   const [servicePillar, setServicePillar] = useState<ServicePillar>(ServicePillar.HARD);
   const [facilityType, setFacilityType] = useState<FacilityType>(FacilityType.RESIDENTIAL);
-  const [latitude, setLatitude] = useState<string>('37.7749');
-  const [longitude, setLongitude] = useState<string>('-122.4194');
+  const [latitude, setLatitude] = useState<string>('');
+  const [longitude, setLongitude] = useState<string>('');
+  const [place, setPlace] = useState<string | null>(null);
+  const [locationStatus, setLocationStatus] = useState<LocationStatus>('idle');
   const [title, setTitle] = useState<string>('');
   const [description, setDescription] = useState<string>('');
-  const [urgency, setUrgency] = useState<'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'>('MEDIUM');
+  const [urgency, setUrgency] = useState<Urgency>('MEDIUM');
 
-  const [loadingGps, setLoadingGps] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [submitted, setSubmitted] = useState<ServiceRequest | null>(null);
 
+  const successScale = useRef(new Animated.Value(0.6)).current;
   useEffect(() => {
-    // Auto fetch GPS on mount for location step
-    fetchGpsLocation();
-  }, []);
+    if (!submitted) return;
+    Animated.spring(successScale, { toValue: 1, damping: 9, stiffness: 160, useNativeDriver: true }).start();
+  }, [submitted, successScale]);
 
-  const fetchGpsLocation = async () => {
-    setLoadingGps(true);
-    try {
-      const coords = await getCurrentWorkerLocation();
-      setLatitude(coords.latitude.toFixed(6));
-      setLongitude(coords.longitude.toFixed(6));
-    } catch {
-      // Keep defaults
-    } finally {
-      setLoadingGps(false);
+  const detectLocation = async () => {
+    setLocationStatus('detecting');
+    const position = await getCurrentPositionOrNull();
+    if (!position) {
+      setLocationStatus('failed');
+      return;
     }
+    setLatitude(position.latitude.toFixed(6));
+    setLongitude(position.longitude.toFixed(6));
+    setPlace(null);
+    setLocationStatus('found');
+    // The address is a nicety; the pin is already set if geocoding is unavailable.
+    describeCoordinates(position).then(setPlace);
   };
 
-  const handleNextStep1 = () => {
-    setStep(2);
+  // Detect once, the first time the customer reaches the location step.
+  useEffect(() => {
+    if (step === 2 && locationStatus === 'idle') detectLocation();
+  }, [step, locationStatus]);
+
+  const coords = parseCoords(latitude, longitude);
+
+  // A pin placed or dragged on the map becomes the site location.
+  const handlePinPicked = (point: { latitude: number; longitude: number }) => {
+    setLatitude(point.latitude.toFixed(6));
+    setLongitude(point.longitude.toFixed(6));
+    setLocationStatus('found');
+    setPlace(null);
+    describeCoordinates(point).then(setPlace);
   };
 
   const handleNextStep2 = () => {
-    const latNum = parseFloat(latitude);
-    const lngNum = parseFloat(longitude);
-    if (isNaN(latNum) || latNum < -90 || latNum > 90) {
-      Alert.alert('Invalid Latitude', 'Please enter a valid latitude (-90 to 90)');
-      return;
-    }
-    if (isNaN(lngNum) || lngNum < -180 || lngNum > 180) {
-      Alert.alert('Invalid Longitude', 'Please enter a valid longitude (-180 to 180)');
+    if (!coords.valid) {
+      toast.error('Drop a pin on the map, or use your current location.', 'Site location needed');
       return;
     }
     setStep(3);
   };
 
-  const handleSubmit = async () => {
-    if (!title.trim() || title.length < 3) {
-      Alert.alert('Title Required', 'Please enter a descriptive service request title.');
+  const handleNextStep3 = () => {
+    if (!title.trim() || title.trim().length < 3) {
+      toast.error('Give your request a short, descriptive title.', 'Title required');
       return;
     }
-    if (!description.trim() || description.length < 5) {
-      Alert.alert('Description Required', 'Please detail the maintenance issue.');
+    if (!description.trim() || description.trim().length < 5) {
+      toast.error('Describe the maintenance issue so we can dispatch the right worker.', 'Description required');
       return;
     }
+    setStep(4);
+  };
 
+  const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
       const createdJob = await apiService.createJob({
@@ -90,512 +158,787 @@ export const CustomerBookingWizard: React.FC<CustomerBookingWizardProps> = ({
         servicePillar,
         facilityType,
         customerId,
-        location: {
-          latitude: parseFloat(latitude),
-          longitude: parseFloat(longitude),
-        },
+        location: { latitude: coords.lat, longitude: coords.lng },
         urgency,
       });
-
-      Alert.alert('Request Raised!', 'Your service request has been sent to Customer Care Dispatch.');
-      onBookingComplete(createdJob);
+      haptics.success();
+      setSubmitted(createdJob);
     } catch (error: any) {
-      Alert.alert('Submission Error', error?.message || 'Failed to submit service request');
+      if (isSubscriptionRequired(error)) {
+        toast.error(getErrorMessage(error), 'Subscription required');
+        onNeedSubscription?.();
+      } else {
+        toast.error(getErrorMessage(error, 'Failed to submit service request'), 'Submission failed');
+      }
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const pillar = PILLAR_OPTIONS.find((option) => option.value === servicePillar) ?? PILLAR_OPTIONS[0];
+  const locationLine =
+    place || (coords.valid ? `${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}` : 'Not set');
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.kicker}>METRO-FIX CUSTOMER PORTAL</Text>
-        <Text style={styles.title}>Book Maintenance Service</Text>
-      </View>
+    <View style={styles.container}>
+      <Animated.ScrollView
+        style={styles.scrollFill}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        contentContainerStyle={[styles.content, { paddingBottom: tabBarClearance(insets) }]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+      >
+        {/* Header */}
+        <ScreenHeader
+          eyebrow="Metro-Fix customer portal"
+          title="Book Maintenance Service"
+        />
 
-      {/* Multi-step Progress Indicator */}
-      <View style={styles.stepIndicatorRow}>
-        <View style={[styles.stepDot, step >= 1 && styles.stepDotActive]}>
-          <Text style={styles.stepDotNum}>1</Text>
-        </View>
-        <View style={[styles.stepLine, step >= 2 && styles.stepLineActive]} />
-        <View style={[styles.stepDot, step >= 2 && styles.stepDotActive]}>
-          <Text style={styles.stepDotNum}>2</Text>
-        </View>
-        <View style={[styles.stepLine, step >= 3 && styles.stepLineActive]} />
-        <View style={[styles.stepDot, step >= 3 && styles.stepDotActive]}>
-          <Text style={styles.stepDotNum}>3</Text>
-        </View>
-      </View>
-
-      {/* STEP 1: SERVICE CATEGORY PILLAR */}
-      {step === 1 && (
-        <View style={styles.stepCard}>
-          <Text style={styles.stepTitle}>Step 1: Select Service Category</Text>
-          <Text style={styles.stepSubtitle}>
-            Choose the FM pillar matching your facility maintenance requirement.
-          </Text>
-
-          <TouchableOpacity
-            style={[
-              styles.pillarCard,
-              servicePillar === ServicePillar.HARD && styles.pillarCardSelected,
-            ]}
-            onPress={() => setServicePillar(ServicePillar.HARD)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.pillarIcon}>⚡</Text>
-            <View style={styles.pillarInfo}>
-              <Text style={styles.pillarTitle}>HARD FM</Text>
-              <Text style={styles.pillarDesc}>
-                HVAC, electrical, plumbing, mechanical & structural repairs
-              </Text>
+        {/* SUCCESS: shown after the request has been raised */}
+        {submitted ? (
+          <View style={[styles.stepCard, styles.successCard]}>
+            <Animated.View style={[styles.successDisc, { transform: [{ scale: successScale }] }]}>
+              <Icon name="check" size={38} color={colors.white} />
+            </Animated.View>
+            <Text style={styles.successTitle} accessibilityRole="header">
+              Request sent
+            </Text>
+            <Text style={styles.successBody}>
+              Customer Care has your request and will dispatch a technician shortly.
+            </Text>
+            <View style={styles.ticketChip}>
+              <Icon name="hash" size={13} color={colors.brand} />
+              <Text style={styles.ticketChipText}>{shortRef(submitted.id)}</Text>
             </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.pillarCard,
-              servicePillar === ServicePillar.SOFT && styles.pillarCardSelected,
-            ]}
-            onPress={() => setServicePillar(ServicePillar.SOFT)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.pillarIcon}>🧹</Text>
-            <View style={styles.pillarInfo}>
-              <Text style={styles.pillarTitle}>SOFT FM</Text>
-              <Text style={styles.pillarDesc}>
-                Deep cleaning, sanitation, reception, groundskeeping & security
-              </Text>
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.pillarCard,
-              servicePillar === ServicePillar.STRATEGIC && styles.pillarCardSelected,
-            ]}
-            onPress={() => setServicePillar(ServicePillar.STRATEGIC)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.pillarIcon}>📊</Text>
-            <View style={styles.pillarInfo}>
-              <Text style={styles.pillarTitle}>STRATEGIC FM</Text>
-              <Text style={styles.pillarDesc}>
-                Energy audits, compliance inspections & vendor governance
-              </Text>
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.nextBtn} onPress={handleNextStep1}>
-            <Text style={styles.nextBtnText}>CONTINUE TO LOCATION ➔</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* STEP 2: LOCATION & FACILITY */}
-      {step === 2 && (
-        <View style={styles.stepCard}>
-          <Text style={styles.stepTitle}>Step 2: Location & Facility</Text>
-          <Text style={styles.stepSubtitle}>
-            Specify facility type and confirm GPS site location coordinates.
-          </Text>
-
-          <Text style={styles.inputLabel}>FACILITY TYPE</Text>
-          <View style={styles.facilityRow}>
-            {[
-              FacilityType.RESIDENTIAL,
-              FacilityType.COMMERCIAL,
-              FacilityType.INDUSTRIAL,
-            ].map((type) => (
-              <TouchableOpacity
-                key={type}
-                style={[
-                  styles.facilityChip,
-                  facilityType === type && styles.facilityChipSelected,
-                ]}
-                onPress={() => setFacilityType(type)}
-              >
-                <Text
-                  style={[
-                    styles.facilityChipText,
-                    facilityType === type && styles.facilityChipTextSelected,
-                  ]}
-                >
-                  {type}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            <Button
+              title="Track request"
+              onPress={() => onBookingComplete(submitted)}
+              variant="primary"
+              size="large"
+              style={styles.primaryAction}
+            />
           </View>
-
-          <View style={styles.gpsBox}>
-            <View style={styles.gpsHeader}>
-              <Text style={styles.inputLabel}>SITE GPS COORDINATES</Text>
-              <TouchableOpacity onPress={fetchGpsLocation} disabled={loadingGps}>
-                {loadingGps ? (
-                  <ActivityIndicator size="small" color="#f38808" />
-                ) : (
-                  <Text style={styles.gpsRefreshText}>📍 Detect GPS</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.coordInputsRow}>
-              <View style={styles.coordInputCol}>
-                <Text style={styles.coordLabel}>Latitude</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={latitude}
-                  onChangeText={setLatitude}
-                  keyboardType="numeric"
-                  placeholder="37.7749"
-                  placeholderTextColor="#81b1b3"
-                />
-              </View>
-              <View style={styles.coordInputCol}>
-                <Text style={styles.coordLabel}>Longitude</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={longitude}
-                  onChangeText={setLongitude}
-                  keyboardType="numeric"
-                  placeholder="-122.4194"
-                  placeholderTextColor="#81b1b3"
-                />
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.navRow}>
-            <TouchableOpacity style={styles.backBtn} onPress={() => setStep(1)}>
-              <Text style={styles.backBtnText}>⬅ BACK</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={[styles.nextBtn, { flex: 1 }]} onPress={handleNextStep2}>
-              <Text style={styles.nextBtnText}>CONTINUE TO DETAILS ➔</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
-      {/* STEP 3: DETAILS & URGENCY */}
-      {step === 3 && (
-        <View style={styles.stepCard}>
-          <Text style={styles.stepTitle}>Step 3: Job Details & Urgency</Text>
-          <Text style={styles.stepSubtitle}>
-            Describe the issue to help Customer Care dispatch the right technician.
-          </Text>
-
-          <Text style={styles.inputLabel}>ISSUE TITLE</Text>
-          <TextInput
-            style={styles.textInput}
-            value={title}
-            onChangeText={setTitle}
-            placeholder="e.g. Roof HVAC Unit Pressure Fault"
-            placeholderTextColor="#81b1b3"
-          />
-
-          <Text style={[styles.inputLabel, { marginTop: 14 }]}>DETAILED DESCRIPTION</Text>
-          <TextInput
-            style={[styles.textInput, styles.textArea]}
-            value={description}
-            onChangeText={setDescription}
-            multiline
-            numberOfLines={4}
-            placeholder="Describe symptoms, noise, or scope of maintenance needed..."
-            placeholderTextColor="#81b1b3"
-          />
-
-          <Text style={[styles.inputLabel, { marginTop: 14 }]}>DISPATCH URGENCY LEVEL</Text>
-          <View style={styles.urgencyGrid}>
-            {(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const).map((level) => (
-              <TouchableOpacity
-                key={level}
-                style={[
-                  styles.urgencyChip,
-                  urgency === level && styles.urgencyChipSelected,
-                ]}
-                onPress={() => setUrgency(level)}
-              >
-                <Text
-                  style={[
-                    styles.urgencyChipText,
-                    urgency === level && styles.urgencyChipTextSelected,
-                  ]}
-                >
-                  {level}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <View style={styles.navRow}>
-            <TouchableOpacity style={styles.backBtn} onPress={() => setStep(2)}>
-              <Text style={styles.backBtnText}>⬅ BACK</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.nextBtn, styles.submitBtn, { flex: 1 }]}
-              onPress={handleSubmit}
-              disabled={isSubmitting}
+        ) : (
+          <>
+            {/* Multi-step Progress Indicator */}
+            <View
+              style={styles.stepIndicatorRow}
+              accessible
+              accessibilityRole="progressbar"
+              accessibilityLabel={`Step ${step} of ${TOTAL_STEPS}: ${STEP_NAMES[step - 1]}`}
+              accessibilityValue={{ min: 1, max: TOTAL_STEPS, now: step }}
             >
-              {isSubmitting ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <Text style={styles.nextBtnText}>🚀 SUBMIT SERVICE REQUEST</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-    </ScrollView>
+              {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((n) => (
+                <React.Fragment key={n}>
+                  {n > 1 && <View style={[styles.stepLine, step >= n && styles.stepLineActive]} />}
+                  <View style={[styles.stepDot, step >= n && styles.stepDotActive]}>
+                    {step > n ? (
+                      <Icon name="check" size={14} color={colors.white} />
+                    ) : (
+                      <Text style={[styles.stepDotNum, step >= n && styles.stepDotNumActive]}>{n}</Text>
+                    )}
+                  </View>
+                </React.Fragment>
+              ))}
+            </View>
+            <Text style={styles.stepName}>{`Step ${step} · ${STEP_NAMES[step - 1]}`}</Text>
+
+            {/* STEP 1: SERVICE CATEGORY PILLAR */}
+            {step === 1 && (
+              <View style={styles.stepCard}>
+                <Text style={styles.stepTitle}>Select Service Category</Text>
+                <Text style={styles.stepSubtitle}>
+                  Choose the FM pillar matching your facility maintenance requirement.
+                </Text>
+
+                <View style={styles.pillarList}>
+                  {PILLAR_OPTIONS.map((option) => {
+                    const selected = servicePillar === option.value;
+                    return (
+                      <Pressable
+                        key={option.value}
+                        style={({ pressed }) => [
+                          styles.pillarCard,
+                          selected && styles.pillarCardSelected,
+                          pressed && !selected && styles.pillarCardPressed,
+                        ]}
+                        onPress={() => setServicePillar(option.value)}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected }}
+                        accessibilityLabel={`${option.title}. ${option.desc}`}
+                      >
+                        <View style={[styles.pillarIconBox, selected && styles.pillarIconBoxSelected]}>
+                          <Icon
+                            name={option.icon}
+                            size={20}
+                            color={selected ? colors.white : colors.textSecondary}
+                          />
+                        </View>
+                        <View style={styles.pillarInfo}>
+                          <Text style={styles.pillarTitle}>{option.title}</Text>
+                          <Text style={styles.pillarDesc}>{option.desc}</Text>
+                        </View>
+                        {selected ? <Icon name="check-circle" size={19} color={colors.brand} /> : null}
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                <Button
+                  title="Continue to Location"
+                  onPress={() => setStep(2)}
+                  variant="primary"
+                  size="large"
+                  style={styles.primaryAction}
+                />
+              </View>
+            )}
+
+            {/* STEP 2: LOCATION & FACILITY */}
+            {step === 2 && (
+              <View style={styles.stepCard}>
+                <Text style={styles.stepTitle}>Location & Facility</Text>
+                <Text style={styles.stepSubtitle}>
+                  Tell us what kind of site it is and where the technician should go.
+                </Text>
+
+                <Text style={styles.inputLabel}>Facility type</Text>
+                <View style={styles.facilityRow}>
+                  {[FacilityType.RESIDENTIAL, FacilityType.COMMERCIAL, FacilityType.INDUSTRIAL].map((type) => {
+                    const selected = facilityType === type;
+                    return (
+                      <Pressable
+                        key={type}
+                        style={({ pressed }) => [
+                          styles.facilityChip,
+                          selected && styles.facilityChipSelected,
+                          pressed && !selected && styles.facilityChipPressed,
+                        ]}
+                        onPress={() => setFacilityType(type)}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected }}
+                      >
+                        <Text style={[styles.facilityChipText, selected && styles.facilityChipTextSelected]}>
+                          {type}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                <View style={styles.locationCard}>
+                  <View style={styles.locationRow}>
+                    <View
+                      style={[
+                        styles.locationDisc,
+                        locationStatus === 'failed' && styles.locationDiscWarn,
+                      ]}
+                    >
+                      {locationStatus === 'detecting' || locationStatus === 'idle' ? (
+                        <ActivityIndicator size="small" color={colors.brand} />
+                      ) : (
+                        <Icon
+                          name={locationStatus === 'failed' ? 'alert-circle' : 'map-pin'}
+                          size={18}
+                          color={locationStatus === 'failed' ? colors.warning : colors.brand}
+                        />
+                      )}
+                    </View>
+                    <View style={styles.locationText} accessibilityLiveRegion="polite">
+                      {locationStatus === 'detecting' || locationStatus === 'idle' ? (
+                        <Text style={styles.locationPrimary}>Finding your location…</Text>
+                      ) : locationStatus === 'failed' && !coords.valid ? (
+                        <>
+                          <Text style={styles.locationPrimary}>We couldn’t read your location</Text>
+                          <Text style={styles.locationSecondary}>
+                            Allow location access, or drop a pin on the map below.
+                          </Text>
+                        </>
+                      ) : (
+                        <>
+                          <Text style={styles.locationPrimary} numberOfLines={2}>
+                            {locationLine}
+                          </Text>
+                          {coords.valid && place ? (
+                            <Text style={styles.locationSecondary}>
+                              {`${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}`}
+                            </Text>
+                          ) : null}
+                        </>
+                      )}
+                    </View>
+                  </View>
+
+                  <Pressable
+                    onPress={detectLocation}
+                    disabled={locationStatus === 'detecting'}
+                    style={({ pressed }) => [styles.locateButton, pressed && styles.locateButtonPressed]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Use my current location"
+                  >
+                    <Icon name="crosshair" size={15} color={colors.brand} />
+                    <Text style={styles.locateText}>Use my current location</Text>
+                  </Pressable>
+
+                  <LocationMapPicker
+                    value={coords.valid ? { latitude: coords.lat, longitude: coords.lng } : null}
+                    onChange={handlePinPicked}
+                  />
+                </View>
+
+                <View style={styles.navRow}>
+                  <Button title="Back" onPress={() => setStep(1)} variant="secondary" size="medium" />
+                  <Button
+                    title="Continue to Details"
+                    onPress={handleNextStep2}
+                    variant="primary"
+                    size="medium"
+                    style={styles.navPrimary}
+                  />
+                </View>
+              </View>
+            )}
+
+            {/* STEP 3: DETAILS & URGENCY */}
+            {step === 3 && (
+              <View style={styles.stepCard}>
+                <Text style={styles.stepTitle}>Job Details & Urgency</Text>
+                <Text style={styles.stepSubtitle}>
+                  Describe the issue to help Customer Care dispatch the right technician.
+                </Text>
+
+                <View style={styles.fields}>
+                  <Input
+                    label="Issue title"
+                    value={title}
+                    onChangeText={setTitle}
+                    placeholder="e.g. Roof HVAC Unit Pressure Fault"
+                    returnKeyType="next"
+                  />
+
+                  <Input
+                    label="Detailed description"
+                    value={description}
+                    onChangeText={setDescription}
+                    multiline
+                    numberOfLines={4}
+                    placeholder="Describe symptoms, noise, or scope of maintenance needed…"
+                  />
+                </View>
+
+                <Text style={[styles.inputLabel, styles.urgencyLabel]}>Dispatch urgency level</Text>
+                <View style={styles.urgencyGrid}>
+                  {(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const).map((level) => {
+                    const selected = urgency === level;
+                    return (
+                      <Pressable
+                        key={level}
+                        style={({ pressed }) => [
+                          styles.urgencyChip,
+                          selected && styles.urgencyChipSelected,
+                          pressed && !selected && styles.facilityChipPressed,
+                        ]}
+                        onPress={() => setUrgency(level)}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected }}
+                      >
+                        <Text style={[styles.urgencyChipText, selected && styles.urgencyChipTextSelected]}>
+                          {level}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                <View style={styles.navRow}>
+                  <Button title="Back" onPress={() => setStep(2)} variant="secondary" size="medium" />
+                  <Button
+                    title="Review request"
+                    onPress={handleNextStep3}
+                    variant="primary"
+                    size="medium"
+                    style={styles.navPrimary}
+                  />
+                </View>
+              </View>
+            )}
+
+            {/* STEP 4: REVIEW */}
+            {step === 4 && (
+              <View style={styles.stepCard}>
+                <Text style={styles.stepTitle}>Review & Send</Text>
+                <Text style={styles.stepSubtitle}>Check the details before we send them to Customer Care.</Text>
+
+                <View style={styles.reviewList}>
+                  <ReviewRow
+                    icon={pillar.icon}
+                    label="Service"
+                    value={`${pillar.title} · ${facilityType}`}
+                    onEdit={() => setStep(1)}
+                  />
+                  <ReviewRow icon="map-pin" label="Site" value={locationLine} onEdit={() => setStep(2)} />
+                  <ReviewRow
+                    icon="file-text"
+                    label={title.trim()}
+                    value={description.trim()}
+                    onEdit={() => setStep(3)}
+                  />
+                  <ReviewRow icon="alert-triangle" label="Urgency" value={urgency} onEdit={() => setStep(3)} />
+                </View>
+
+                <View style={styles.navRow}>
+                  <Button title="Back" onPress={() => setStep(3)} variant="secondary" size="medium" />
+                  <Button
+                    title="Send request"
+                    onPress={handleSubmit}
+                    isLoading={isSubmitting}
+                    disabled={isSubmitting}
+                    variant="primary"
+                    size="medium"
+                    style={styles.navPrimary}
+                  />
+                </View>
+              </View>
+            )}
+          </>
+        )}
+      </Animated.ScrollView>
+      <GlassHeader title="Book Service" scrollY={scrollY} />
+    </View>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
+interface ReviewRowProps {
+  icon: FeatherIconName;
+  label: string;
+  value: string;
+  onEdit: () => void;
+}
+
+const ReviewRow: React.FC<ReviewRowProps> = ({ icon, label, value, onEdit }) => (
+  <View style={styles.reviewRow}>
+    <View style={styles.reviewIcon}>
+      <Icon name={icon} size={16} color={colors.brand} />
+    </View>
+    <View style={styles.reviewText}>
+      <Text style={styles.reviewLabel} numberOfLines={1}>
+        {label}
+      </Text>
+      <Text style={styles.reviewValue} numberOfLines={3}>
+        {value}
+      </Text>
+    </View>
+    <Pressable
+      onPress={onEdit}
+      style={styles.reviewEdit}
+      accessibilityRole="button"
+      accessibilityLabel={`Edit ${label}`}
+    >
+      <Text style={styles.reviewEditText}>Edit</Text>
+    </Pressable>
+  </View>
+);
+
+const styles = themedStyles(() => StyleSheet.create({
+  stepName: {
+    ...typography.overline,
+    color: colors.textSecondary,
+    marginTop: -spacing.lg,
+    marginBottom: spacing.lg,
+  },
+
+  // ── Location card ──
+  locationCard: {
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.bg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: spacing.md,
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  locationDisc: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.brandSubtle,
+  },
+  locationDiscWarn: {
+    backgroundColor: colors.surfaceRaised,
+  },
+  locationText: {
     flex: 1,
-    backgroundColor: '#1c2d40',
+    minWidth: 0,
   },
-  content: {
-    padding: 18,
-    paddingBottom: 40,
+  locationPrimary: {
+    ...typography.bodyStrong,
+    color: colors.text,
   },
-  header: {
-    marginBottom: 20,
+  locationSecondary: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
-  kicker: {
-    color: '#81b1b3',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
-  title: {
-    color: '#ffffff',
-    fontSize: 22,
-    fontWeight: '800',
-  },
-  stepIndicatorRow: {
+  locateButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 24,
+    gap: spacing.sm,
+    minHeight: layout.minTap,
+    borderRadius: radius.pill,
+    backgroundColor: colors.brandSubtle,
+  },
+  locateButtonPressed: {
+    backgroundColor: colors.surfaceRaised,
+  },
+  locateText: {
+    ...typography.label,
+    fontWeight: '700',
+    color: colors.brand,
+  },
+  manualToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: layout.minTap,
+  },
+  manualText: {
+    ...typography.label,
+    color: colors.textSecondary,
+  },
+
+  // ── Review ──
+  reviewList: {
+    gap: spacing.md,
+  },
+  reviewRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.bg,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  reviewIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.brandSubtle,
+  },
+  reviewText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  reviewLabel: {
+    ...typography.overline,
+    color: colors.textSecondary,
+  },
+  reviewValue: {
+    ...typography.body,
+    color: colors.text,
+    marginTop: 2,
+  },
+  reviewEdit: {
+    minHeight: layout.minTap,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+  },
+  reviewEditText: {
+    ...typography.label,
+    fontWeight: '700',
+    color: colors.brand,
+  },
+
+  // ── Success ──
+  successCard: {
+    alignItems: 'center',
+    paddingVertical: spacing.huge,
+  },
+  successDisc: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.success,
+    marginBottom: spacing.xl,
+  },
+  successTitle: {
+    ...typography.h1,
+    color: colors.text,
+  },
+  successBody: {
+    ...typography.body,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  ticketChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: radius.pill,
+    backgroundColor: colors.brandSubtle,
+  },
+  ticketChipText: {
+    ...typography.label,
+    fontWeight: '800',
+    letterSpacing: 1,
+    color: colors.brand,
+  },
+  scrollFill: {
+    flex: 1,
+  },
+  container: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  content: {
+    paddingHorizontal: layout.screenPadding,
+  },
+
+  // ── Step indicator ──
+  stepIndicatorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.xxl,
   },
   stepDot: {
     width: 32,
     height: 32,
-    borderRadius: 16,
-    backgroundColor: '#2b435f',
-    justifyContent: 'center',
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
   },
   stepDotActive: {
-    backgroundColor: '#f38808',
-    borderColor: '#f38808',
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
   },
   stepDotNum: {
-    color: '#ffffff',
+    ...typography.caption,
     fontWeight: '800',
-    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  stepDotNumActive: {
+    color: colors.white,
   },
   stepLine: {
-    width: 40,
-    height: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    marginHorizontal: 6,
+    flex: 1,
+    height: 2,
+    backgroundColor: colors.border,
   },
   stepLineActive: {
-    backgroundColor: '#f38808',
+    backgroundColor: colors.brand,
   },
+
+  // ── Step card ──
   stepCard: {
-    backgroundColor: '#2b435f',
-    borderRadius: 22,
-    padding: 20,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xxl,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: colors.border,
+    padding: spacing.xl,
   },
   stepTitle: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '800',
-    marginBottom: 4,
+    ...typography.h1,
+    color: colors.text,
   },
   stepSubtitle: {
-    color: '#81b1b3',
-    fontSize: 13,
-    lineHeight: 18,
-    marginBottom: 20,
+    ...typography.body,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+    marginBottom: spacing.xl,
+  },
+  primaryAction: {
+    marginTop: spacing.xl,
+  },
+
+  // ── Pillar options ──
+  pillarList: {
+    gap: spacing.md,
   },
   pillarCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: 'transparent',
+    gap: spacing.lg,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.bg,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+  },
+  pillarCardPressed: {
+    backgroundColor: colors.surfaceRaised,
   },
   pillarCardSelected: {
-    borderColor: '#f38808',
-    backgroundColor: 'rgba(243, 136, 8, 0.12)',
+    borderColor: colors.brand,
+    backgroundColor: colors.brandSubtle,
   },
-  pillarIcon: {
-    fontSize: 26,
-    marginRight: 14,
+  pillarIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceRaised,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  pillarIconBoxSelected: {
+    backgroundColor: colors.brand,
   },
   pillarInfo: {
     flex: 1,
+    minWidth: 0,
   },
   pillarTitle: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '800',
-    marginBottom: 2,
+    ...typography.h3,
+    color: colors.text,
   },
   pillarDesc: {
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: 12,
-    lineHeight: 16,
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
   },
-  nextBtn: {
-    backgroundColor: '#f38808',
-    height: 54,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  submitBtn: {
-    backgroundColor: '#4aad83',
-  },
-  nextBtnText: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
+
+  // ── Fields ──
   inputLabel: {
-    color: '#81b1b3',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-    marginBottom: 8,
+    ...typography.label,
+    color: colors.textSecondary,
+    marginBottom: spacing.md,
+  },
+  fields: {
+    gap: spacing.lg,
   },
   facilityRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 20,
+    gap: spacing.sm,
+    marginBottom: spacing.xl,
   },
   facilityChip: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    paddingVertical: 12,
-    borderRadius: 12,
+    minHeight: layout.minTap,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.pill,
+    backgroundColor: colors.bg,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+  },
+  facilityChipPressed: {
+    backgroundColor: colors.surfaceRaised,
   },
   facilityChipSelected: {
-    backgroundColor: '#f38808',
-    borderColor: '#f38808',
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
   },
   facilityChipText: {
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: 12,
-    fontWeight: '800',
+    ...typography.caption,
+    fontWeight: '700',
+    color: colors.textSecondary,
   },
   facilityChipTextSelected: {
-    color: '#ffffff',
+    color: colors.white,
   },
+
+  // ── GPS ──
   gpsBox: {
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 16,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.bg,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   gpsHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  gpsRefreshBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + 2,
+    minHeight: 36,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.brandSubtle,
   },
   gpsRefreshText: {
-    color: '#f38808',
-    fontSize: 12,
-    fontWeight: '800',
+    ...typography.caption,
+    fontWeight: '700',
+    color: colors.brand,
   },
   coordInputsRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: spacing.md,
   },
   coordInputCol: {
     flex: 1,
   },
-  coordLabel: {
-    color: 'rgba(255, 255, 255, 0.6)',
-    fontSize: 11,
-    marginBottom: 4,
-  },
-  textInput: {
-    backgroundColor: '#1c2d40',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: '#ffffff',
-    fontSize: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
-  },
-  textArea: {
-    height: 90,
-    textAlignVertical: 'top',
-  },
-  navRow: {
-    flexDirection: 'row',
-    gap: 12,
-    alignItems: 'center',
-  },
-  backBtn: {
-    paddingHorizontal: 16,
-    height: 54,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  backBtnText: {
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontWeight: '800',
-    fontSize: 13,
+
+  // ── Urgency ──
+  urgencyLabel: {
+    marginTop: spacing.xl,
   },
   urgencyGrid: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 20,
+    flexWrap: 'wrap',
+    gap: spacing.sm,
   },
   urgencyChip: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    paddingVertical: 12,
-    borderRadius: 12,
+    flexGrow: 1,
+    flexBasis: '22%',
+    minHeight: layout.minTap,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.pill,
+    backgroundColor: colors.bg,
+    borderWidth: 1.5,
+    borderColor: colors.border,
   },
   urgencyChipSelected: {
-    backgroundColor: '#e53e3e',
-    borderColor: '#e53e3e',
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
   },
   urgencyChipText: {
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: 11,
-    fontWeight: '800',
+    ...typography.caption,
+    fontWeight: '700',
+    color: colors.textSecondary,
   },
   urgencyChipTextSelected: {
-    color: '#ffffff',
+    color: colors.white,
   },
-});
+
+  // ── Navigation ──
+  navRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginTop: spacing.xxl,
+  },
+  navPrimary: {
+    flex: 1,
+  },
+}));

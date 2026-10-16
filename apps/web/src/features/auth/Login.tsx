@@ -1,15 +1,17 @@
-import { type CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { loginSchema, type LoginInput } from '@metro-fix/core-types';
-import { BrandLogo } from '@metro-fix/ui';
+import { loginSchema, type LoginInput, type User } from '@metro-fix/core-types';
+import { API_BASE_URL } from '../../lib/api';
 
 export interface LoginProps {
-  onSubmit: (values: LoginInput) => void;
-  isLoading?: boolean;
+  onSuccess: (data: { accessToken: string; user: User }) => void;
 }
 
-export function Login({ onSubmit, isLoading = false }: LoginProps) {
+export function Login({ onSuccess }: LoginProps) {
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
   const {
     register,
     handleSubmit,
@@ -22,16 +24,47 @@ export function Login({ onSubmit, isLoading = false }: LoginProps) {
     },
   });
 
+  const onSubmit = async (values: LoginInput) => {
+    setIsLoading(true);
+    setAuthError(null);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(values),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.message || 'Invalid email address or password.');
+      }
+
+      const data = await response.json();
+      // data: { accessToken: string, user: User }
+      onSuccess(data);
+    } catch (err: any) {
+      setAuthError(err.message || 'Unable to connect to authentication server.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} style={styles.form} noValidate>
-      <div style={styles.logoWrapper}>
-        <img src={BrandLogo} alt="Metro-Fix Logo" style={styles.logo} />
+      <div style={styles.headerGroup}>
+        <div style={styles.sectionEyebrow}>Secure Access</div>
+        <h2 style={styles.formTitle}>Sign In</h2>
+        <p style={styles.formSubtitle}>Access your METRO-FIX facility control center.</p>
       </div>
 
-      <div style={styles.headerGroup}>
-        <h2 style={styles.formTitle}>Sign In</h2>
-        <p style={styles.formSubtitle}>Access your METRO-FIX facility control center</p>
-      </div>
+      {authError && (
+        <div style={styles.errorBanner}>
+          <span>⚠️ {authError}</span>
+        </div>
+      )}
 
       <div style={styles.fieldGroup}>
         <label style={styles.label} htmlFor="login-email">
@@ -46,7 +79,7 @@ export function Login({ onSubmit, isLoading = false }: LoginProps) {
             ...styles.input,
             ...(errors.email ? styles.inputError : undefined),
           }}
-          placeholder="admin@metro-fix.com"
+          placeholder="you@example.com"
         />
         {errors.email && <span style={styles.errorText}>{errors.email.message}</span>}
       </div>
@@ -72,20 +105,6 @@ export function Login({ onSubmit, isLoading = false }: LoginProps) {
       <button type="submit" disabled={isLoading} style={styles.submitButton}>
         {isLoading ? 'Signing In...' : 'Sign In'}
       </button>
-
-      <div style={styles.quickAccessBlock}>
-        <div style={styles.quickAccessTitle}>Demo Accounts (Password: 8+ chars)</div>
-        <div style={styles.quickAccessBadges}>
-          <div style={styles.badgeItem}>
-            <span style={styles.badgeRole}>Admin:</span>
-            <code style={styles.code}>admin@metro-fix.com</code>
-          </div>
-          <div style={styles.badgeItem}>
-            <span style={styles.badgeRole}>Dispatcher:</span>
-            <code style={styles.code}>dispatch@metro-fix.com</code>
-          </div>
-        </div>
-      </div>
     </form>
   );
 }
@@ -97,111 +116,89 @@ const styles: Record<string, CSSProperties> = {
     gap: '16px',
     width: '100%',
   },
-  logoWrapper: {
-    display: 'flex',
-    justifyContent: 'center',
-    marginBottom: '4px',
-  },
-  logo: {
-    display: 'block',
-    maxHeight: '40px',
-    width: 'auto',
+  sectionEyebrow: {
+    fontSize: '0.76rem',
+    fontWeight: 800,
+    letterSpacing: '0.14em',
+    textTransform: 'uppercase',
+    color: 'var(--sidebar-accent)',
   },
   headerGroup: {
-    textAlign: 'center',
-    marginBottom: '4px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+    marginBottom: '2px',
   },
   formTitle: {
-    margin: '0 0 4px',
-    fontSize: '1.35rem',
-    fontWeight: 700,
+    margin: 0,
+    fontSize: '1.65rem',
+    lineHeight: 1.05,
+    fontWeight: 800,
     color: 'var(--text-primary)',
+    letterSpacing: '-0.03em',
   },
   formSubtitle: {
     margin: 0,
-    fontSize: '0.84rem',
+    fontSize: '0.92rem',
     color: 'var(--text-secondary)',
+    lineHeight: 1.45,
+  },
+  errorBanner: {
+    padding: '11px 14px',
+    background: 'var(--surface-strong)',
+    color: 'var(--text-primary)',
+    borderRadius: '12px',
+    fontSize: '0.86rem',
+    fontWeight: 700,
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-subtle)',
   },
   fieldGroup: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '6px',
+    gap: '7px',
   },
   label: {
     fontSize: '0.84rem',
-    fontWeight: 600,
+    fontWeight: 700,
     color: 'var(--text-primary)',
   },
   input: {
     width: '100%',
     boxSizing: 'border-box',
-    border: '1px solid var(--border-subtle)',
-    background: 'var(--surface)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-subtle)',
+    background: 'var(--surface-elevated)',
     color: 'var(--text-primary)',
-    borderRadius: '12px',
-    padding: '12px 14px',
+    borderRadius: '14px',
+    padding: '13px 14px',
     outline: 'none',
     fontSize: '0.92rem',
+    boxShadow: 'inset 0 1px 2px rgba(16, 36, 38, 0.05)',
   },
   inputError: {
     borderColor: '#e53e3e',
-    boxShadow: '0 0 0 1px #e53e3e',
+    boxShadow: '0 0 0 1px rgba(229, 62, 62, 0.45)',
   },
   errorText: {
-    color: '#e53e3e',
+    color: '#d37105',
     fontSize: '0.82rem',
-    fontWeight: 500,
+    fontWeight: 600,
     marginTop: '2px',
   },
   submitButton: {
     border: 'none',
-    borderRadius: '12px',
-    padding: '13px 18px',
-    background: '#f38808',
+    borderRadius: '14px',
+    padding: '14px 18px',
+    background: 'linear-gradient(135deg, #f7b552 0%, #f38808 48%, #d37105 100%)',
     color: '#ffffff',
-    fontWeight: 700,
+    fontWeight: 800,
     fontSize: '0.95rem',
     cursor: 'pointer',
-    boxShadow: '0 4px 14px rgba(243, 136, 8, 0.35)',
+    boxShadow: '0 14px 28px rgba(243, 136, 8, 0.34)',
     marginTop: '6px',
-  },
-  quickAccessBlock: {
-    marginTop: '10px',
-    padding: '12px',
-    borderRadius: '12px',
-    background: 'var(--surface-strong)',
-    border: '1px solid var(--border-subtle)',
-  },
-  quickAccessTitle: {
-    fontSize: '0.76rem',
-    fontWeight: 700,
-    color: 'var(--text-secondary)',
-    textTransform: 'uppercase',
-    letterSpacing: '0.06em',
-    marginBottom: '6px',
-  },
-  quickAccessBadges: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '6px',
-  },
-  badgeItem: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    fontSize: '0.82rem',
-  },
-  badgeRole: {
-    color: 'var(--text-secondary)',
-    fontWeight: 600,
-  },
-  code: {
-    background: '#2b435f',
-    color: '#ffffff',
-    padding: '2px 8px',
-    borderRadius: '6px',
-    fontFamily: 'monospace',
-    fontSize: '0.8rem',
   },
 };
 

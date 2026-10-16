@@ -9,6 +9,10 @@
     ".": {
       "types": "./src/index.ts",
       "import": "./src/index.ts"
+    },
+    "./admin": {
+      "types": "./src/AdminWorkspace.tsx",
+      "import": "./src/AdminWorkspace.tsx"
     }
   },
   "peerDependencies": {

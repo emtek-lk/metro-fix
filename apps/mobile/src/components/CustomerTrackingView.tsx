@@ -1,388 +1,510 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
+import { Alert, Linking, View, StyleSheet, Animated } from 'react-native';
+import { Text } from './ui/AppText';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-} from 'react-native';
-import { JobStatus, ServiceRequest } from '@metro-fix/core-types';
-import { realtimeSocket } from '../services/websocket';
+  JobStatus,
+  ServiceRequest,
+  JOB_STAGES,
+  canTransition,
+  isTerminalStatus,
+} from '@metro-fix/core-types';
+
+import { Button } from './ui/Button';
+import { QuoteBreakdown } from './QuoteBreakdown';
+import { Icon } from './ui/Icon';
+import { IconButton } from './ui/IconButton';
+import { ScreenHeader } from './ui/ScreenHeader';
+import { useToast } from './ui/Toast';
+import { useAppSettings } from '../hooks/useAppSettings';
+import { colors } from '../theme/colors';
+import { typography } from '../theme/typography';
+import { spacing, radius, layout, tabBarClearance } from '../theme/layout';
+import { getStatusPresentation } from '../theme/status';
+import { themedStyles } from '../theme/themedStyles';
+import { shortRef } from '../lib/ticket';
+import { haptics } from '../lib/haptics';
+import { getErrorMessage } from '../lib/errors';
+import { trackingMessage } from '../lib/trackingCopy';
+import { workerNameOf } from '../lib/jobs';
+import { useCancelJob, useJobDetail } from '../hooks/useJobs';
+import { GlassHeader, useCollapsingHeader } from './ui/GlassHeader';
 
 interface CustomerTrackingViewProps {
   job: ServiceRequest;
   onNewBooking: () => void;
+  /** When provided, a back button is shown (e.g. when opened from the requests list). */
+  onBack?: () => void;
 }
-
-const LIFECYCLE_STAGES: { status: JobStatus; label: string; icon: string }[] = [
-  { status: JobStatus.REQUESTED, label: 'Requested', icon: '📝' },
-  { status: JobStatus.PENDING_ACCEPTANCE, label: 'Dispatching', icon: '📡' },
-  { status: JobStatus.ASSIGNED, label: 'Technician Assigned', icon: '👨‍🔧' },
-  { status: JobStatus.ON_ROUTE, label: 'Worker On Route', icon: '🚗' },
-  { status: JobStatus.INSPECTION, label: 'Inspection / Quote', icon: '🔍' },
-  { status: JobStatus.IN_PROGRESS, label: 'Work In Progress', icon: '⚙️' },
-  { status: JobStatus.COMPLETED, label: 'Completed & Paid', icon: '✅' },
-];
 
 export const CustomerTrackingView: React.FC<CustomerTrackingViewProps> = ({
   job: initialJob,
   onNewBooking,
+  onBack,
 }) => {
-  const [currentJob, setCurrentJob] = useState<ServiceRequest>(initialJob);
+  const insets = useSafeAreaInsets();
+  const toast = useToast();
+  const { scrollY, onScroll } = useCollapsingHeader();
+  // Live: the realtime socket writes every change into this query (see useRealtimeSync), so the
+  // screen follows the job without any polling of its own. The job passed in is the first paint.
+  const { data } = useJobDetail(initialJob.id);
+  const currentJob = data ?? initialJob;
+  const cancel = useCancelJob();
 
-  useEffect(() => {
-    // Listen to real-time WebSocket update events from NestJS backend
-    const unsubscribe = realtimeSocket.on('job.updated', (updatedJob) => {
-      if (updatedJob.id === currentJob.id) {
-        console.log('[CustomerTrackingView] Real-time status update received:', updatedJob.status);
-        setCurrentJob(updatedJob);
-      }
-    });
+  const cancelled = currentJob.status === JobStatus.CANCELLED;
+  const currentStageIndex = JOB_STAGES.indexOf(currentJob.status);
+  const current = getStatusPresentation(currentJob.status);
+  const technician = workerNameOf(currentJob);
+  const technicianPhone = currentJob.worker?.user?.phoneNumber?.trim() || null;
+  const message = trackingMessage(currentJob.status, technician);
+  const appSettings = useAppSettings();
+  // Dispatch can switch customer cancellation off (Settings > Requests & plans); they then contact support.
+  const canCancel = appSettings.allowCustomerCancellation && canTransition(currentJob.status, JobStatus.CANCELLED);
+  const isLive = !isTerminalStatus(currentJob.status);
+  const hasTechnician =
+    !!currentJob.workerId &&
+    currentJob.status !== JobStatus.REQUESTED &&
+    currentJob.status !== JobStatus.PENDING_ACCEPTANCE &&
+    !cancelled;
+  const technicianCanBeCalled = hasTechnician && !!technicianPhone && !isTerminalStatus(currentJob.status);
 
-    return () => unsubscribe();
-  }, [currentJob.id]);
+  const confirmCancel = () => {
+    Alert.alert(
+      'Cancel this request?',
+      currentJob.status === JobStatus.REQUESTED
+        ? 'Nobody has been sent yet.'
+        : 'Anyone who has been contacted will be told.',
+      [
+        { text: 'Keep request', style: 'cancel' },
+        {
+          text: 'Cancel request',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await cancel.mutateAsync({ jobId: currentJob.id });
+              haptics.success();
+              toast.success('Your request was cancelled.', 'Cancelled');
+            } catch (error) {
+              haptics.error();
+              toast.error(getErrorMessage(error, 'Could not cancel the request.'), 'Cancel failed');
+            }
+          },
+        },
+      ],
+    );
+  };
 
-  const currentStageIndex = LIFECYCLE_STAGES.findIndex(
-    (s) => s.status === currentJob.status,
-  );
+  const callTechnician = () => {
+    if (!technicianPhone) return;
+    Linking.openURL(`tel:${technicianPhone}`).catch(() =>
+      toast.error('Could not open the phone app.', 'Unable to call'),
+    );
+  };
+
+  const quote =
+    currentJob.quoteAmount != null
+      ? `LKR ${Number(currentJob.quoteAmount).toLocaleString('en-LK')}${
+          currentJob.estimatedHours != null ? ` · about ${currentJob.estimatedHours}h` : ''
+        }`
+      : null;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerTitleRow}>
-          <Text style={styles.kicker}>LIVE SERVICE TRACKING</Text>
-          <View style={styles.liveBadge}>
-            <View style={styles.greenDot} />
-            <Text style={styles.liveBadgeText}>WEBSOCKET LIVE</Text>
-          </View>
-        </View>
-        <Text style={styles.title}>{currentJob.title}</Text>
-        <Text style={styles.ticketId}>Ticket #{currentJob.id}</Text>
-      </View>
-
-      {/* Main Status Hero Card */}
-      <View style={styles.heroCard}>
-        <Text style={styles.heroStatusLabel}>CURRENT STAGE</Text>
-        <Text style={styles.heroStatusValue}>{currentJob.status}</Text>
-        <Text style={styles.heroDesc}>{currentJob.description}</Text>
-      </View>
-
-      {/* 7-Stage Visual Lifecycle Progress Tracker */}
-      <View style={styles.trackerCard}>
-        <Text style={styles.trackerTitle}>SERVICE LIFECYCLE PROGRESS</Text>
-
-        <View style={styles.stageList}>
-          {LIFECYCLE_STAGES.map((stage, idx) => {
-            const isDone = idx < currentStageIndex;
-            const isCurrent = idx === currentStageIndex;
-
-            return (
-              <View key={stage.status} style={styles.stageRow}>
-                <View style={styles.stageIconCol}>
-                  <View
-                    style={[
-                      styles.stageNode,
-                      isDone && styles.stageNodeDone,
-                      isCurrent && styles.stageNodeCurrent,
-                    ]}
-                  >
-                    <Text style={styles.stageIconText}>{stage.icon}</Text>
-                  </View>
-                  {idx < LIFECYCLE_STAGES.length - 1 && (
-                    <View
-                      style={[
-                        styles.stageConnector,
-                        isDone && styles.stageConnectorDone,
-                      ]}
-                    />
-                  )}
-                </View>
-
-                <View style={styles.stageContentCol}>
-                  <Text
-                    style={[
-                      styles.stageLabel,
-                      isCurrent && styles.stageLabelCurrent,
-                      isDone && styles.stageLabelDone,
-                    ]}
-                  >
-                    {stage.label}
-                  </Text>
-                  {isCurrent && (
-                    <Text style={styles.activeTag}>IN PROGRESS AT SITE</Text>
-                  )}
-                </View>
-              </View>
-            );
-          })}
-        </View>
-      </View>
-
-      {/* Assigned Technician Card */}
-      {currentJob.workerId ? (
-        <View style={styles.workerCard}>
-          <Text style={styles.workerCardTitle}>ASSIGNED SERVICE TECHNICIAN</Text>
-          <View style={styles.workerRow}>
-            <View style={styles.avatarBox}>
-              <Text style={styles.avatarText}>👨‍🔧</Text>
-            </View>
-            <View style={styles.workerInfo}>
-              <Text style={styles.workerName}>Alex Rivers (Field Tech #88)</Text>
-              <Text style={styles.workerMeta}>⭐ 4.9 Rating • Hard & Soft FM Certified</Text>
-            </View>
-          </View>
-        </View>
-      ) : (
-        <View style={styles.dispatchingBox}>
-          <Text style={styles.dispatchingText}>
-            📡 Customer Care is currently selecting the nearest certified technician for your site location.
-          </Text>
-        </View>
-      )}
-
-      {/* Action Footer */}
-      <TouchableOpacity
-        style={styles.newBookingBtn}
-        onPress={onNewBooking}
-        activeOpacity={0.8}
+    <View style={styles.container}>
+      <Animated.ScrollView
+        style={styles.scrollFill}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        contentContainerStyle={[styles.content, { paddingBottom: tabBarClearance(insets) }]}
+        showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.newBookingBtnText}>➕ BOOK ANOTHER SERVICE</Text>
-      </TouchableOpacity>
-    </ScrollView>
+        {onBack ? (
+          <View style={styles.backRow}>
+            <IconButton
+              onPress={onBack}
+              accessibilityLabel="Back to my requests"
+              icon={<Icon name="chevron-left" size={22} color={colors.text} />}
+              backgroundColor={colors.surface}
+              size={44}
+            />
+          </View>
+        ) : null}
+
+        {/* Header */}
+        <ScreenHeader
+          eyebrow="Service tracking"
+          title={currentJob.title}
+          subtitle={`Ticket #${shortRef(currentJob.id)}`}
+          right={
+            isLive ? (
+              <View style={styles.liveBadge} accessibilityLabel="Updating live">
+                <View style={styles.liveDot} />
+                <Text style={styles.liveBadgeText}>Live</Text>
+              </View>
+            ) : undefined
+          }
+        />
+
+        {/* Current Stage Hero */}
+        <View style={[styles.heroCard, { borderColor: current.color }]}>
+          <Text style={styles.heroStatusLabel}>Current stage</Text>
+          <View style={styles.heroStatusRow}>
+            <View style={[styles.heroIconBox, { backgroundColor: current.color }]}>
+              <Icon name={current.icon} size={20} color={colors.white} />
+            </View>
+            <Text style={styles.heroStatusValue}>{current.label}</Text>
+          </View>
+          <Text style={styles.heroDesc}>{message.detail}</Text>
+          {cancelled && currentJob.cancelReason ? (
+            <Text style={styles.heroReason}>Reason: {currentJob.cancelReason}</Text>
+          ) : null}
+        </View>
+
+        {/* Lifecycle Tracker (a cancelled request left the normal path, so it has no timeline) */}
+        {!cancelled && (
+          <View style={styles.trackerCard}>
+            <Text style={styles.trackerTitle}>Service progress</Text>
+
+            <View style={styles.stageList}>
+              {JOB_STAGES.map((status, index) => {
+                const stage = getStatusPresentation(status);
+                const isComplete = index < currentStageIndex;
+                const isCurrent = index === currentStageIndex;
+                const isDone = isComplete || isCurrent;
+                const isLast = index === JOB_STAGES.length - 1;
+
+                return (
+                  <View key={status} style={styles.stageRow}>
+                    <View style={styles.stageIconCol}>
+                      <View
+                        style={[
+                          styles.stageIcon,
+                          isDone && { backgroundColor: stage.color, borderColor: stage.color },
+                        ]}
+                      >
+                        <Icon
+                          name={isComplete ? 'check' : stage.icon}
+                          size={14}
+                          color={isDone ? colors.white : colors.textMuted}
+                        />
+                      </View>
+                      {!isLast && (
+                        <View
+                          style={[styles.stageConnector, isComplete && { backgroundColor: stage.color }]}
+                        />
+                      )}
+                    </View>
+
+                    <View style={styles.stageContentCol}>
+                      <Text style={[styles.stageLabel, isDone && styles.stageLabelActive]}>
+                        {stage.label}
+                      </Text>
+                      {isCurrent && <Text style={styles.activeTag}>{message.caption}</Text>}
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
+        {/* Technician: only once one has actually accepted the job */}
+        {hasTechnician ? (
+          <View style={styles.workerCard}>
+            <Text style={styles.workerCardTitle}>Your technician</Text>
+            <View style={styles.workerRow}>
+              <View style={styles.avatarBox}>
+                <Icon name="user" size={22} color={colors.brand} />
+              </View>
+              <View style={styles.workerInfo}>
+                <Text style={styles.workerName}>{technician ?? 'Assigned technician'}</Text>
+                {currentJob.worker?.rating != null ? (
+                  <View style={styles.workerMetaRow}>
+                    <Icon name="star" size={12} color={colors.brand} />
+                    <Text style={styles.workerMeta}>{currentJob.worker.rating.toFixed(1)} rating</Text>
+                  </View>
+                ) : null}
+              </View>
+              {technicianCanBeCalled ? (
+                <IconButton
+                  onPress={callTechnician}
+                  accessibilityLabel={`Call ${technician ?? 'technician'}`}
+                  icon={<Icon name="phone" size={18} color={colors.brand} />}
+                  backgroundColor={colors.brandSubtle}
+                  size={44}
+                />
+              ) : null}
+            </View>
+          </View>
+        ) : !cancelled && !isTerminalStatus(currentJob.status) ? (
+          <View style={styles.dispatchingBox}>
+            <Icon name="radio" size={17} color={colors.info} />
+            <Text style={styles.dispatchingText}>{message.detail}</Text>
+          </View>
+        ) : null}
+
+        {currentJob.jobCard ? (
+          <QuoteBreakdown card={currentJob.jobCard} />
+        ) : quote ? (
+          <View style={styles.workerCard}>
+            <Text style={styles.workerCardTitle}>Quote from your technician</Text>
+            <Text style={styles.workerName}>{quote}</Text>
+            {currentJob.quoteNotes ? <Text style={styles.workerMeta}>{currentJob.quoteNotes}</Text> : null}
+          </View>
+        ) : null}
+
+        {/* Actions */}
+        {canCancel ? (
+          <Button
+            title="Cancel request"
+            onPress={confirmCancel}
+            isLoading={cancel.isPending}
+            variant="danger"
+            size="large"
+            style={styles.cancelBtn}
+          />
+        ) : null}
+        <Button
+          title="Book Another Service"
+          onPress={onNewBooking}
+          variant="outline"
+          size="large"
+          icon={<Icon name="plus" size={17} color={colors.brand} />}
+          style={styles.newBookingBtn}
+        />
+      </Animated.ScrollView>
+      <GlassHeader
+        title="Tracking"
+        scrollY={scrollY}
+        left={
+          onBack ? (
+            <IconButton
+              onPress={onBack}
+              accessibilityLabel="Back to my requests"
+              icon={<Icon name="chevron-left" size={22} color={colors.text} />}
+              backgroundColor={colors.surface}
+              size={44}
+            />
+          ) : undefined
+        }
+      />
+    </View>
   );
 };
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
+  backRow: {
+    flexDirection: 'row',
+    marginTop: spacing.xs,
+  },
+  scrollFill: {
+    flex: 1,
+  },
   container: {
     flex: 1,
-    backgroundColor: '#1c2d40',
+    backgroundColor: 'transparent',
   },
   content: {
-    padding: 18,
-    paddingBottom: 40,
+    paddingHorizontal: layout.screenPadding,
   },
-  header: {
-    marginBottom: 16,
-  },
-  headerTitleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  kicker: {
-    color: '#81b1b3',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
+
+  // ── Live badge ──
   liveBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(74, 173, 131, 0.15)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 14,
+    gap: spacing.xs + 2,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: radius.pill,
+    backgroundColor: colors.successSubtle,
     borderWidth: 1,
-    borderColor: '#4aad83',
+    borderColor: colors.success,
   },
-  greenDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#4aad83',
-    marginRight: 6,
+  liveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: colors.success,
   },
   liveBadgeText: {
-    color: '#4aad83',
-    fontSize: 10,
-    fontWeight: '800',
+    ...typography.caption,
+    fontWeight: '700',
+    color: colors.success,
   },
-  title: {
-    color: '#ffffff',
-    fontSize: 22,
-    fontWeight: '800',
-  },
-  ticketId: {
-    color: '#81b1b3',
-    fontSize: 13,
-    fontWeight: '600',
-    marginTop: 2,
-  },
+
+  // ── Hero ──
   heroCard: {
-    backgroundColor: '#f38808',
-    borderRadius: 22,
-    padding: 20,
-    marginBottom: 16,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xxl,
+    borderWidth: 1.5,
+    padding: spacing.xl,
+    marginBottom: spacing.lg,
   },
   heroStatusLabel: {
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1,
-    marginBottom: 4,
+    ...typography.overline,
+    color: colors.textSecondary,
+  },
+  heroStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginTop: spacing.md,
+  },
+  heroIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   heroStatusValue: {
-    color: '#ffffff',
-    fontSize: 24,
-    fontWeight: '900',
-    marginBottom: 8,
+    ...typography.h1,
+    color: colors.text,
+    flex: 1,
   },
   heroDesc: {
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontSize: 14,
-    lineHeight: 20,
+    ...typography.body,
+    color: colors.textSecondary,
+    marginTop: spacing.lg,
   },
+  heroReason: {
+    ...typography.caption,
+    color: colors.textMuted,
+    marginTop: spacing.sm,
+  },
+  cancelBtn: {
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
+  },
+
+  // ── Tracker ──
   trackerCard: {
-    backgroundColor: '#2b435f',
-    borderRadius: 22,
-    padding: 20,
-    marginBottom: 16,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xxl,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: colors.border,
+    padding: spacing.xl,
+    marginBottom: spacing.lg,
   },
   trackerTitle: {
-    color: '#81b1b3',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-    marginBottom: 16,
+    ...typography.overline,
+    color: colors.textSecondary,
+    marginBottom: spacing.lg,
   },
   stageList: {
     gap: 0,
   },
   stageRow: {
     flexDirection: 'row',
-    minHeight: 48,
+    gap: spacing.lg,
   },
   stageIconCol: {
-    width: 40,
     alignItems: 'center',
-  },
-  stageNode: {
     width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    justifyContent: 'center',
+  },
+  stageIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: radius.pill,
+    backgroundColor: colors.bg,
+    borderWidth: 1.5,
+    borderColor: colors.border,
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  stageNodeDone: {
-    backgroundColor: '#4aad83',
-    borderColor: '#4aad83',
-  },
-  stageNodeCurrent: {
-    backgroundColor: '#f38808',
-    borderColor: '#ffffff',
-  },
-  stageIconText: {
-    fontSize: 14,
+    justifyContent: 'center',
   },
   stageConnector: {
     width: 2,
     flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    marginVertical: 2,
-  },
-  stageConnectorDone: {
-    backgroundColor: '#4aad83',
+    minHeight: 22,
+    backgroundColor: colors.border,
   },
   stageContentCol: {
     flex: 1,
-    paddingLeft: 12,
-    justifyContent: 'center',
-    paddingBottom: 16,
+    paddingBottom: spacing.xl,
+    paddingTop: spacing.xs + 2,
   },
   stageLabel: {
-    color: 'rgba(255, 255, 255, 0.5)',
-    fontSize: 14,
+    ...typography.body,
+    color: colors.textMuted,
+  },
+  stageLabelActive: {
+    color: colors.text,
     fontWeight: '700',
   },
-  stageLabelCurrent: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  stageLabelDone: {
-    color: '#81b1b3',
-  },
   activeTag: {
-    color: '#f38808',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-    marginTop: 2,
+    ...typography.caption,
+    fontWeight: '700',
+    color: colors.brand,
+    marginTop: spacing.xs,
   },
+
+  // ── Technician ──
   workerCard: {
-    backgroundColor: '#2b435f',
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 20,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: colors.border,
+    padding: spacing.xl,
+    marginBottom: spacing.lg,
   },
   workerCardTitle: {
-    color: '#81b1b3',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-    marginBottom: 12,
+    ...typography.overline,
+    color: colors.textSecondary,
+    marginBottom: spacing.lg,
   },
   workerRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.lg,
   },
   avatarBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(243, 136, 8, 0.2)',
-    justifyContent: 'center',
+    width: 48,
+    height: 48,
+    borderRadius: radius.pill,
+    backgroundColor: colors.brandSubtle,
+    borderWidth: 1,
+    borderColor: colors.brand,
     alignItems: 'center',
-    marginRight: 12,
-  },
-  avatarText: {
-    fontSize: 22,
+    justifyContent: 'center',
   },
   workerInfo: {
     flex: 1,
+    minWidth: 0,
   },
   workerName: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '800',
+    ...typography.h3,
+    color: colors.text,
+  },
+  workerMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + 2,
+    marginTop: spacing.xs,
   },
   workerMeta: {
-    color: '#81b1b3',
-    fontSize: 12,
-    marginTop: 2,
+    ...typography.caption,
+    color: colors.textSecondary,
+    flex: 1,
   },
+
+  // ── Dispatching ──
   dispatchingBox: {
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 20,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.xl,
+    marginBottom: spacing.lg,
   },
   dispatchingText: {
-    color: '#81b1b3',
-    fontSize: 13,
-    lineHeight: 18,
+    ...typography.body,
+    color: colors.textSecondary,
+    flex: 1,
   },
+
   newBookingBtn: {
-    backgroundColor: '#2b435f',
-    borderWidth: 1.5,
-    borderColor: '#f38808',
-    height: 52,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
+    marginTop: spacing.xs,
   },
-  newBookingBtnText: {
-    color: '#f38808',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-});
+}));

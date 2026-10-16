@@ -18,32 +18,54 @@ export interface SidebarProps {
   onRouteChange: (route: string) => void;
   collapsed: boolean;
   onToggleCollapsed: () => void;
-  footerSlot?: ReactNode;
-  userProfile?: {
-    fullName: string;
-    email: string;
-    role: string;
-    avatarUrl?: string;
-  };
-  onLogout?: () => void;
+  isMobile?: boolean;
+  isOpen?: boolean;
+  onClose?: () => void;
 }
+
+const SVGIcon = ({ children }: { children: React.ReactNode }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    {children}
+  </svg>
+);
+
+export const portalSections: SidebarSection[] = [
+  {
+    title: 'CUSTOMER PORTAL',
+    items: [
+      { id: 'browse-services', label: 'Browse Services', icon: <SVGIcon><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /><rect x="8" y="2" width="8" height="4" rx="1" ry="1" /></SVGIcon> },
+      { id: 'my-requests', label: 'My Requests', icon: <SVGIcon><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></SVGIcon> },
+      { id: 'my-subscription', label: 'Subscription', icon: <SVGIcon><rect width="20" height="14" x="2" y="5" rx="2" /><line x1="2" x2="22" y1="10" y2="10" /></SVGIcon> },
+    ],
+  },
+];
 
 export const sidebarSections: SidebarSection[] = [
   {
     title: 'CUSTOMER CARE',
     items: [
-      { id: 'dispatch-board', label: 'Dispatch Board', icon: '⌂' },
-      { id: 'active-roster', label: 'Active Roster', icon: '☰' },
+      { id: 'dispatch-board', label: 'Dispatch Board', icon: <SVGIcon><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" /><line x1="9" y1="3" x2="9" y2="18" /><line x1="15" y1="6" x2="15" y2="21" /></SVGIcon> },
+      { id: 'active-roster', label: 'Active Roster', icon: <SVGIcon><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></SVGIcon> },
     ],
   },
   {
     title: 'ADMINISTRATION',
     items: [
-      { id: 'workers', label: 'Workers', icon: '◫' },
-      { id: 'customers', label: 'Customers', icon: '◔' },
-      { id: 'service-catalog', label: 'Service Catalog', icon: '⚙' },
-      { id: 'subscriptions', label: 'Subscriptions', icon: '§' },
-      { id: 'financials', label: 'Financials', icon: '⟠' },
+      { id: 'workers', label: 'Workers', icon: <SVGIcon><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" /></SVGIcon> },
+      { id: 'customers', label: 'Customers', icon: <SVGIcon><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></SVGIcon> },
+      { id: 'service-catalog', label: 'Service Catalog', icon: <SVGIcon><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /><rect x="8" y="2" width="8" height="4" rx="1" ry="1" /></SVGIcon> },
+      { id: 'subscriptions', label: 'Subscriptions', icon: <SVGIcon><rect width="20" height="14" x="2" y="5" rx="2" /><line x1="2" x2="22" y1="10" y2="10" /></SVGIcon> },
+      { id: 'financials', label: 'Financials', icon: <SVGIcon><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></SVGIcon> },
     ],
   },
 ];
@@ -56,21 +78,11 @@ export function Sidebar({
   onRouteChange,
   collapsed,
   onToggleCollapsed,
-  footerSlot,
-  userProfile,
-  onLogout,
+  isMobile,
+  isOpen,
+  onClose,
 }: SidebarProps) {
-  const [isProfilePopoverOpen, setIsProfilePopoverOpen] = useState(false);
-  const sidebarWidth = collapsed ? 60 : 260;
-
-  const initials = userProfile?.fullName
-    ? userProfile.fullName
-        .split(' ')
-        .map((part) => part[0])
-        .slice(0, 2)
-        .join('')
-        .toUpperCase()
-    : 'U';
+  const sidebarWidth = collapsed ? 80 : 260;
 
   const renderNavButton = (
     key: string,
@@ -84,8 +96,8 @@ export function Sidebar({
       key={key}
       type="button"
       onClick={onClick}
-      title={title}
-      className={active ? 'active' : ''}
+      data-tooltip={title}
+      className={`sidebar-nav-btn ${active ? 'active' : ''} ${collapsed ? 'collapsed' : ''}`}
       aria-current={active ? 'page' : undefined}
       style={{
         ...styles.navButton,
@@ -93,17 +105,61 @@ export function Sidebar({
         ...(active ? styles.navButtonActive : undefined),
       }}
     >
-      <div style={{ ...styles.iconBox, ...(active ? styles.iconBoxActive : styles.iconBoxInactive) }}>{icon}</div>
+      <div
+        className="sidebar-icon-box"
+        style={{ ...styles.iconBox, ...(active ? styles.iconBoxActive : styles.iconBoxInactive) }}
+      >
+        {icon}
+      </div>
       {!collapsed && <span style={styles.navLabel}>{label}</span>}
     </button>
   );
 
+  const drawerStyles: CSSProperties = isMobile
+    ? {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        bottom: 0,
+        zIndex: 100000,
+        transform: isOpen ? 'translateX(0)' : 'translateX(-100%)',
+        transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        boxShadow: isOpen ? '0 0 24px rgba(0,0,0,0.5)' : 'none',
+      }
+    : {};
+
   return (
-    <aside style={{ ...styles.sidebar, width: sidebarWidth, padding: collapsed ? '12px' : '16px' }}>
-      <div style={styles.topBlock}>
+    <>
+      {isMobile && isOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            zIndex: 99999,
+            transition: 'opacity 0.3s',
+          }}
+          onClick={onClose}
+          aria-hidden="true"
+        />
+      )}
+      <aside
+        style={{
+          ...styles.sidebar,
+          width: sidebarWidth,
+          padding: collapsed ? '16px 0' : '16px',
+          alignItems: collapsed ? 'center' : 'stretch',
+          ...drawerStyles,
+        }}
+      >
+      <div style={{ ...styles.topBlock, ...(collapsed ? styles.topBlockCollapsed : undefined), width: '100%' }}>
         <button
           type="button"
           onClick={onToggleCollapsed}
+          className={`sidebar-nav-btn ${collapsed ? 'collapsed' : ''}`}
           style={{
             ...styles.navButton,
             ...styles.headerToggle,
@@ -112,11 +168,20 @@ export function Sidebar({
           }}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
-          <img
-            src={BrandLogo}
-            alt="Metro-Fix"
-            style={collapsed ? styles.brandLogoCollapsed : styles.brandLogoExpanded}
-          />
+          <div style={collapsed ? styles.brandBadgeCollapsed : styles.brandBadgeExpanded}>
+            <img
+              src={BrandLogo}
+              alt="Metro-Fix"
+              style={collapsed ? styles.brandLogoCollapsed : styles.brandLogoExpanded}
+            />
+          </div>
+
+          {!collapsed && (
+            <div style={styles.brandWordmark}>
+              <div style={styles.brandWordmarkTitle}>METRO-FIX</div>
+              <div style={styles.brandWordmarkSubtitle}>Facility control center</div>
+            </div>
+          )}
         </button>
 
         {!collapsed && (
@@ -157,94 +222,18 @@ export function Sidebar({
         </nav>
       </div>
 
-      <div style={styles.bottomBlock}>
-        {footerSlot && (
-          <div
-            style={{
-              ...styles.footerSlot,
-              ...(collapsed ? styles.footerButtonWrapCollapsed : styles.footerButtonWrapExpanded),
-            }}
-          >
-            {footerSlot}
-          </div>
-        )}
-
-        {/* User Profile Block at Bottom */}
-        {userProfile && (
-          <div style={styles.profileContainer}>
-            {/* Logout / View Profile Popover Menu */}
-            {isProfilePopoverOpen && (
-              <>
-                <div
-                  style={styles.popoverBackdrop}
-                  onClick={() => setIsProfilePopoverOpen(false)}
-                />
-                <div
-                  style={{
-                    ...styles.popoverMenu,
-                    ...(collapsed ? styles.popoverMenuCollapsed : styles.popoverMenuExpanded),
-                  }}
-                >
-                  <div style={styles.popoverHeader}>
-                    <div style={styles.popoverName}>{userProfile.fullName}</div>
-                    <div style={styles.popoverEmail}>{userProfile.email}</div>
-                  </div>
-                  <div style={styles.popoverDivider} />
-                  <button
-                    type="button"
-                    style={styles.popoverOption}
-                    onClick={() => {
-                      setIsProfilePopoverOpen(false);
-                      alert(`Profile Info:\nFull Name: ${userProfile.fullName}\nRole: ${userProfile.role}\nEmail: ${userProfile.email}`);
-                    }}
-                  >
-                    <span>👤</span>
-                    <span>View Profile</span>
-                  </button>
-                  <button
-                    type="button"
-                    style={{ ...styles.popoverOption, ...styles.popoverLogoutBtn }}
-                    onClick={() => {
-                      setIsProfilePopoverOpen(false);
-                      onLogout?.();
-                    }}
-                  >
-                    <span>🚪</span>
-                    <span>Logout</span>
-                  </button>
-                </div>
-              </>
-            )}
-
-            {/* Profile Trigger Button */}
-            <button
-              type="button"
-              onClick={() => setIsProfilePopoverOpen((prev) => !prev)}
-              title={collapsed ? `${userProfile.fullName} (${userProfile.role})` : undefined}
-              style={{
-                ...styles.profileBlock,
-                ...(collapsed ? styles.profileBlockCollapsed : styles.profileBlockExpanded),
-              }}
-            >
-              <div style={styles.avatarBox}>
-                {userProfile.avatarUrl ? (
-                  <img src={userProfile.avatarUrl} alt={userProfile.fullName} style={styles.avatarImg} />
-                ) : (
-                  <span style={styles.avatarInitials}>{initials}</span>
-                )}
-              </div>
-
-              {!collapsed && (
-                <div style={styles.profileTextWrapper}>
-                  <div style={styles.profileFullName}>{userProfile.fullName}</div>
-                  <div style={styles.profileRole}>{userProfile.role}</div>
-                </div>
-              )}
-            </button>
-          </div>
+      <div style={{ ...styles.bottomBlock, ...(collapsed ? { alignItems: 'center' } : undefined), width: '100%' }}>
+        {renderNavButton(
+          'settings',
+          'Settings',
+          <SVGIcon><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></SVGIcon>,
+          activeRoute === 'Settings',
+          () => onRouteChange('Settings'),
+          collapsed ? 'Settings' : undefined
         )}
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }
 
@@ -265,28 +254,67 @@ const styles: Record<string, CSSProperties> = {
   topBlock: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '14px',
+    gap: '12px',
     flexShrink: 0,
+  },
+  topBlockCollapsed: {
+    alignItems: 'center',
+    gap: '10px',
   },
   headerToggle: {
     display: 'flex',
     alignItems: 'center',
     gap: '12px',
-    minHeight: '60px',
+    minHeight: '72px',
     width: '100%',
     margin: 0,
-    padding: 0,
+    padding: '12px',
+    borderRadius: '22px',
+    background: 'rgba(255, 255, 255, 0.96)',
+    border: '1px solid rgba(16, 36, 38, 0.08)',
+    boxShadow: '0 14px 30px rgba(0, 0, 0, 0.18)',
   },
   headerToggleExpanded: {
     justifyContent: 'flex-start',
   },
   headerToggleCollapsed: {
     justifyContent: 'center',
+    width: '44px',
+    height: '44px',
+    minHeight: '44px',
+    padding: '0',
+    margin: '0 auto',
+    borderRadius: '12px',
+    background: 'transparent',
+    border: 'none',
+    boxShadow: 'none',
   },
-  iconBox: {
+  brandBadgeExpanded: {
+    width: '50px',
+    height: '50px',
+    borderRadius: '16px',
+    background: '#ffffff',
+    border: '1px solid rgba(16, 36, 38, 0.08)',
+    display: 'grid',
+    placeItems: 'center',
+    flexShrink: 0,
+    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.8)',
+  },
+  brandBadgeCollapsed: {
     width: '36px',
     height: '36px',
-    borderRadius: '12px',
+    borderRadius: '10px',
+    background: '#ffffff',
+    border: '1px solid rgba(16, 36, 38, 0.08)',
+    display: 'grid',
+    placeItems: 'center',
+    flexShrink: 0,
+    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.8)',
+  },
+  iconBox: {
+    width: '34px',
+    height: '34px',
+    borderRadius: '10px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -306,20 +334,41 @@ const styles: Record<string, CSSProperties> = {
     color: 'var(--sidebar-text)',
   },
   brandLogoExpanded: {
-    height: '40px',
-    width: 'auto',
+    height: '34px',
+    width: '34px',
     objectFit: 'contain',
   },
   brandLogoCollapsed: {
-    maxWidth: '40px',
-    height: 'auto',
+    width: '26px',
+    height: '26px',
     objectFit: 'contain',
+  },
+  brandWordmark: {
+    display: 'flex',
+    flexDirection: 'column',
+    minWidth: 0,
+  },
+  brandWordmarkTitle: {
+    fontSize: '0.98rem',
+    fontWeight: 800,
+    letterSpacing: '0.08em',
+    color: '#102426',
+    lineHeight: 1.1,
+    whiteSpace: 'nowrap',
+  },
+  brandWordmarkSubtitle: {
+    fontSize: '0.72rem',
+    fontWeight: 600,
+    letterSpacing: '0.02em',
+    color: '#4b6769',
+    lineHeight: 1.2,
+    whiteSpace: 'nowrap',
   },
   searchContainer: {
     display: 'flex',
     flexDirection: 'column',
     gap: '6px',
-    marginBottom: '16px',
+    marginBottom: '12px',
   },
   filterLabel: {
     fontSize: '0.75rem',
@@ -331,10 +380,11 @@ const styles: Record<string, CSSProperties> = {
   filterInput: {
     width: '100%',
     borderRadius: '12px',
-    border: '1px solid var(--border-subtle)',
-    background: 'var(--surface-strong)',
-    color: 'var(--color-text-primary, #000)',
-    caretColor: 'var(--color-text-primary, #000)',
+    // Sidebar is always dark regardless of theme — use sidebar-specific glass styling
+    border: '1px solid rgba(255, 255, 255, 0.12)',
+    background: 'rgba(255, 255, 255, 0.07)',
+    color: '#f8fbfd',
+    caretColor: '#f8fbfd',
     padding: '10px 12px',
     boxSizing: 'border-box',
     fontSize: '0.88rem',
@@ -346,16 +396,20 @@ const styles: Record<string, CSSProperties> = {
     overflowX: 'hidden',
     msOverflowStyle: 'none',
     scrollbarWidth: 'none',
+    width: '100%',
+    padding: 0,
   },
   nav: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '18px',
+    gap: '16px',
+    width: '100%',
   },
   sectionBlock: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '10px',
+    gap: '8px',
+    width: '100%',
   },
   sectionTitle: {
     color: 'var(--sidebar-accent)',
@@ -363,20 +417,22 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 800,
     textTransform: 'uppercase',
     letterSpacing: '0.12em',
-    paddingLeft: '62px',
+    // 10px (nav btn left-padding) + 36px (icon-box) + 12px (gap) = 58px
+    paddingLeft: '58px',
   },
   menuGroup: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '8px',
+    gap: '6px',
+    width: '100%',
   },
   navButton: {
     display: 'flex',
     alignItems: 'center',
     gap: '12px',
     width: '100%',
-    minHeight: '60px',
-    padding: '0',
+    minHeight: '52px',
+    padding: '0 10px',
     margin: 0,
     borderRadius: '14px',
     border: '1px solid transparent',
@@ -384,16 +440,22 @@ const styles: Record<string, CSSProperties> = {
     color: 'var(--sidebar-text)',
     textAlign: 'left',
     cursor: 'pointer',
+    transition: 'transform 140ms ease, background-color 140ms ease, box-shadow 140ms ease',
     boxSizing: 'border-box',
   },
   navButtonCollapsed: {
     justifyContent: 'center',
-    gap: 0,
+    width: '44px',
+    height: '44px',
+    minHeight: '44px',
     padding: '0',
-    margin: 0,
+    margin: '0 auto',
+    borderRadius: '12px',
+    gap: 0,
   },
   navButtonActive: {
     color: '#ffffff',
+    background: 'rgba(243, 136, 8, 0.14)',
   },
   navLabel: {
     color: 'currentColor',
@@ -403,9 +465,10 @@ const styles: Record<string, CSSProperties> = {
   bottomBlock: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '12px',
+    gap: '10px',
     flexShrink: 0,
-    paddingTop: '12px',
+    paddingTop: '10px',
+    borderTop: '1px solid rgba(255, 255, 255, 0.08)',
     position: 'relative',
   },
   footerSlot: {
@@ -426,8 +489,8 @@ const styles: Record<string, CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    margin: '0',
-    width: '100%',
+    margin: '0 auto',
+    width: '44px',
     padding: '0',
     boxSizing: 'border-box',
   },
@@ -440,7 +503,7 @@ const styles: Record<string, CSSProperties> = {
     alignItems: 'center',
     gap: '12px',
     width: '100%',
-    minHeight: '52px',
+    minHeight: '54px',
     padding: '6px 0',
     margin: 0,
     borderRadius: '14px',
@@ -452,9 +515,17 @@ const styles: Record<string, CSSProperties> = {
   },
   profileBlockExpanded: {
     justifyContent: 'flex-start',
+    padding: '6px 8px',
+    borderRadius: '12px',
   },
   profileBlockCollapsed: {
     justifyContent: 'center',
+    width: '44px',
+    height: '44px',
+    minHeight: '44px',
+    padding: '0',
+    margin: '0 auto',
+    borderRadius: '12px',
   },
   avatarBox: {
     width: '36px',
@@ -468,6 +539,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 800,
     fontSize: '0.92rem',
     flexShrink: 0,
+    boxShadow: '0 6px 14px rgba(0, 0, 0, 0.18)',
   },
   avatarImg: {
     width: '36px',
@@ -486,7 +558,7 @@ const styles: Record<string, CSSProperties> = {
     textAlign: 'left',
   },
   profileFullName: {
-    color: 'var(--text-primary)',
+    color: '#ffffff',
     fontWeight: 700,
     fontSize: '0.88rem',
     whiteSpace: 'nowrap',
@@ -494,8 +566,11 @@ const styles: Record<string, CSSProperties> = {
     textOverflow: 'ellipsis',
   },
   profileRole: {
-    color: 'var(--text-secondary)',
-    fontSize: '0.76rem',
+    color: 'rgba(255, 255, 255, 0.65)',
+    fontSize: '0.74rem',
+    fontWeight: 600,
+    textTransform: 'uppercase',
+    letterSpacing: '0.06em',
     whiteSpace: 'nowrap',
   },
   popoverBackdrop: {
@@ -508,11 +583,11 @@ const styles: Record<string, CSSProperties> = {
     background: 'transparent',
   },
   popoverMenu: {
-    backgroundColor: '#2b435f',
-    border: '1px solid var(--border-subtle)',
+    backgroundColor: '#1c2d40',
+    border: '1px solid rgba(255, 255, 255, 0.14)',
     borderRadius: '16px',
     padding: '12px',
-    boxShadow: '0 16px 36px rgba(0, 0, 0, 0.6)',
+    boxShadow: '0 16px 36px rgba(0, 0, 0, 0.65)',
     zIndex: 99999,
     display: 'flex',
     flexDirection: 'column',
@@ -526,7 +601,7 @@ const styles: Record<string, CSSProperties> = {
   },
   popoverMenuCollapsed: {
     position: 'fixed',
-    left: '72px',
+    left: '84px',
     bottom: '16px',
     width: '220px',
   },
@@ -539,7 +614,7 @@ const styles: Record<string, CSSProperties> = {
     fontSize: '0.92rem',
   },
   popoverEmail: {
-    color: '#81b1b3',
+    color: 'rgba(255, 255, 255, 0.7)',
     fontSize: '0.78rem',
     marginTop: '2px',
   },
@@ -557,15 +632,16 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: '10px',
     border: 'none',
     background: 'transparent',
-    color: 'var(--text-primary)',
+    color: '#f0f6fc',
     fontSize: '0.88rem',
     fontWeight: 600,
     textAlign: 'left',
     cursor: 'pointer',
   },
   popoverLogoutBtn: {
-    backgroundColor: 'rgba(243, 136, 8, 0.15)',
+    backgroundColor: 'rgba(243, 136, 8, 0.16)',
     color: '#f38808',
+    border: '1px solid rgba(243, 136, 8, 0.35)',
     fontWeight: 800,
     marginTop: '2px',
   },

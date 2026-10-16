@@ -1,4 +1,8 @@
+import * as dotenv from 'dotenv';
+dotenv.config();
+
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -7,33 +11,95 @@ import {
   WorkerEntity,
   CustomerEntity,
   ServiceRequestEntity,
+  ServiceCatalogEntity,
+  SubscriptionPlanEntity,
+  SubscriptionPaymentEntity,
+  AppSettingEntity,
+  AuditLogEntity,
 } from './entities';
 import { WorkersModule } from './workers/workers.module';
 import { JobsModule } from './jobs/jobs.module';
 import { CustomersModule } from './customers/customers.module';
+import { ServicesModule } from './services/services.module';
+import { SubscriptionsModule } from './subscriptions/subscriptions.module';
+import { FinancialsModule } from './financials/financials.module';
+import { AuthModule } from './auth/auth.module';
+import { JwtAuthGuard } from './auth/jwt-auth.guard';
+import { RolesGuard } from './auth/roles.guard';
+import { UploadsModule } from './uploads/uploads.module';
+import { SettingsModule } from './settings/settings.module';
+import { AuditModule } from './audit/audit.module';
+import { AdminModule } from './admin/admin.module';
+import { SeedService } from './common/seed.service';
 
 @Module({
   imports: [
     TypeOrmModule.forRoot({
-      type: 'postgres',
+      type: 'mssql',
       host: process.env.DB_HOST || 'localhost',
-      port: parseInt(process.env.DB_PORT || '5432', 10),
-      username: process.env.DB_USERNAME || 'postgres',
-      password: process.env.DB_PASSWORD || 'postgres',
-      database: process.env.DB_NAME || 'metrofix',
+      port: parseInt(process.env.DB_PORT || '1433', 10),
+      username: process.env.DB_USERNAME || 'sa',
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME || 'metrofix_db',
+      // A paused serverless database (Azure SQL free tier) can take a minute or more to wake: wait
+      // for it instead of failing the start-up. Defaults match the previous behaviour.
+      connectionTimeout: parseInt(process.env.DB_CONNECT_TIMEOUT_MS || '15000', 10),
+      retryAttempts: parseInt(process.env.DB_RETRY_ATTEMPTS || '9', 10),
+      retryDelay: parseInt(process.env.DB_RETRY_DELAY_MS || '3000', 10),
+      options: {
+        // Local SQL Server (docker) has a self-signed certificate and no encryption. A hosted
+        // database such as Azure SQL needs DB_ENCRYPT=true and TRUST_SERVER_CERTIFICATE=false.
+        trustServerCertificate: process.env.TRUST_SERVER_CERTIFICATE !== 'false',
+        encrypt: process.env.DB_ENCRYPT === 'true',
+      },
       entities: [
         UserEntity,
         WorkerEntity,
         CustomerEntity,
         ServiceRequestEntity,
+        ServiceCatalogEntity,
+        SubscriptionPlanEntity,
+        SubscriptionPaymentEntity,
+        AppSettingEntity,
+        AuditLogEntity,
       ],
-      synchronize: process.env.NODE_ENV !== 'production',
+      synchronize: process.env.DB_SYNCHRONIZE === 'true' || process.env.NODE_ENV !== 'production',
     }),
+    TypeOrmModule.forFeature([
+      UserEntity,
+      WorkerEntity,
+      CustomerEntity,
+      ServiceRequestEntity,
+      ServiceCatalogEntity,
+      SubscriptionPlanEntity,
+      SubscriptionPaymentEntity,
+      AppSettingEntity,
+      AuditLogEntity,
+    ]),
+    SettingsModule,
+    AuditModule,
+    AdminModule,
+    AuthModule,
+    UploadsModule,
     WorkersModule,
     JobsModule,
     CustomersModule,
+    ServicesModule,
+    SubscriptionsModule,
+    FinancialsModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    SeedService,
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard,
+    },
+  ],
 })
 export class AppModule {}
