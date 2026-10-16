@@ -333,6 +333,8 @@ page. Do not import `AdminWorkspace` from the `@metro-fix/ui` barrel; use `@metr
 
 ---
 
+Putting the system online on free tiers (Azure SQL, Render, Cloudflare Pages, mobile release builds) is covered step by step in [HOSTING.md](HOSTING.md).
+
 ## 12. Troubleshooting
 
 | Symptom | Fix |

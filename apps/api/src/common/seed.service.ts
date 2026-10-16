@@ -12,6 +12,7 @@ import {
   SubscriptionPaymentEntity,
 } from '../entities';
 import { CATALOG_SEEDS, PLAN_SEEDS } from './seed-data';
+import { staffPasswordFromEnv } from './staff-password';
 import {
   Role,
   SubscriptionTier,
@@ -94,6 +95,11 @@ export class SeedService implements OnApplicationBootstrap {
 
     const saltRounds = 10;
     const password = await bcrypt.hash('Demo123!', saltRounds);
+    // On a hosted system the admin and dispatcher get their own password (STAFF_INITIAL_PASSWORD)
+    // rather than the public demo one. It is applied when the account is created and never forced
+    // back afterwards, so a password changed in the app survives a restart.
+    const staffSecret = staffPasswordFromEnv(process.env.STAFF_INITIAL_PASSWORD);
+    const staffPassword = staffSecret ? await bcrypt.hash(staffSecret, saltRounds) : password;
 
     const usersData = [
       {
@@ -115,11 +121,11 @@ export class SeedService implements OnApplicationBootstrap {
       if (!user) {
         user = this.userRepository.create({
           ...data,
-          password,
+          password: staffPassword,
         });
         await this.userRepository.save(user);
         this.logger.log(`Created user: ${data.email}`);
-      } else {
+      } else if (!staffSecret) {
         user.password = password;
         await this.userRepository.save(user);
         this.logger.log(`Updated password for: ${data.email}`);

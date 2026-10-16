@@ -41,6 +41,11 @@ import { SeedService } from './common/seed.service';
       username: process.env.DB_USERNAME || 'sa',
       password: process.env.DB_PASSWORD,
       database: process.env.DB_NAME || 'metrofix_db',
+      // A paused serverless database (Azure SQL free tier) can take a minute or more to wake: wait
+      // for it instead of failing the start-up. Defaults match the previous behaviour.
+      connectionTimeout: parseInt(process.env.DB_CONNECT_TIMEOUT_MS || '15000', 10),
+      retryAttempts: parseInt(process.env.DB_RETRY_ATTEMPTS || '9', 10),
+      retryDelay: parseInt(process.env.DB_RETRY_DELAY_MS || '3000', 10),
       options: {
         // Local SQL Server (docker) has a self-signed certificate and no encryption. A hosted
         // database such as Azure SQL needs DB_ENCRYPT=true and TRUST_SERVER_CERTIFICATE=false.

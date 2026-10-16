@@ -1,0 +1,61 @@
+# Render Blueprint for the METRO-FIX API. See HOSTING.md for the full walkthrough.
+#
+# Secrets are listed with `sync: false`: Render asks for their values in the dashboard when the
+# Blueprint is created, so none of them are stored in this repository.
+services:
+  - type: web
+    name: metrofix-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile.api
+    dockerContext: .
+    plan: free
+    region: singapore
+    # Cheap liveness check that does not touch the database (a free serverless database must be
+    # allowed to sleep).
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # --- Database (Azure SQL) ---
+      - key: DB_HOST
+        sync: false # <server>.database.windows.net
+      - key: DB_NAME
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_PORT
+        value: '1433'
+      - key: DB_ENCRYPT
+        value: 'true'
+      - key: TRUST_SERVER_CERTIFICATE
+        value: 'false'
+      # Creates and updates tables from the entities. Fine while the schema is still changing;
+      # move to migrations before real customer data.
+      - key: DB_SYNCHRONIZE
+        value: 'true'
+      # A paused free-tier database can take a minute or more to wake: wait for it.
+      - key: DB_CONNECT_TIMEOUT_MS
+        value: '90000'
+      - key: DB_RETRY_ATTEMPTS
+        value: '30'
+      - key: DB_RETRY_DELAY_MS
+        value: '5000'
+      # Each check is a database query; a longer interval lets the free database sleep sooner.
+      - key: OFFER_SWEEP_INTERVAL_SECONDS
+        value: '60'
+
+      # --- Authentication ---
+      - key: JWT_SECRET
+        generateValue: true
+      # Password for the seeded admin and dispatcher accounts (12+ characters, letters and numbers).
+      # Required in production; the API refuses to start without it.
+      - key: STAFF_INITIAL_PASSWORD
+        sync: false
+
+      # --- Browsers allowed to call the API (comma separated; the two website addresses) ---
+      - key: CORS_ORIGINS
+        sync: false

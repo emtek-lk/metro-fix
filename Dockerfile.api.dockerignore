@@ -1,0 +1,17 @@
+# Applies only to Dockerfile.api (BuildKit reads <Dockerfile>.dockerignore), so local development
+# builds are unaffected. Keep the build context to what the API image actually copies.
+*
+!package.json
+!package-lock.json
+!apps/*/package.json
+!packages/*/package.json
+!apps/api
+!packages/core-types
+!packages/ts-config
+
+**/node_modules
+**/dist
+**/.env
+**/.env.*
+apps/api/uploads
+apps/api/test
