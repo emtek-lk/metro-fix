@@ -42,8 +42,10 @@ import { SeedService } from './common/seed.service';
       password: process.env.DB_PASSWORD,
       database: process.env.DB_NAME || 'metrofix_db',
       options: {
-        trustServerCertificate: true,
-        encrypt: false,
+        // Local SQL Server (docker) has a self-signed certificate and no encryption. A hosted
+        // database such as Azure SQL needs DB_ENCRYPT=true and TRUST_SERVER_CERTIFICATE=false.
+        trustServerCertificate: process.env.TRUST_SERVER_CERTIFICATE !== 'false',
+        encrypt: process.env.DB_ENCRYPT === 'true',
       },
       entities: [
         UserEntity,
