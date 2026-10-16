@@ -62,8 +62,14 @@ unchanged: `compose.yml` keeps using the plain `Dockerfile`.
 1. Push the code to GitHub (Render builds what is on GitHub, not your computer).
 2. At render.com sign in with GitHub and allow it to see the repository (an organisation owner may need to
    approve it).
-3. **New + > Blueprint**, pick the repository and the branch to deploy. Render reads `render.yaml` and asks for
-   the values marked `sync: false`:
+3. **Create the service.** Render asks for a payment card before it will create a Blueprint, so on a
+   card-free account use **New + > Web Service** and copy the settings from `render.yaml` by hand:
+   Language **Docker**, branch to deploy (not `main` until it contains `Dockerfile.api`), region
+   **Singapore**, instance type **Free**; under Advanced: Dockerfile path `./Dockerfile.api`, build
+   context `.`, health check path `/health`, auto-deploy on; and every environment variable listed in
+   `render.yaml` (use *Generate* for `JWT_SECRET`). With a card on file you can instead use
+   **New + > Blueprint** and Render fills all of this from `render.yaml`, asking only for the values marked
+   `sync: false`:
 
    | Variable | Value |
    |---|---|

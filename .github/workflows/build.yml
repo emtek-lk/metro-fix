@@ -21,6 +21,10 @@ jobs:
           node-version: 22
           cache: 'npm'
 
+      # The repo requires npm ^9.2.0 (devEngines); Node 22 ships npm 10, which refuses to run.
+      - name: Use npm 9
+        run: npm install -g npm@9.9.4
+
       - name: Install Dependencies
         run: npm ci
 
