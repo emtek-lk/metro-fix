@@ -1,4 +1,4 @@
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Base application theme. -->
     <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
@@ -6,6 +6,12 @@
         <item name="android:editTextBackground">@drawable/rn_edit_text_material</item>
         <!-- Shown behind the splash and before React draws; follows light / dark. -->
         <item name="android:windowBackground">@color/splash_background</item>
+        <!--
+          The app draws its own light and dark themes (Profile > Appearance). Without this, a phone's
+          automatic dark mode (Xiaomi MIUI, Android 10+ "force dark") can darken the app again after
+          the user picked Light.
+        -->
+        <item name="android:forceDarkAllowed" tools:targetApi="q">false</item>
     </style>
 
 </resources>

@@ -1,3 +1,4 @@
+import { withAppFont } from '../theme/fonts';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
@@ -114,7 +115,7 @@ export const LocationMapPicker: React.FC<LocationMapPickerProps> = ({ value, onC
         <View style={s.searchBox}>
           <Icon name="search" size={15} color={colors.textMuted} />
           <TextInput
-            style={s.searchInput}
+            style={withAppFont(s.searchInput)}
             value={query}
             onChangeText={setQuery}
             placeholder="Search an address or place"
