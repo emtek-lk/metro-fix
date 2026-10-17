@@ -7,7 +7,7 @@ AI agents should use this when troubleshooting startup failures.
 |---|---|---|
 | API | NestJS + SQL Server, REST and live updates | http://localhost:3000 |
 | Customer website | React + Vite, customers request and track work | http://metrofix.localhost:5173 |
-| Staff website | Same build, staff only: dispatch, admin, settings | http://admin.metrofix.localhost:5173 |
+| Staff website | Same build, staff only: dispatch, admin, settings | http://admin-metrofix.localhost:5173 |
 | Mobile apps | Expo / React Native: technicians (and a customer app) | Metro on :8081, simulators or devices |
 | Database | SQL Server 2022 in Docker | localhost:1433 |
 
@@ -87,10 +87,10 @@ npm run dev --workspace apps/web        # Vite on :5173, listening on all addres
 | Open | You get | Sign in with |
 |---|---|---|
 | http://metrofix.localhost:5173 | **Customer website** (Services, Requests, Plan, Account). Phone layout in a narrow window, desktop layout in a wide one. | `marcus@residences.lk` (customer) |
-| http://admin.metrofix.localhost:5173 | **Staff website**: Dispatch Board, Active Roster, Workers, Customers, Service Catalog, Subscriptions, Financials, Settings. | `admin@demo.local` or `dispatch@demo.local` |
+| http://admin-metrofix.localhost:5173 | **Staff website**: Dispatch Board, Active Roster, Workers, Customers, Service Catalog, Subscriptions, Financials, Settings. | `admin@demo.local` or `dispatch@demo.local` |
 | http://localhost:5173 | Both (development shortcut): the role you sign in with decides what you see. | any web account |
 
-Chrome, Edge and Firefox resolve `*.localhost` on their own. **Safari does not**: add `127.0.0.1 metrofix.localhost admin.metrofix.localhost` to `/etc/hosts`.
+Chrome, Edge and Firefox resolve `*.localhost` on their own. **Safari does not**: add `127.0.0.1 metrofix.localhost admin-metrofix.localhost` to `/etc/hosts`.
 Each address keeps its own sign-in. Password for every demo account: `Demo123!`.
 
 ---
@@ -257,7 +257,7 @@ curl -s http://localhost:3000/financials/summary -H "Authorization: Bearer $TOKE
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000/jobs                      # 401 without a token
 ```
 
-Then open http://metrofix.localhost:5173 and http://admin.metrofix.localhost:5173 and sign in as in section 4.
+Then open http://metrofix.localhost:5173 and http://admin-metrofix.localhost:5173 and sign in as in section 4.
 
 ---
 
@@ -268,12 +268,16 @@ is written into the code.
 
 | Address | Serves |
 |---|---|
-| `admin.<anything>` (first label is `admin`) | The **staff** site: dispatch, admin, settings. Customer accounts are turned away with a link to the customer site. |
+| `admin-<site>` or `admin.<site>` (first label is `admin-...` or exactly `admin`) | The **staff** site: dispatch, admin, settings. Customer accounts are turned away with a link to the customer site. |
 | any other real hostname | The **customer** site: browse services, requests, plan, account. Staff accounts are turned away with a link to the staff site. |
 | plain `localhost`, an IP, a single-word host | Both, as before (development). |
 
-Examples: `metrofix.example.lk` is customers and `admin.metrofix.example.lk` is staff; locally
-`metrofix.localhost:5173` and `admin.metrofix.localhost:5173`.
+Two naming styles are recognised. The **flat** style (`dash`) is the one this project uses, locally and in
+production: `metrofix.example.lk` (customers), `admin-metrofix.example.lk` (staff), `api-metrofix.example.lk`
+(API). Every name is one level below the domain, so a free wildcard certificate (Cloudflare's, for example)
+covers all of them. The older **dot** style (`admin.metrofix.example.lk`, `api.metrofix.example.lk`) still works;
+it is the default when `VITE_HOST_STYLE` is not set. Locally: `metrofix.localhost:5173` and
+`admin-metrofix.localhost:5173` (`admin.metrofix.localhost:5173` also works).
 
 ### Trying it locally
 
@@ -281,26 +285,28 @@ Chrome, Edge and Firefox resolve `*.localhost` to your own machine, so no hosts-
 
 ```
 http://metrofix.localhost:5173         customer site
-http://admin.metrofix.localhost:5173   staff site
+http://admin-metrofix.localhost:5173   staff site
 http://localhost:3000                  API (both sites use it)
 ```
 
-Safari does not resolve `*.localhost`; add `127.0.0.1 metrofix.localhost admin.metrofix.localhost` to `/etc/hosts`.
+Safari does not resolve `*.localhost`; add `127.0.0.1 metrofix.localhost admin-metrofix.localhost` to `/etc/hosts`.
 Each address keeps its own sign-in, so signing in as a customer on one never signs you in on the other.
 
 ### Settings that change the behaviour
 
 | Where | Variable | Meaning |
 |---|---|---|
-| web build | `VITE_API_URL` | Full API address. Default: `http://localhost:3000` on localhost and `*.localhost`, `api.<site>` elsewhere (both `metrofix.example.lk` and `admin.metrofix.example.lk` use `api.metrofix.example.lk`). |
+| web build | `VITE_API_URL` | Full API address. Default: `http://localhost:3000` on localhost and `*.localhost`, otherwise next to the site: `api.<site>` (dot style) or `api-<site>` (dash style), the same for the customer and staff names. |
+| web build | `VITE_HOST_STYLE` | `dash` (`admin-<site>`, `api-<site>`) or `dot` (`admin.<site>`, `api.<site>`, the default). Both are recognised when a page is opened; this chooses which one is built for the other site's link and the API address. `apps/web/.env.development` sets `dash`. |
 | web build | `VITE_ADMIN_SUBDOMAIN` | The label that marks the staff site (default `admin`). |
+| web build | `VITE_ADMIN_SITE_URL` / `VITE_CUSTOMER_SITE_URL` | Full address of the other site, only if neither style fits. |
 | web build | `VITE_SURFACE` | Force `admin`, `customer` or `any` regardless of the address. |
-| API | `CORS_ORIGINS` | Comma-separated browser origins allowed to call the API in production, e.g. `https://metrofix.example.lk,https://admin.metrofix.example.lk`. `*` stands for one hostname label (`https://*.metrofix.example.lk`). If unset in production, no browser origin is allowed (the native apps are unaffected). Development always also allows localhost and `*.localhost`. |
+| API | `CORS_ORIGINS` | Comma-separated browser origins allowed to call the API in production, e.g. `https://metrofix.example.lk,https://admin-metrofix.example.lk`. `*` stands for one hostname label (`https://*.metrofix.example.lk`). If unset in production, no browser origin is allowed (the native apps are unaffected). Development always also allows localhost and `*.localhost`. |
 
 ### Going live on your own domain
 
-1. **DNS** (wherever the domain is managed): create records for `metrofix`, `admin.metrofix` and `api.metrofix`
-   (or one wildcard `*.metrofix` plus `metrofix`). Use **A** records pointing at your server's IP, or **CNAME**
+1. **DNS** (wherever the domain is managed): create records for `metrofix`, `admin-metrofix` and `api-metrofix`
+   (flat style) or `metrofix`, `admin.metrofix` and `api.metrofix` (dot style). Use **A** records pointing at your server's IP, or **CNAME**
    records pointing at the target your host gives you. A CNAME cannot be placed on a bare domain.
 2. **Build the website:** `npm run build --workspace apps/web` (the `dist` folder is plain static files; the same build serves both sites).
 3. **Run the API** in production mode on an internal port (3000) with `NODE_ENV=production`, `CORS_ORIGINS`, `JWT_SECRET`,
@@ -308,12 +314,12 @@ Each address keeps its own sign-in, so signing in as a customer on one never sig
 4. **A reverse proxy** receives all three names on ports 80 and 443, handles HTTPS, and routes by hostname. Only the proxy is public. Example (Caddy, which also fetches certificates automatically):
 
 ```
-metrofix.example.lk, admin.metrofix.example.lk {
+metrofix.example.lk, admin-metrofix.example.lk {
     root * /srv/metrofix-web
     try_files {path} /index.html
     file_server
 }
-api.metrofix.example.lk {
+api-metrofix.example.lk {
     reverse_proxy api:3000      # also carries the live-update websocket
 }
 ```
@@ -321,7 +327,7 @@ api.metrofix.example.lk {
 The same with Nginx: one `server` block per name, `root` + `try_files $uri /index.html` for the two website names, and
 `proxy_pass http://api:3000` with `proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade";` for the API.
 
-5. **Check:** the customer name shows the customer site, the `admin.` name shows the staff sign-in without a Register tab, signing in
+5. **Check:** the customer name shows the customer site, the `admin-` name shows the staff sign-in without a Register tab, signing in
    with the wrong audience shows "This is the staff/customer site", and the browser console shows no CORS errors.
 
 ### Staff screens load on demand

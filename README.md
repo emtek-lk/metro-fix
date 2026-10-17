@@ -34,7 +34,7 @@ cd apps/mobile && npm run dev                   # Metro for the mobile apps (pre
 | Open | For |
 |---|---|
 | http://metrofix.localhost:5173 | **Customer website** (sign in as `marcus@residences.lk`) |
-| http://admin.metrofix.localhost:5173 | **Staff website** (`admin@demo.local` or `dispatch@demo.local`) |
+| http://admin-metrofix.localhost:5173 | **Staff website** (`admin@demo.local` or `dispatch@demo.local`) |
 | iOS simulator / Android emulator / Expo web | **Mobile apps** (`worker1@demo.local` technician, or a customer) |
 
 Every demo account uses the password `Demo123!` (full list in API.md). The database is **SQL Server**, not Postgres.

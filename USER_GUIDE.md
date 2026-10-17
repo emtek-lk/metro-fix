@@ -106,7 +106,7 @@ Administrators manage system entities, customer profiles, service catalogs, and 
 
 Everything needed to run the API, the customer website, the staff website and the mobile apps (iOS, Android and the browser preview) is in **[SETUP.md](SETUP.md)**: prerequisites, first-time setup, Docker, the local addresses for the two websites, the mobile apps, demo accounts, environment variables, tests and troubleshooting.
 
-In short: `docker compose up -d`, then open `http://metrofix.localhost:5173` (customers) or `http://admin.metrofix.localhost:5173` (staff) and sign in with a demo account (password `Demo123!`). The API creates the tables and the demo data itself when it starts; there is nothing to seed by hand.
+In short: `docker compose up -d`, then open `http://metrofix.localhost:5173` (customers) or `http://admin-metrofix.localhost:5173` (staff) and sign in with a demo account (password `Demo123!`). The API creates the tables and the demo data itself when it starts; there is nothing to seed by hand.
 
 ## 5a. Settings (sidebar, bottom)
 
@@ -124,7 +124,7 @@ Changes take effect immediately. Each save is recorded in the audit log.
 
 ## 5b. Two websites
 
-Customers use the **customer website** (for example `metrofix.<your-domain>`); staff use the **staff website** (`admin.metrofix.<your-domain>`). Signing in on the wrong one shows a page with a link to the right one. On a phone the customer website has a tab bar along the bottom (Services, Requests, Plan, Account); on a computer it has links along the top. Technicians use the mobile app, not the website.
+Customers use the **customer website** (for example `metrofix.<your-domain>`); staff use the **staff website** (`admin-metrofix.<your-domain>`). Signing in on the wrong one shows a page with a link to the right one. On a phone the customer website has a tab bar along the bottom (Services, Requests, Plan, Account); on a computer it has links along the top. Technicians use the mobile app, not the website.
 
 ## 6. Customers: subscription and requests
 
