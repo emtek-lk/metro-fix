@@ -50,3 +50,6 @@ coverage/
 
 # user uploads (job photos)
 apps/api/uploads/
+
+# Private infrastructure notes (identifiers, access): keep out of the public repository
+docs/private/

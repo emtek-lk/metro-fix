@@ -1,5 +1,9 @@
 # Hosting METRO-FIX (free tiers)
 
+> What is deployed right now, the DNS records and every setting are kept in [docs/INFRASTRUCTURE.md](docs/INFRASTRUCTURE.md);
+> problems and routine tasks in [docs/RUNBOOK.md](docs/RUNBOOK.md); rebuilding or moving in [docs/MIGRATION.md](docs/MIGRATION.md).
+> This file is the first-time walkthrough.
+
 Walkthrough for putting the system online without paying: **Azure SQL** (database), **Render** (API),
 **Cloudflare Pages** (the two websites) and the **mobile apps** pointed at the hosted API. Do the parts in
 this order; each needs the one before it. Free-tier limits change, so check each provider's current terms.
@@ -25,8 +29,7 @@ seconds and 32 GB a month) and **Auto-pause the database until next month** when
 - Server login: **SQL authentication** (the API connects with a username and password).
 - Networking: public endpoint; add a firewall rule for your own IP (to test from your computer). Leave
   "Allow Azure services" off: Render is not Azure. Render's addresses are added in part 2.
-- Note the **database name**: it is whatever you typed (for example `metro-fix-dev-db`), not the
-  `metrofix_db` used locally.
+- Note the **database name**: it is whatever you typed when creating it, not the `metrofix_db` used locally.
 
 | Azure shows | API variable |
 |---|---|
