@@ -1,5 +1,6 @@
 import React from 'react';
 import { Text as RNText, type TextProps } from 'react-native';
+import { withAppFont } from '../../theme/fonts';
 
 /**
  * Largest factor the system text size may scale our text by. Beyond this the fixed-width layouts
@@ -13,8 +14,8 @@ export const MAX_FONT_SCALE = 1.5;
  * cannot do this: React 19 ignores it on function components.)
  */
 export const Text = React.forwardRef<RNText, TextProps>(function AppText(
-  { maxFontSizeMultiplier = MAX_FONT_SCALE, ...props },
+  { maxFontSizeMultiplier = MAX_FONT_SCALE, style, ...props },
   ref,
 ) {
-  return <RNText ref={ref} maxFontSizeMultiplier={maxFontSizeMultiplier} {...props} />;
+  return <RNText ref={ref} maxFontSizeMultiplier={maxFontSizeMultiplier} style={withAppFont(style)} {...props} />;
 });

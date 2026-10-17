@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { withAppFont } from '../../theme/fonts';
 import { View, TextInput, StyleSheet, StyleProp, ViewStyle, type TextInputProps } from 'react-native';
 import { Text } from './AppText';
 import { colors } from '../../theme/colors';
@@ -69,7 +70,7 @@ export const Input: React.FC<InputProps> = ({
           ref={inputRef}
           multiline={multiline}
           placeholderTextColor={colors.textMuted}
-          style={[styles.input, multiline && styles.inputMultiline]}
+          style={withAppFont([styles.input, multiline && styles.inputMultiline])}
           onFocus={(e) => {
             setFocused(true);
             inputProps.onFocus?.(e);

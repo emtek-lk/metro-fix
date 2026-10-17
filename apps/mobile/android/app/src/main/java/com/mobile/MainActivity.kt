@@ -1,4 +1,5 @@
 package com.mobile
+import android.os.Build
 import android.os.Bundle
 import expo.modules.ReactActivityDelegateWrapper
 
@@ -15,6 +16,11 @@ class MainActivity : ReactActivity() {
    */
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(null)
+    // The app has its own light / dark themes; keep the phone's automatic dark mode (Xiaomi MIUI and
+    // Android 10+ "force dark") from darkening it again after the user picks Light.
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+      window.decorView.isForceDarkAllowed = false
+    }
   }
 
   /**

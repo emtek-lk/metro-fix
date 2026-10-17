@@ -9,7 +9,7 @@ this order; each needs the one before it. Free-tier limits change, so check each
 | 1 | Azure SQL Database (free offer) | written |
 | 2 | Render: the API | written |
 | 3 | Cloudflare Pages: customer and admin websites | written |
-| 4 | Mobile apps against the hosted API | to write |
+| 4 | Mobile apps against the hosted API | in progress |
 
 ```
  customer site ─┐                         ┌─ Azure SQL (free, pauses when idle)
@@ -184,3 +184,40 @@ the listed origins. Beyond that: delete a DNS record when you delete the service
 can be claimed by someone else); keep the staff password strong (accounts lock after repeated failures); the
 demo customer and worker accounts still use `Demo123!`, so change or remove them before real use; and consider
 putting Cloudflare Access (free for small teams) in front of the staff site.
+
+## 4. Mobile apps against the hosted API
+
+The apps read their API address from `EXPO_PUBLIC_API_URL`, fixed when the JavaScript is bundled.
+
+| Build | Reads | Address |
+|---|---|---|
+| Debug (Metro, simulators, `npm run ios` / `android`) | `apps/mobile/.env` (git-ignored) | your local API |
+| **Release** (Android `assembleRelease`, iOS Release / Archive) | `apps/mobile/.env.production` (committed) | `https://api-metrofix.vanguardprotection.lk` |
+
+To try the hosted API from a debug build without editing files:
+`EXPO_PUBLIC_API_URL=https://api-metrofix.vanguardprotection.lk npx react-native start --reset-cache`.
+
+**Android release APK:** `npm run build:android:release` in `apps/mobile` (npm 9), or the Gradle command inside that
+script. Output: `apps/mobile/android/app/build/outputs/apk/release/app-release.apk`.
+
+- About **27 MB**, down from about 83 MB: it contains the arm64 native libraries only (all current phones and
+  Apple-silicon emulators; the default build carries four CPU types, 68 MB of it), and release builds shrink
+  the Java/Kotlin code and unused resources (R8). Debug builds are unchanged.
+- Old 32-bit-only phones and Intel emulators cannot install it. For those, build with
+  `-PreactNativeArchitectures=armeabi-v7a,arm64-v8a,x86_64` (a larger file).
+- Signed with the debug key: fine for installing on your own devices and sharing with testers, not for the
+  Play Store (that needs your own keystore, and an app bundle instead of an APK).
+- `android/app/proguard-rules.pro` keeps the Expo classes that are looked up by name. Without it the shrinker
+  removes `RNHeadlessAppLoader`, and background location tracking could not start the app headlessly.
+  If you add a native library and something works in debug but fails in release, a missing keep rule is the
+  first suspect (look for `ClassNotFoundException` in `adb logcat`).
+- **Changing `.env.production`:** Gradle does not notice env files, so it reuses the old bundle. The script above
+  forces the JavaScript bundle to be rebuilt; if you run Gradle yourself, add
+  `:app:createBundleReleaseJsAndAssets --rerun`.
+- Release builds run with no Metro server; the debug-only quick sign-in buttons are not shown.
+
+iOS: archive the `mobile` scheme in Xcode (Release); installing on a device for more than 7 days needs a paid
+Apple developer account. Not built yet.
+
+Free-tier note: the first request after the API has been idle takes 30 to 60 seconds (the API and the database
+wake up), so the first sign-in on a release build may look stuck; it is not.
