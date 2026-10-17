@@ -2,6 +2,7 @@ import {
   counterpartHost,
   detectSurface,
   resolveApiBase,
+  resolveSiteUrl,
   surfaceAllowsRole,
   Role,
 } from '@metro-fix/core-types';
@@ -50,6 +51,66 @@ describe('the other site, for "go to the right place" links', () => {
 
   it('has no counterpart for plain localhost', () => {
     expect(counterpartHost('localhost:5173', 'admin')).toBeNull();
+  });
+});
+
+describe('the other site, with names that do not follow admin.<site>', () => {
+  const page = { protocol: 'https:', host: 'metrofix.example.lk' };
+
+  it('derives it by the admin.<site> pattern when nothing is configured', () => {
+    expect(resolveSiteUrl(page, 'admin')).toBe('https://admin.metrofix.example.lk');
+    expect(resolveSiteUrl({ protocol: 'https:', host: 'admin.metrofix.example.lk' }, 'customer')).toBe('https://metrofix.example.lk');
+    expect(resolveSiteUrl({ protocol: 'http:', host: 'localhost:5173' }, 'admin')).toBeNull();
+  });
+
+  it('uses a configured address instead, without a trailing slash', () => {
+    expect(resolveSiteUrl(page, 'admin', { adminSiteUrl: 'https://admin-metrofix.example.lk/' })).toBe('https://admin-metrofix.example.lk');
+    expect(
+      resolveSiteUrl({ protocol: 'https:', host: 'admin-metrofix.example.lk' }, 'customer', { customerSiteUrl: ' https://metrofix.example.lk ' }),
+    ).toBe('https://metrofix.example.lk');
+  });
+
+  it('ignores a blank setting', () => {
+    expect(resolveSiteUrl(page, 'admin', { adminSiteUrl: '  ' })).toBe('https://admin.metrofix.example.lk');
+  });
+});
+
+describe('dash-style names: admin-<site> and api-<site>', () => {
+  const secure = (hostname: string) => ({ protocol: 'https:', hostname });
+
+  it('recognises admin-<site> as the staff site, alongside admin.<site>', () => {
+    expect(detectSurface('admin-metrofix.example.lk')).toBe('admin');
+    expect(detectSurface('admin-metrofix.localhost')).toBe('admin');
+    expect(detectSurface('ADMIN-Metrofix.example.lk')).toBe('admin');
+    expect(detectSurface('metrofix.example.lk')).toBe('customer');
+    expect(detectSurface('admin.metrofix.example.lk')).toBe('admin');
+  });
+
+  it('does not mistake a customer name that merely starts with "admin"', () => {
+    expect(detectSurface('administration.example.lk')).toBe('customer');
+    expect(detectSurface('admin-.example.lk')).toBe('customer');
+  });
+
+  it('finds the other site in either direction, keeping the port', () => {
+    expect(counterpartHost('admin-metrofix.example.lk', 'customer')).toBe('metrofix.example.lk');
+    expect(counterpartHost('admin-metrofix.localhost:5173', 'customer')).toBe('metrofix.localhost:5173');
+    expect(counterpartHost('metrofix.localhost:5173', 'admin', { hostStyle: 'dash' })).toBe('admin-metrofix.localhost:5173');
+    expect(counterpartHost('metrofix.example.lk', 'admin', { hostStyle: 'dash' })).toBe('admin-metrofix.example.lk');
+    expect(counterpartHost('admin-metrofix.example.lk', 'admin', { hostStyle: 'dash' })).toBe('admin-metrofix.example.lk');
+    // Without a configured style the staff address is still built the dot way.
+    expect(counterpartHost('metrofix.example.lk', 'admin')).toBe('admin.metrofix.example.lk');
+  });
+
+  it('puts the API at api-<site> for a staff site named that way, or when the style is configured', () => {
+    expect(resolveApiBase(secure('admin-metrofix.example.lk'))).toBe('https://api-metrofix.example.lk');
+    expect(resolveApiBase(secure('metrofix.example.lk'), { hostStyle: 'dash' })).toBe('https://api-metrofix.example.lk');
+    expect(resolveApiBase(secure('admin-metrofix.example.lk'), { hostStyle: 'dash' })).toBe('https://api-metrofix.example.lk');
+    expect(resolveApiBase(secure('metrofix.example.lk'))).toBe('https://api.metrofix.example.lk');
+    expect(resolveApiBase(secure('admin.metrofix.example.lk'), { hostStyle: 'dash' })).toBe('https://api-metrofix.example.lk');
+  });
+
+  it('still uses port 3000 of this machine for local dash-style names', () => {
+    expect(resolveApiBase({ protocol: 'http:', hostname: 'admin-metrofix.localhost', port: '5173' }, { hostStyle: 'dash' })).toBe('http://localhost:3000');
   });
 });
 

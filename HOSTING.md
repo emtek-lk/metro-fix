@@ -8,7 +8,7 @@ this order; each needs the one before it. Free-tier limits change, so check each
 |---|---|---|
 | 1 | Azure SQL Database (free offer) | written |
 | 2 | Render: the API | written |
-| 3 | Cloudflare Pages: customer and admin websites | to write |
+| 3 | Cloudflare Pages: customer and admin websites | written |
 | 4 | Mobile apps against the hosted API | to write |
 
 ```
@@ -98,3 +98,89 @@ unchanged: `compose.yml` keeps using the plain `Dockerfile`.
 
 **Building the image yourself** (to test before deploying):
 `docker build -f Dockerfile.api -t metrofix-api .` then run it with the variables above in an env file.
+
+## 3. Cloudflare Pages: the customer and admin websites
+
+The web app is one codebase that serves two audiences. Its API address and audience are fixed **at build
+time** (`VITE_API_URL`, `VITE_SURFACE`), so each website is its own Pages project built from the same repo.
+
+Create two projects, **Workers & Pages > Create > Pages > Connect to Git** (if the page pushes you to
+Workers, use the "Looking to deploy Pages?" link), repository `metro-fix`, production branch `main`:
+
+| Setting | Customer site | Admin site |
+|---|---|---|
+| Project name | `metrofix-customer` | `metrofix-admin` |
+| Framework preset | None | None |
+| Build command | see below | see below |
+| Build output directory | `apps/web/dist` | `apps/web/dist` |
+| Root directory | (empty) | (empty) |
+
+Build command (one line, both projects):
+
+```
+npm install -g npm@9.9.4 && npm ci && npm run build --workspace packages/core-types && npm run build --workspace apps/web
+```
+
+Environment variables (Production), for both projects unless noted:
+
+| Variable | Value |
+|---|---|
+| `NODE_VERSION` | `22` |
+| `SKIP_DEPENDENCY_INSTALL` | `1` (Cloudflare's own install would use npm 10, which the repo's npm 9 pin rejects; the build command installs with npm 9 itself) |
+| `VITE_API_URL` | the Render API address, e.g. `https://metrofix-api.onrender.com` |
+| `VITE_SURFACE` | `customer` on the customer project, `admin` on the admin project |
+
+Then let the API accept the two sites: on Render set `CORS_ORIGINS` to the two Pages addresses, comma
+separated (for example `https://metrofix-customer.pages.dev,https://metrofix-admin.pages.dev`). Render
+redeploys on the change.
+
+Notes:
+
+- Client-side routes work without extra files: with no top-level `404.html`, Pages serves `index.html` for any
+  path that is not a file.
+- The site follows its own address for the other site's link ("wrong site" screen). On `*.pages.dev` there is
+  no `admin.` label, so that cross-link is not meaningful; it is fine once both sites sit on one domain.
+- With your own domain see "Your own domain" below.
+- If Cloudflare's build still fails at the install step, the fallback is to build in GitHub Actions (which
+  already uses npm 9) and upload the result with `wrangler pages deploy`.
+
+### Your own domain
+
+Add the domain after everything works on the free `*.pages.dev` / `*.onrender.com` addresses. If the DNS is
+already on Cloudflare, adding a custom domain to a Pages project creates the DNS record for you.
+
+Use the **flat** names (one level below the domain). Cloudflare's free certificate covers the domain and one
+level below it, so a name two levels deep such as `admin.metrofix.<domain>` can show a browser certificate
+error. The web app recognises the flat style (`VITE_HOST_STYLE=dash`); the local names follow it too
+(`metrofix.localhost`, `admin-metrofix.localhost`). Example for `vanguardprotection.lk`:
+
+| Name | Points at | How |
+|---|---|---|
+| `metrofix.vanguardprotection.lk` | Pages project `metrofix-customer` | Project > Custom domains |
+| `admin-metrofix.vanguardprotection.lk` | Pages project `metrofix-admin` | Project > Custom domains |
+| `api-metrofix.vanguardprotection.lk` | Render service | Render > Settings > Custom Domains; then in Cloudflare DNS a CNAME `api-metrofix` to `<service>.onrender.com`, **DNS only** (grey cloud) until Render shows the certificate as issued |
+
+Pages variables (Production, both projects) are fixed at build time, so redeploy after changing them:
+
+| Variable | Customer project | Admin project |
+|---|---|---|
+| `VITE_HOST_STYLE` | `dash` | `dash` |
+| `VITE_API_URL` | `https://api-metrofix.vanguardprotection.lk` | same |
+| `VITE_SURFACE` | `customer` | `admin` |
+
+With `VITE_HOST_STYLE=dash` the "go to the other site" link on the wrong-site screen is worked out by itself
+(`VITE_ADMIN_SITE_URL` / `VITE_CUSTOMER_SITE_URL` exist only for names that fit neither style).
+
+On Render set `CORS_ORIGINS` to both site addresses, comma separated (keep the `pages.dev` ones while you are
+switching over, then remove them). The mobile apps use `EXPO_PUBLIC_API_URL=https://api-metrofix.vanguardprotection.lk`.
+
+**Check on the live names:** the customer name shows "Create an account"; the `admin-` name shows the staff
+sign-in; a staff login on the customer site and a customer login on the staff site each show the "wrong site"
+screen with a working link; the browser console shows no CORS errors.
+
+**Security notes.** The two sites are different origins, and the API sets no cookies (the sign-in token lives in
+each site's own browser storage), so nothing is shared between them, and the API accepts browser calls only from
+the listed origins. Beyond that: delete a DNS record when you delete the service it points to (a dangling record
+can be claimed by someone else); keep the staff password strong (accounts lock after repeated failures); the
+demo customer and worker accounts still use `Demo123!`, so change or remove them before real use; and consider
+putting Cloudflare Access (free for small teams) in front of the staff site.
