@@ -29,6 +29,7 @@ cp apps/api/.env.example apps/api/.env          # then set JWT_SECRET
 npm run build --workspace packages/core-types   # shared types, needed by the API
 docker compose up -d                            # SQL Server + API (:3000) + web dev server (:5173)
 cd apps/mobile && npm run dev                   # Metro for the mobile apps (press i / a / w)
+# without Docker, from the repo root: npm run dev:all (API + website + mobile in browser), or one at a time: api:dev | web:dev | mobile:web
 ```
 
 | Open | For |

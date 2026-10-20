@@ -83,7 +83,7 @@
 
 ## 8. How to run (short)
 
-`docker compose up -d` (SQL Server, API :3000, web :5173) · customer website `http://metrofix.localhost:5173`, staff website `http://admin.metrofix.localhost:5173` · mobile: `cd apps/mobile && npm run dev` (Metro :8081) then iOS simulator, Android emulator or Expo web. Full guide, including iOS/Android steps and troubleshooting: `SETUP.md`.
+`docker compose up -d` (SQL Server, API :3000, web :5173) · customer website `http://metrofix.localhost:5173`, staff website `http://admin.metrofix.localhost:5173` · mobile: `cd apps/mobile && npm run dev` (Metro :8081) then iOS simulator, Android emulator or Expo web (from the repo root: `npm run dev:all` for all three, or `npm run api:dev`, `npm run web:dev`, `npm run mobile:web`). Full guide, including iOS/Android steps and troubleshooting: `SETUP.md`.
 
 ## 9. Changelog (newest first)
 

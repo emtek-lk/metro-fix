@@ -17,6 +17,10 @@
   ],
   "scripts": {
     "dev": "turbo run dev",
+    "api:dev": "npm run dev --workspace apps/api",
+    "web:dev": "npm run dev --workspace apps/web",
+    "dev:all": "npx --yes concurrently@9.1.2 -k -n api,web,mobile -c blue,green,magenta \"npm:api:dev\" \"npm:web:dev\" \"npm:mobile:web\"",
+    "mobile:web": "npm run web --workspace apps/mobile",
     "build": "turbo run build",
     "lint": "turbo run lint"
   },

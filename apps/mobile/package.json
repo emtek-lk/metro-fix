@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "expo start",
+    "web": "expo start --web",
     "android": "react-native run-android",
     "ios": "react-native run-ios",
     "lint": "eslint .",

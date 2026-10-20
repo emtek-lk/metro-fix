@@ -81,7 +81,7 @@ One web app, two audiences. It works out which from the address you open it on (
 
 ```bash
 # Option A already started it. Otherwise:
-npm run dev --workspace apps/web        # Vite on :5173, listening on all addresses
+npm run web:dev                         # from the repo root: Vite on :5173, listening on all addresses (same as: npm run dev --workspace apps/web)
 ```
 
 | Open | You get | Sign in with |
@@ -155,7 +155,7 @@ The app id is `com.mobile`; relaunch without rebuilding with `adb shell am start
 
 ### 5.5 Browser preview (no simulator)
 
-With Metro running press `w`, or run `npx expo start --web`. It is handy for quick UI checks, but the map picker, camera,
+From the repo root run `npm run mobile:web` (Metro plus the app in your browser; the API must be running). Or, with Metro already running, press `w`. It is handy for quick UI checks, but the map picker, camera,
 background location and the signature pad behave differently from a phone, so test those on a simulator or device.
 
 ### 5.6 What to try
@@ -362,6 +362,8 @@ page. Do not import `AdminWorkspace` from the `@metro-fix/ui` barrel; use `@metr
 | Where | Script | Description |
 |---|---|---|
 | root | `npm run build` | `turbo run build` (builds every package that has a build) |
+| root | `npm run dev:all` | starts the API, the website and the mobile app (browser) together in one terminal with colour-coded logs; Ctrl+C stops all. Needs the database running. |
+| root | `npm run api:dev` / `web:dev` / `mobile:web` | run the API (Nest watch, needs the database) / the website (Vite :5173) / the mobile app in the browser (Expo web), each from the repo root |
 | root | `npm run dev` | `turbo run dev`, starts every app including the Expo server; prefer the individual commands above |
 | `apps/api` | `start:dev` / `build` / `start:prod` | watch mode / compile / run the compiled build |
 | `apps/api` | `test`, `test:e2e` | unit tests / end-to-end test (needs the database) |
