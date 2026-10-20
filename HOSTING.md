@@ -1,0 +1,226 @@
+# Hosting METRO-FIX (free tiers)
+
+> What is deployed right now, the DNS records and every setting are kept in [docs/INFRASTRUCTURE.md](docs/INFRASTRUCTURE.md);
+> problems and routine tasks in [docs/RUNBOOK.md](docs/RUNBOOK.md); rebuilding or moving in [docs/MIGRATION.md](docs/MIGRATION.md).
+> This file is the first-time walkthrough.
+
+Walkthrough for putting the system online without paying: **Azure SQL** (database), **Render** (API),
+**Cloudflare Pages** (the two websites) and the **mobile apps** pointed at the hosted API. Do the parts in
+this order; each needs the one before it. Free-tier limits change, so check each provider's current terms.
+
+| Part | What | Status |
+|---|---|---|
+| 1 | Azure SQL Database (free offer) | written |
+| 2 | Render: the API | written |
+| 3 | Cloudflare Pages: customer and admin websites | written |
+| 4 | Mobile apps against the hosted API | in progress |
+
+```
+ customer site ─┐                         ┌─ Azure SQL (free, pauses when idle)
+ admin site  ───┼──▶ Render API (Docker) ─┘
+ mobile apps ───┘      https://<name>.onrender.com
+```
+
+## 1. Azure SQL Database
+
+Create a SQL database with the **free offer** applied (serverless, General Purpose; about 100,000 vCore
+seconds and 32 GB a month) and **Auto-pause the database until next month** when it is used up.
+
+- Server login: **SQL authentication** (the API connects with a username and password).
+- Networking: public endpoint; add a firewall rule for your own IP (to test from your computer). Leave
+  "Allow Azure services" off: Render is not Azure. Render's addresses are added in part 2.
+- Note the **database name**: it is whatever you typed when creating it, not the `metrofix_db` used locally.
+
+| Azure shows | API variable |
+|---|---|
+| Server name `<name>.database.windows.net` | `DB_HOST` |
+| Database name | `DB_NAME` |
+| Server admin login / password | `DB_USERNAME` / `DB_PASSWORD` |
+| (fixed) | `DB_PORT=1433`, `DB_ENCRYPT=true`, `TRUST_SERVER_CERTIFICATE=false` |
+
+**First run.** Start the API once against the database (`apps/api`, with those variables in `.env`) so the
+tables are created and seeded. The seeder always creates the service catalogue and subscription plans (the
+app needs them), the admin and dispatcher accounts, and the demo customers, workers and jobs. Set
+`STAFF_INITIAL_PASSWORD` (12+ characters, letters and numbers) first: the admin and dispatcher are created
+with it instead of the public `Demo123!`, and a password changed in the app is never reset on restart.
+The demo customers and workers still use `Demo123!`.
+
+**Free-tier behaviour to plan around**
+
+- The database pauses when idle; the first request after a pause waits for it to wake (up to about a
+  minute). The API is configured to wait (`DB_CONNECT_TIMEOUT_MS`, `DB_RETRY_*`).
+- The free allowance is roughly **55 hours a month of awake time**. The API checks for expired job offers on
+  a timer, and each check is a query, so while the API is awake the database is awake. `render.yaml` sets
+  `OFFER_SWEEP_INTERVAL_SECONDS=60`. **Do not run an uptime pinger against the API**: it would keep both
+  awake all month and use the allowance in about two days. If one is ever needed, point it at `/health`,
+  which does not touch the database.
+- Set a budget alert (Cost Management) as a safety net, and rotate any password you pasted anywhere.
+
+## 2. Render: the API
+
+The repository contains everything Render needs: `Dockerfile.api` (production image: only the API's
+production dependencies, runs as a non-root user) and `render.yaml` (a Blueprint). Local development is
+unchanged: `compose.yml` keeps using the plain `Dockerfile`.
+
+1. Push the code to GitHub (Render builds what is on GitHub, not your computer).
+2. At render.com sign in with GitHub and allow it to see the repository (an organisation owner may need to
+   approve it).
+3. **Create the service.** Render asks for a payment card before it will create a Blueprint, so on a
+   card-free account use **New + > Web Service** and copy the settings from `render.yaml` by hand:
+   Language **Docker**, branch to deploy (not `main` until it contains `Dockerfile.api`), region
+   **Singapore**, instance type **Free**; under Advanced: Dockerfile path `./Dockerfile.api`, build
+   context `.`, health check path `/health`, auto-deploy on; and every environment variable listed in
+   `render.yaml` (use *Generate* for `JWT_SECRET`). With a card on file you can instead use
+   **New + > Blueprint** and Render fills all of this from `render.yaml`, asking only for the values marked
+   `sync: false`:
+
+   | Variable | Value |
+   |---|---|
+   | `DB_HOST`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD` | from part 1 |
+   | `STAFF_INITIAL_PASSWORD` | the staff password (required in production: the API refuses to start without it) |
+   | `CORS_ORIGINS` | the two website addresses, comma separated (part 3); a placeholder is fine until then |
+
+   `JWT_SECRET` is generated by Render. Everything else is already set in the file.
+4. **Let Render reach the database.** In the Render service open **Connect > Outbound** and copy its outbound
+   IP addresses. In Azure, on the SQL *server* (not the database): **Security > Networking > Firewall rules**,
+   add one rule per address. Without this the API cannot connect.
+5. Wait for the first deploy (the first boot also waits for the database to wake). Then check:
+   - `https://<service>.onrender.com/health` answers `{"status":"ok"}`
+   - `https://<service>.onrender.com/settings/public` answers with the company details
+   - signing in at `/auth/login` works with the staff password
+
+**Free-tier behaviour**
+
+- The service sleeps after about 15 minutes without traffic; the next request takes 30 to 60 seconds.
+- Uploaded job photos are written to the container's disk, which free Render discards on restart or
+  redeploy. Photos are lost, not the jobs. Persistent storage (Render disk on a paid plan, or object storage
+  such as Cloudflare R2) needs a code change and is not done yet.
+- `DB_SYNCHRONIZE=true` lets the API create and alter tables from the entities. Fine while the schema is
+  changing; move to migrations before real customer data.
+- `autoDeploy: true` redeploys on every push to the chosen branch; a broken push breaks the live API.
+
+**Building the image yourself** (to test before deploying):
+`docker build -f Dockerfile.api -t metrofix-api .` then run it with the variables above in an env file.
+
+## 3. Cloudflare Pages: the customer and admin websites
+
+The web app is one codebase that serves two audiences. Its API address and audience are fixed **at build
+time** (`VITE_API_URL`, `VITE_SURFACE`), so each website is its own Pages project built from the same repo.
+
+Create two projects, **Workers & Pages > Create > Pages > Connect to Git** (if the page pushes you to
+Workers, use the "Looking to deploy Pages?" link), repository `metro-fix`, production branch `main`:
+
+| Setting | Customer site | Admin site |
+|---|---|---|
+| Project name | `metrofix-customer` | `metrofix-admin` |
+| Framework preset | None | None |
+| Build command | see below | see below |
+| Build output directory | `apps/web/dist` | `apps/web/dist` |
+| Root directory | (empty) | (empty) |
+
+Build command (one line, both projects):
+
+```
+npm install -g npm@9.9.4 && npm ci && npm run build --workspace packages/core-types && npm run build --workspace apps/web
+```
+
+Environment variables (Production), for both projects unless noted:
+
+| Variable | Value |
+|---|---|
+| `NODE_VERSION` | `22` |
+| `SKIP_DEPENDENCY_INSTALL` | `1` (Cloudflare's own install would use npm 10, which the repo's npm 9 pin rejects; the build command installs with npm 9 itself) |
+| `VITE_API_URL` | the Render API address, e.g. `https://metrofix-api.onrender.com` |
+| `VITE_SURFACE` | `customer` on the customer project, `admin` on the admin project |
+
+Then let the API accept the two sites: on Render set `CORS_ORIGINS` to the two Pages addresses, comma
+separated (for example `https://metrofix-customer.pages.dev,https://metrofix-admin.pages.dev`). Render
+redeploys on the change.
+
+Notes:
+
+- Client-side routes work without extra files: with no top-level `404.html`, Pages serves `index.html` for any
+  path that is not a file.
+- The site follows its own address for the other site's link ("wrong site" screen). On `*.pages.dev` there is
+  no `admin.` label, so that cross-link is not meaningful; it is fine once both sites sit on one domain.
+- With your own domain see "Your own domain" below.
+- If Cloudflare's build still fails at the install step, the fallback is to build in GitHub Actions (which
+  already uses npm 9) and upload the result with `wrangler pages deploy`.
+
+### Your own domain
+
+Add the domain after everything works on the free `*.pages.dev` / `*.onrender.com` addresses. If the DNS is
+already on Cloudflare, adding a custom domain to a Pages project creates the DNS record for you.
+
+Use the **flat** names (one level below the domain). Cloudflare's free certificate covers the domain and one
+level below it, so a name two levels deep such as `admin.metrofix.<domain>` can show a browser certificate
+error. The web app recognises the flat style (`VITE_HOST_STYLE=dash`); the local names follow it too
+(`metrofix.localhost`, `admin-metrofix.localhost`). Example for `vanguardprotection.lk`:
+
+| Name | Points at | How |
+|---|---|---|
+| `metrofix.vanguardprotection.lk` | Pages project `metrofix-customer` | Project > Custom domains |
+| `admin-metrofix.vanguardprotection.lk` | Pages project `metrofix-admin` | Project > Custom domains |
+| `api-metrofix.vanguardprotection.lk` | Render service | Render > Settings > Custom Domains; then in Cloudflare DNS a CNAME `api-metrofix` to `<service>.onrender.com`, **DNS only** (grey cloud) until Render shows the certificate as issued |
+
+Pages variables (Production, both projects) are fixed at build time, so redeploy after changing them:
+
+| Variable | Customer project | Admin project |
+|---|---|---|
+| `VITE_HOST_STYLE` | `dash` | `dash` |
+| `VITE_API_URL` | `https://api-metrofix.vanguardprotection.lk` | same |
+| `VITE_SURFACE` | `customer` | `admin` |
+
+With `VITE_HOST_STYLE=dash` the "go to the other site" link on the wrong-site screen is worked out by itself
+(`VITE_ADMIN_SITE_URL` / `VITE_CUSTOMER_SITE_URL` exist only for names that fit neither style).
+
+On Render set `CORS_ORIGINS` to both site addresses, comma separated (keep the `pages.dev` ones while you are
+switching over, then remove them). The mobile apps use `EXPO_PUBLIC_API_URL=https://api-metrofix.vanguardprotection.lk`.
+
+**Check on the live names:** the customer name shows "Create an account"; the `admin-` name shows the staff
+sign-in; a staff login on the customer site and a customer login on the staff site each show the "wrong site"
+screen with a working link; the browser console shows no CORS errors.
+
+**Security notes.** The two sites are different origins, and the API sets no cookies (the sign-in token lives in
+each site's own browser storage), so nothing is shared between them, and the API accepts browser calls only from
+the listed origins. Beyond that: delete a DNS record when you delete the service it points to (a dangling record
+can be claimed by someone else); keep the staff password strong (accounts lock after repeated failures); the
+demo customer and worker accounts still use `Demo123!`, so change or remove them before real use; and consider
+putting Cloudflare Access (free for small teams) in front of the staff site.
+
+## 4. Mobile apps against the hosted API
+
+The apps read their API address from `EXPO_PUBLIC_API_URL`, fixed when the JavaScript is bundled.
+
+| Build | Reads | Address |
+|---|---|---|
+| Debug (Metro, simulators, `npm run ios` / `android`) | `apps/mobile/.env` (git-ignored) | your local API |
+| **Release** (Android `assembleRelease`, iOS Release / Archive) | `apps/mobile/.env.production` (committed) | `https://api-metrofix.vanguardprotection.lk` |
+
+To try the hosted API from a debug build without editing files:
+`EXPO_PUBLIC_API_URL=https://api-metrofix.vanguardprotection.lk npx react-native start --reset-cache`.
+
+**Android release APK:** `npm run build:android:release` in `apps/mobile` (npm 9), or the Gradle command inside that
+script. Output: `apps/mobile/android/app/build/outputs/apk/release/app-release.apk`.
+
+- About **27 MB**, down from about 83 MB: it contains the arm64 native libraries only (all current phones and
+  Apple-silicon emulators; the default build carries four CPU types, 68 MB of it), and release builds shrink
+  the Java/Kotlin code and unused resources (R8). Debug builds are unchanged.
+- Old 32-bit-only phones and Intel emulators cannot install it. For those, build with
+  `-PreactNativeArchitectures=armeabi-v7a,arm64-v8a,x86_64` (a larger file).
+- Signed with the debug key: fine for installing on your own devices and sharing with testers, not for the
+  Play Store (that needs your own keystore, and an app bundle instead of an APK).
+- `android/app/proguard-rules.pro` keeps the Expo classes that are looked up by name. Without it the shrinker
+  removes `RNHeadlessAppLoader`, and background location tracking could not start the app headlessly.
+  If you add a native library and something works in debug but fails in release, a missing keep rule is the
+  first suspect (look for `ClassNotFoundException` in `adb logcat`).
+- **Changing `.env.production`:** Gradle does not notice env files, so it reuses the old bundle. The script above
+  forces the JavaScript bundle to be rebuilt; if you run Gradle yourself, add
+  `:app:createBundleReleaseJsAndAssets --rerun`.
+- Release builds run with no Metro server; the debug-only quick sign-in buttons are not shown.
+
+iOS: archive the `mobile` scheme in Xcode (Release); installing on a device for more than 7 days needs a paid
+Apple developer account. Not built yet.
+
+Free-tier note: the first request after the API has been idle takes 30 to 60 seconds (the API and the database
+wake up), so the first sign-in on a release build may look stuck; it is not.

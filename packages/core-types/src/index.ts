@@ -700,13 +700,26 @@ export function passwordPolicyProblem(password: string, minLength: number): stri
 /** Which audience a website address serves. `any` is local development (plain localhost or an IP). */
 export type Surface = 'admin' | 'customer' | 'any';
 
+/**
+ * How the staff and API names are built from the customer site name. `dot`: admin.metrofix.example.lk
+ * and api.metrofix.example.lk. `dash`: admin-metrofix.example.lk and api-metrofix.example.lk (one level
+ * below the domain, so a free wildcard certificate covers them). Both styles are always recognised.
+ */
+export type HostStyle = 'dot' | 'dash';
+
 export interface HostingConfig {
+  /** Which style to generate when building the staff or API address from the customer site's. Default `dot`. */
+  hostStyle?: HostStyle;
   /** The first label that marks the staff site, e.g. "admin" in admin.example.lk. Default "admin". */
   adminLabel?: string;
   /** Forces the audience regardless of the address (set at build time for unusual hosting). */
   surface?: Surface;
   /** Full API address; when set it wins over everything else. */
   apiBase?: string;
+  /** Full address of the staff website, for hosting that does not follow the `admin.<site>` pattern. */
+  adminSiteUrl?: string;
+  /** Full address of the customer website, for hosting that does not follow the `admin.<site>` pattern. */
+  customerSiteUrl?: string;
 }
 
 const DEFAULT_ADMIN_LABEL = 'admin';
@@ -725,12 +738,25 @@ function isPlainHost(hostname: string): boolean {
  * real hostname (`metrofix.example.lk`, `metrofix.localhost`) is the customer site, and plain
  * localhost / IPs serve both so development keeps working. Nothing here names a real domain.
  */
+/** Which style marks `host` as the staff site (`admin.<site>` or `admin-<site>`), or null if it is not. */
+function adminStyleOf(host: string, adminLabel: string): HostStyle | null {
+  const first = host.toLowerCase().split('.')[0];
+  if (first === adminLabel) return 'dot';
+  if (first.startsWith(`${adminLabel}-`) && first.length > adminLabel.length + 1) return 'dash';
+  return null;
+}
+
+/** The customer site's host name for a staff host (drops the `admin.` label or the `admin-` prefix). */
+function withoutAdminMarker(labels: string[], style: HostStyle, adminLabel: string): string[] {
+  return style === 'dot' ? labels.slice(1) : [labels[0].slice(adminLabel.length + 1), ...labels.slice(1)];
+}
+
 export function detectSurface(hostname: string, config: HostingConfig = {}): Surface {
   if (config.surface) return config.surface;
   const host = hostname.toLowerCase();
   if (isPlainHost(host)) return 'any';
   const adminLabel = (config.adminLabel || DEFAULT_ADMIN_LABEL).toLowerCase();
-  return host.split('.')[0] === adminLabel ? 'admin' : 'customer';
+  return adminStyleOf(host, adminLabel) ? 'admin' : 'customer';
 }
 
 /** The same site's address for the other audience (adds or drops the admin label), keeping the port. */
@@ -739,9 +765,13 @@ export function counterpartHost(host: string, target: 'admin' | 'customer', conf
   const [name, port] = host.split(':');
   if (isPlainHost(name.toLowerCase())) return null;
   const labels = name.split('.');
-  const isAdmin = labels[0].toLowerCase() === adminLabel;
-  if (target === 'admin') return `${isAdmin ? name : `${adminLabel}.${name}`}${port ? `:${port}` : ''}`;
-  return isAdmin ? `${labels.slice(1).join('.')}${port ? `:${port}` : ''}` : host;
+  const style = adminStyleOf(name, adminLabel);
+  const suffix = port ? `:${port}` : '';
+  if (target === 'admin') {
+    if (style) return `${name}${suffix}`;
+    return config.hostStyle === 'dash' ? `${adminLabel}-${name}${suffix}` : `${adminLabel}.${name}${suffix}`;
+  }
+  return style ? `${withoutAdminMarker(labels, style, adminLabel).join('.')}${suffix}` : host;
 }
 
 /**
@@ -758,8 +788,28 @@ export function resolveApiBase(
   if (isPlainHost(host) || host.endsWith('.localhost')) return `${location.protocol}//${host === 'localhost' || isIpAddress(host) ? host : 'localhost'}:${LOCAL_API_PORT}`;
   const adminLabel = (config.adminLabel || DEFAULT_ADMIN_LABEL).toLowerCase();
   const labels = host.split('.');
-  const base = labels[0] === adminLabel ? labels.slice(1) : labels;
-  return `${location.protocol}//${[API_LABEL, ...base].join('.')}`;
+  const style = adminStyleOf(host, adminLabel);
+  const base = style ? withoutAdminMarker(labels, style, adminLabel) : labels;
+  // The API follows the staff site's style unless a style is configured.
+  const apiStyle = config.hostStyle ?? (style === 'dash' ? 'dash' : 'dot');
+  const apiHost = apiStyle === 'dash' ? [`${API_LABEL}-${base[0]}`, ...base.slice(1)] : [API_LABEL, ...base];
+  return `${location.protocol}//${apiHost.join('.')}`;
+}
+
+/**
+ * Full address of the other website, for "go to the right place" links. An address set in the config
+ * (adminSiteUrl / customerSiteUrl) wins; otherwise it is derived from this page's address by the
+ * `admin.<site>` pattern. Null on plain localhost, where there is no other site.
+ */
+export function resolveSiteUrl(
+  location: { protocol: string; host: string },
+  target: 'admin' | 'customer',
+  config: HostingConfig = {},
+): string | null {
+  const explicit = (target === 'admin' ? config.adminSiteUrl : config.customerSiteUrl)?.trim();
+  if (explicit) return explicit.replace(/\/+$/, '');
+  const host = counterpartHost(location.host, target, config);
+  return host ? `${location.protocol}//${host}` : null;
 }
 
 /** Whether a role belongs on a website: staff on the admin site, customers on the customer site. */

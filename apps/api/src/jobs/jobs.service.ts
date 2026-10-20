@@ -49,7 +49,15 @@ const DEFAULT_LATITUDE = 6.9271;
 const DEFAULT_LONGITUDE = 79.8612;
 
 /** How often unanswered offers are swept back into the dispatch queue. */
-const OFFER_SWEEP_INTERVAL_MS = 5_000;
+const DEFAULT_OFFER_SWEEP_SECONDS = 5;
+/**
+ * How often unanswered offers are checked. Every check is a database query, so a hosted free-tier
+ * database that should be allowed to sleep wants a longer interval (OFFER_SWEEP_INTERVAL_SECONDS).
+ */
+export const offerSweepIntervalMs = (raw: string | undefined = process.env.OFFER_SWEEP_INTERVAL_SECONDS): number => {
+  const seconds = Number(raw);
+  return (Number.isFinite(seconds) && seconds >= 1 ? seconds : DEFAULT_OFFER_SWEEP_SECONDS) * 1000;
+};
 
 /** The signed-in user performing an action. Staff are unrestricted; workers and customers are scoped. */
 export interface Actor {
@@ -96,7 +104,7 @@ export class JobsService implements OnModuleInit, OnModuleDestroy {
       this.expireStaleOffers().catch((error) =>
         this.logger.warn(`Offer sweep failed: ${error?.message ?? error}`),
       );
-    }, OFFER_SWEEP_INTERVAL_MS);
+    }, offerSweepIntervalMs());
     this.offerSweepTimer.unref?.();
   }
 

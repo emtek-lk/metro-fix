@@ -8,6 +8,7 @@
     "web": "expo start --web",
     "android": "react-native run-android",
     "ios": "react-native run-ios",
+    "build:android:release": "cd android && ./gradlew :app:createBundleReleaseJsAndAssets --rerun :app:assembleRelease -PreactNativeArchitectures=arm64-v8a",
     "lint": "eslint .",
     "build:leaflet": "node scripts/generate-leaflet-bundle.js",
     "start": "react-native start",

@@ -15,11 +15,25 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      # No `cache: npm` here: that option runs `npm config get cache` inside the repo, and the npm that
+      # ships with Node 22 (npm 10) refuses to run there because the repo pins npm ^9.2.0 (devEngines).
       - name: Setup Node.js v22
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'npm'
+
+      # Installed from outside the repo for the same reason; every later npm command uses npm 9.
+      - name: Use npm 9
+        working-directory: ${{ runner.temp }}
+        run: npm install -g npm@9.9.4
+
+      - name: Cache npm downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            npm-${{ runner.os }}-
 
       - name: Install Dependencies
         run: npm ci

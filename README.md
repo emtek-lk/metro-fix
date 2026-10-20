@@ -15,6 +15,10 @@ Turborepo monorepo: `apps/api` (NestJS + SQL Server), `apps/web` (React + Vite: 
 | [API.md](API.md) | REST and WebSocket contract |
 | [CONVENTIONS.md](CONVENTIONS.md) | Patterns and known pitfalls |
 | [SETUP.md](SETUP.md) | Environment setup and running locally |
+| [HOSTING.md](HOSTING.md) | Putting the system online on free tiers (Azure SQL, Render, Cloudflare Pages, mobile) |
+| [docs/INFRASTRUCTURE.md](docs/INFRASTRUCTURE.md) | What is deployed where: addresses, DNS, settings, environment variables, limits |
+| [docs/RUNBOOK.md](docs/RUNBOOK.md) | Troubleshooting and routine operations for the hosted system |
+| [docs/MIGRATION.md](docs/MIGRATION.md) | Rebuilding, moving a part, changing the domain |
 | [USER_GUIDE.md](USER_GUIDE.md) | End-user workflows |
 
 `FINAL_PROJECT_SUMMARY.md` and `TECHNICAL_RETROSPECTIVE.md` are historical snapshots.
@@ -35,7 +39,7 @@ cd apps/mobile && npm run dev                   # Metro for the mobile apps (pre
 | Open | For |
 |---|---|
 | http://metrofix.localhost:5173 | **Customer website** (sign in as `marcus@residences.lk`) |
-| http://admin.metrofix.localhost:5173 | **Staff website** (`admin@demo.local` or `dispatch@demo.local`) |
+| http://admin-metrofix.localhost:5173 | **Staff website** (`admin@demo.local` or `dispatch@demo.local`) |
 | iOS simulator / Android emulator / Expo web | **Mobile apps** (`worker1@demo.local` technician, or a customer) |
 
 Every demo account uses the password `Demo123!` (full list in API.md). The database is **SQL Server**, not Postgres.
